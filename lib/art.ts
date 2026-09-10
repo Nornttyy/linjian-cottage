@@ -1,12 +1,13 @@
 import type { Terrain } from './world';
-import {toolFrames} from './frame-layout';
+import {toolFrames,toolAnchors,toolBodyHeights,baseAnchorX} from './frame-layout';
 export type Direction='down'|'up'|'right';
 export type HeroAction='idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword';
 export type Sprite='tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|'fire0'|'fire1'|'fire2'|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
+export const HERO_SIZE={width:64,height:56,anchorX:32,anchorY:44};
 export const frameKey=(action:HeroAction,direction:Direction,frame:number)=>`${action}-${direction}-${frame}` as Sprite;
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c;};
-const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('素材加载失败'));img.src=src;});
+const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('素材加载失败'));img.src='.'+src;});
 function transparentMatte(c:HTMLCanvasElement){
     const ctx=c.getContext('2d',{willReadFrequently:true})!,data=ctx.getImageData(0,0,c.width,c.height),p=data.data,w=c.width,h=c.height;
     let transparent=0;for(let i=3;i<p.length;i+=4)if(p[i]<8)transparent++;
@@ -56,9 +57,11 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
         for(let row=0;row<rows;row++){
             const group=cells.slice(row*cols,(row+1)*cols),boxes=group.map(bounds);
             const y0=Math.min(...boxes.map(b=>b.y0)),y1=Math.max(...boxes.map(b=>b.y1)),height=y1-y0+1;
-            group.forEach((c,col)=>{const out=canvas(48,56),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;const scale=tool?32/180:32/height;
-                const anchor=tool?([256,503,744][row]-toolFrames[tool][row*cols+col][1]-2):y1+1;
-                ctx.drawImage(c,(48-c.width*scale)/2,44-anchor*scale,c.width*scale,c.height*scale);cells[row*cols+col]=out;});
+            group.forEach((c,col)=>{const out=canvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;const scale=tool?32/toolBodyHeights[tool][row]:32/height;
+                const anchor=tool?toolAnchors[tool][row*cols+col][1]-2:file==='hero-motion.png'&&row<3?y1+1:boxes[col].y1+1;
+                const anchorX=tool?toolAnchors[tool][row*cols+col][0]:baseAnchorX[file]?.[row*cols+col];
+                const drawX=anchorX===undefined?(HERO_SIZE.width-c.width*scale)/2:HERO_SIZE.anchorX-(anchorX-2)*scale;
+                ctx.drawImage(c,drawX,HERO_SIZE.anchorY-anchor*scale,c.width*scale,c.height*scale);cells[row*cols+col]=out;});
         }
     }
     if(kind==='slime')cells.forEach((c,i)=>{const out=canvas(40,40),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(c,0,0,40,40);cells[i]=out;});
@@ -69,7 +72,7 @@ export function loadArt(){return cached??=loadAll();}
 async function loadAll():Promise<Atlas>{
     const [materials,objects,icons,walk,motion,axe,pick,sword,slime,entrance,hurt]=await Promise.all([
         sheet('surfaces-final.png',4,4,'texture'),sheet('objects-final.png',4,4,'prop'),sheet('icons-final.png',4,4,'prop'),
-        sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe.png',8,3,'hero'),sheet('hero-pick.png',8,3,'hero'),sheet('hero-sword.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero')
+        sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v2.png',8,3,'hero'),sheet('hero-pick-v2.png',8,3,'hero'),sheet('hero-sword-v2.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero')
     ]);
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
@@ -78,7 +81,7 @@ async function loadAll():Promise<Atlas>{
     assign(['axe','pick','sword','remove','wood','stone-icon','copper-icon','essence','heart','stamina','map','room','torch','tuft','mushrooms','spark'],icons);
     for(const [row,dir] of (['down','up','right'] as const).entries())for(let f=0;f<8;f++){
         art[frameKey('walk',dir,f)]=walk[row*8+f];art[frameKey('hurt',dir,f)]=walk[24+f];art[frameKey('dodge',dir,f)]=motion[row*8+f];
-        art[frameKey('axe',dir,f)]=axe[row*8+f];art[frameKey('pick',dir,f)]=pick[row*8+f];art[frameKey('sword',dir,f)]=sword[row*8+f];
+        art[frameKey('axe',dir,f)]=axe[row*8+f];art[frameKey('pick',dir,f)]=pick[row*8+f];art[frameKey('sword',dir,f)]=sword[row*8+(dir==='up'?[0,2,1,3,4,5,6,7][f]:f)];
     }
     for(let f=0;f<4;f++)art[frameKey('idle','down',f)]=motion[24+f];
     for(let f=0;f<8;f++){art[frameKey('hurt','up',f)]=hurt[f];art[frameKey('hurt','right',f)]=hurt[8+f];}

@@ -13,9 +13,11 @@
 | hero-walk.png | 下、上、右行走各8帧，正面受击8帧 | 8列4行 |
 | hero-motion.png | 下、上、右闪避各8帧，待机共8帧 | 8列4行 |
 | hero-hurt-directions.png | 上、右受击各8帧 | 8列2行 |
-| hero-axe.png | 下、上、右砍树各8帧 | 8列3行，专用裁切坐标 |
-| hero-pick.png | 下、上、右挖矿各8帧 | 8列3行，专用裁切坐标 |
-| hero-sword.png | 下、上、右挥剑各8帧 | 8列3行，专用裁切坐标 |
+| hero-axe-v2.png | 下、上、右砍树各8帧，修正下挥中间姿势与收势 | 8列3行，专用裁切和人体锚点 |
+| hero-pick-v2.png | 下、上、右挖矿各8帧，补充下挥与低位收势 | 8列3行，专用裁切和人体锚点 |
+| hero-sword-v2.png | 下、上、右挥剑各8帧，改为连续横斩与收剑 | 8列3行，专用裁切和人体锚点 |
 | slime.png | 待机8、移动8、攻击8、受击4、死亡4 | 8列4行 |
 
-每张图对应同目录的 `.prompt.txt`；带 `correction` 的文件记录限定修正。旧的 world-atlas、terrain-atlas 是前期保留版本，已不被游戏加载。
+每张图对应同目录的 `.prompt.txt`；带 `correction` 的文件记录限定修正。旧的 world-atlas、terrain-atlas、hero-axe、hero-pick、hero-sword 是前期保留版本，已不被游戏加载。
+
+动作播放使用独立于联机快照的本地时钟，并固定出招朝向。人体中心按帧校正；工具按各方向的身体高度统一比例，避免把伸出的工具计入人体大小。斧与镐接触姿势对应245ms，剑对应170ms。

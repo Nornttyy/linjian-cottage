@@ -1,1277 +1,2291 @@
 {
-  "axe": {
-    "path": "/private/tmp/linjian-axe-8x3.png",
-    "size": [
-      2048,
-      768
-    ],
-    "mode": "RGB",
-    "layout": "8 columns x 3 rows",
-    "directions": [
-      "down",
-      "up",
-      "right"
-    ],
-    "note": "RGB baked checkerboard; requires matte removal. Some tools cross uniform 256 px row boundaries. Use these per-column crops. Bounds measured from saturated/dark pixels only. Preserve common body scale rather than normalize each frame to its individual bounding box.",
-    "frames": [
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 0,
-        "crop": [
-          0,
-          0,
-          256,
-          269
-        ],
-        "foregroundBounds": [
-          87,
-          83,
-          170,
-          268
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 1,
-        "crop": [
-          256,
-          0,
-          256,
-          258
-        ],
-        "foregroundBounds": [
-          277,
-          83,
-          426,
-          257
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 2,
-        "crop": [
-          512,
-          0,
-          256,
-          258
-        ],
-        "foregroundBounds": [
-          538,
-          67,
-          683,
-          257
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 3,
-        "crop": [
-          768,
-          0,
-          256,
-          258
-        ],
-        "foregroundBounds": [
-          852,
-          17,
-          940,
-          257
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 4,
-        "crop": [
-          1024,
-          0,
-          256,
-          270
-        ],
-        "foregroundBounds": [
-          1108,
-          89,
-          1200,
-          269
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 5,
-        "crop": [
-          1280,
-          0,
-          256,
-          274
-        ],
-        "foregroundBounds": [
-          1364,
-          100,
-          1473,
-          273
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 6,
-        "crop": [
-          1536,
-          0,
-          256,
-          258
-        ],
-        "foregroundBounds": [
-          1625,
-          83,
-          1789,
-          257
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 7,
-        "crop": [
-          1792,
-          0,
-          256,
-          269
-        ],
-        "foregroundBounds": [
-          1880,
-          83,
-          1963,
-          268
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 0,
-        "crop": [
-          0,
-          269,
-          256,
-          243
-        ],
-        "foregroundBounds": [
-          87,
-          324,
-          170,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 1,
-        "crop": [
-          256,
-          258,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          341,
-          324,
-          491,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 2,
-        "crop": [
-          512,
-          258,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          544,
-          318,
-          683,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 3,
-        "crop": [
-          768,
-          258,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          855,
-          274,
-          938,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 4,
-        "crop": [
-          1024,
-          270,
-          256,
-          242
-        ],
-        "foregroundBounds": [
-          1111,
-          336,
-          1196,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 5,
-        "crop": [
-          1280,
-          274,
-          256,
-          238
-        ],
-        "foregroundBounds": [
-          1368,
-          342,
-          1456,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 6,
-        "crop": [
-          1536,
-          258,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          1556,
-          324,
-          1708,
-          504
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 7,
-        "crop": [
-          1792,
-          269,
-          256,
-          243
-        ],
-        "foregroundBounds": [
-          1879,
-          324,
-          1963,
-          504
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 0,
-        "crop": [
-          0,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          91,
-          560,
-          195,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 1,
-        "crop": [
-          256,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          295,
-          560,
-          426,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 2,
-        "crop": [
-          512,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          543,
-          554,
-          684,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 3,
-        "crop": [
-          768,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          835,
-          523,
-          937,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 4,
-        "crop": [
-          1024,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1098,
-          572,
-          1241,
-          744
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 5,
-        "crop": [
-          1280,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1356,
-          580,
-          1502,
-          745
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 6,
-        "crop": [
-          1536,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1625,
-          560,
-          1773,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 7,
-        "crop": [
-          1792,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1884,
-          560,
-          1988,
-          747
-        ]
-      }
-    ]
-  },
-  "pick": {
-    "path": "/private/tmp/linjian-pick-8x3.png",
-    "size": [
-      2048,
-      768
-    ],
-    "mode": "RGB",
-    "layout": "8 columns x 3 rows",
-    "directions": [
-      "down",
-      "up",
-      "right"
-    ],
-    "note": "RGB baked checkerboard; requires matte removal. Some tools cross uniform 256 px row boundaries. Use these per-column crops. Bounds measured from saturated/dark pixels only. Preserve common body scale rather than normalize each frame to its individual bounding box.",
-    "frames": [
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 0,
-        "crop": [
-          0,
-          0,
-          256,
-          269
-        ],
-        "foregroundBounds": [
-          85,
-          84,
-          172,
-          268
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 1,
-        "crop": [
-          256,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          284,
-          83,
-          427,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 2,
-        "crop": [
-          512,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          542,
-          72,
-          684,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 3,
-        "crop": [
-          768,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          837,
-          29,
-          941,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 4,
-        "crop": [
-          1024,
-          0,
-          256,
-          276
-        ],
-        "foregroundBounds": [
-          1108,
-          94,
-          1220,
-          275
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 5,
-        "crop": [
-          1280,
-          0,
-          256,
-          281
-        ],
-        "foregroundBounds": [
-          1362,
-          109,
-          1477,
-          280
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 6,
-        "crop": [
-          1536,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          1622,
-          84,
-          1778,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 7,
-        "crop": [
-          1792,
-          0,
-          256,
-          270
-        ],
-        "foregroundBounds": [
-          1879,
-          84,
-          1965,
-          269
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 0,
-        "crop": [
-          0,
-          269,
-          256,
-          245
-        ],
-        "foregroundBounds": [
-          85,
-          339,
-          172,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 1,
-        "crop": [
-          256,
-          260,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          340,
-          334,
-          486,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 2,
-        "crop": [
-          512,
-          260,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          542,
-          319,
-          685,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 3,
-        "crop": [
-          768,
-          260,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          853,
-          297,
-          941,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 4,
-        "crop": [
-          1024,
-          276,
-          256,
-          238
-        ],
-        "foregroundBounds": [
-          1109,
-          352,
-          1198,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 5,
-        "crop": [
-          1280,
-          281,
-          256,
-          233
-        ],
-        "foregroundBounds": [
-          1366,
-          356,
-          1457,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 6,
-        "crop": [
-          1536,
-          260,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          1563,
-          335,
-          1709,
-          513
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 7,
-        "crop": [
-          1792,
-          270,
-          256,
-          244
-        ],
-        "foregroundBounds": [
-          1877,
-          339,
-          1964,
-          513
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 0,
-        "crop": [
-          0,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          92,
-          561,
-          196,
-          748
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 1,
-        "crop": [
-          256,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          290,
-          561,
-          429,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 2,
-        "crop": [
-          512,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          554,
-          536,
-          684,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 3,
-        "crop": [
-          768,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          828,
-          525,
-          938,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 4,
-        "crop": [
-          1024,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          1098,
-          572,
-          1241,
-          746
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 5,
-        "crop": [
-          1280,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          1356,
-          582,
-          1496,
-          748
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 6,
-        "crop": [
-          1536,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          1625,
-          561,
-          1775,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 7,
-        "crop": [
-          1792,
-          514,
-          256,
-          254
-        ],
-        "foregroundBounds": [
-          1885,
-          560,
-          1989,
-          747
-        ]
-      }
-    ]
-  },
-  "sword": {
-    "path": "/private/tmp/linjian-sword-8x3.png",
-    "size": [
-      2048,
-      768
-    ],
-    "mode": "RGB",
-    "layout": "8 columns x 3 rows",
-    "directions": [
-      "down",
-      "up",
-      "right"
-    ],
-    "note": "RGB baked checkerboard; requires matte removal. Some tools cross uniform 256 px row boundaries. Use these per-column crops. Bounds measured from saturated/dark pixels only. Preserve common body scale rather than normalize each frame to its individual bounding box.",
-    "frames": [
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 0,
-        "crop": [
-          0,
-          0,
-          256,
-          273
-        ],
-        "foregroundBounds": [
-          86,
-          83,
-          170,
-          272
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 1,
-        "crop": [
-          256,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          289,
-          83,
-          426,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 2,
-        "crop": [
-          512,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          541,
-          69,
-          683,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 3,
-        "crop": [
-          768,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          849,
-          19,
-          939,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 4,
-        "crop": [
-          1024,
-          0,
-          256,
-          280
-        ],
-        "foregroundBounds": [
-          1108,
-          89,
-          1235,
-          279
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 5,
-        "crop": [
-          1280,
-          0,
-          256,
-          279
-        ],
-        "foregroundBounds": [
-          1364,
-          100,
-          1509,
-          278
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 6,
-        "crop": [
-          1536,
-          0,
-          256,
-          260
-        ],
-        "foregroundBounds": [
-          1623,
-          83,
-          1767,
-          259
-        ]
-      },
-      {
-        "row": 0,
-        "direction": "down",
-        "frame": 7,
-        "crop": [
-          1792,
-          0,
-          256,
-          273
-        ],
-        "foregroundBounds": [
-          1879,
-          83,
-          1963,
-          272
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 0,
-        "crop": [
-          0,
-          273,
-          256,
-          239
-        ],
-        "foregroundBounds": [
-          84,
-          326,
-          170,
-          505
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 1,
-        "crop": [
-          256,
-          260,
-          256,
-          252
-        ],
-        "foregroundBounds": [
-          339,
-          326,
-          476,
-          506
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 2,
-        "crop": [
-          512,
-          260,
-          256,
-          252
-        ],
-        "foregroundBounds": [
-          547,
-          323,
-          683,
-          506
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 3,
-        "crop": [
-          768,
-          260,
-          256,
-          251
-        ],
-        "foregroundBounds": [
-          853,
-          273,
-          939,
-          506
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 4,
-        "crop": [
-          1024,
-          280,
-          256,
-          232
-        ],
-        "foregroundBounds": [
-          1108,
-          335,
-          1237,
-          505
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 5,
-        "crop": [
-          1280,
-          279,
-          256,
-          233
-        ],
-        "foregroundBounds": [
-          1364,
-          342,
-          1509,
-          508
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 6,
-        "crop": [
-          1536,
-          260,
-          256,
-          252
-        ],
-        "foregroundBounds": [
-          1572,
-          326,
-          1708,
-          506
-        ]
-      },
-      {
-        "row": 1,
-        "direction": "up",
-        "frame": 7,
-        "crop": [
-          1792,
-          273,
-          256,
-          239
-        ],
-        "foregroundBounds": [
-          1877,
-          326,
-          1963,
-          506
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 0,
-        "crop": [
-          0,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          92,
-          560,
-          201,
-          748
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 1,
-        "crop": [
-          256,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          302,
-          560,
-          426,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 2,
-        "crop": [
-          512,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          553,
-          541,
-          683,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 3,
-        "crop": [
-          768,
-          511,
-          256,
-          257
-        ],
-        "foregroundBounds": [
-          836,
-          512,
-          938,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 4,
-        "crop": [
-          1024,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1098,
-          572,
-          1262,
-          745
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 5,
-        "crop": [
-          1280,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1356,
-          579,
-          1525,
-          745
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 6,
-        "crop": [
-          1536,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1624,
-          560,
-          1764,
-          747
-        ]
-      },
-      {
-        "row": 2,
-        "direction": "right",
-        "frame": 7,
-        "crop": [
-          1792,
-          512,
-          256,
-          256
-        ],
-        "foregroundBounds": [
-          1884,
-          560,
-          1994,
-          748
-        ]
-      }
-    ]
+  "coordinateSystem": "crop is source [x,y,w,h]; anchor is local to that exact crop BEFORE any inset; rowBodyHeight is neutral skull-top to boot-sole in source pixels, excludes tool",
+  "apply": "scale=32/rowBodyHeight; draw crop at [targetX-anchor[0]*scale,44-anchor[1]*scale]. If trimming 2px off crop, also subtract 2 from both anchors. targetX=32 for 64-wide canvas (24 for 48-wide).",
+  "notes": [
+    "Crops are connected complete figure bounds plus 2px, not nominal 256px columns. Tool tips may cross nominal columns.",
+    "Do not rescale individual active frames. Use one rowBodyHeight per actor direction.",
+    "Foot annotations use isolated dark-brown boot pixels near a shared row floor with outline refinement; review candidates can vary by ~2 source pixels."
+  ],
+  "sheets": {
+    "axe": {
+      "file": "hero-axe-v2.png",
+      "size": [
+        2048,
+        768
+      ],
+      "sha256": "be009e15ed31a097bf721e6bb068befea2d95947dc7e8e96fd12a8d50f9c04b4",
+      "componentCount": 24,
+      "rowBodyHeight": [
+        174,
+        182,
+        190
+      ],
+      "frames": [
+        {
+          "row": 0,
+          "col": 0,
+          "crop": [
+            82,
+            78,
+            92,
+            188
+          ],
+          "anchor": [
+            46,
+            176
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            128,
+            254
+          ],
+          "connectedBoundsSource": [
+            84,
+            80,
+            172,
+            264
+          ],
+          "footColorBoundsSource": [
+            88,
+            228,
+            168,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "crop": [
+            264,
+            77,
+            162,
+            179
+          ],
+          "anchor": [
+            116.5,
+            177
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            380.5,
+            254
+          ],
+          "connectedBoundsSource": [
+            266,
+            79,
+            424,
+            254
+          ],
+          "footColorBoundsSource": [
+            340,
+            228,
+            421,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "crop": [
+            524,
+            62,
+            160,
+            194
+          ],
+          "anchor": [
+            113.5,
+            192
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            637.5,
+            254
+          ],
+          "connectedBoundsSource": [
+            526,
+            64,
+            682,
+            254
+          ],
+          "footColorBoundsSource": [
+            597,
+            228,
+            678,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "crop": [
+            846,
+            14,
+            92,
+            243
+          ],
+          "anchor": [
+            46.5,
+            240
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            892.5,
+            254
+          ],
+          "connectedBoundsSource": [
+            848,
+            16,
+            936,
+            255
+          ],
+          "footColorBoundsSource": [
+            853,
+            228,
+            932,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "crop": [
+            1076,
+            78,
+            178,
+            179
+          ],
+          "anchor": [
+            49,
+            177
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            1125,
+            255
+          ],
+          "connectedBoundsSource": [
+            1078,
+            80,
+            1252,
+            255
+          ],
+          "footColorBoundsSource": [
+            1087,
+            228,
+            1163,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 5,
+          "crop": [
+            1358,
+            87,
+            123,
+            183
+          ],
+          "anchor": [
+            51,
+            170
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            1409,
+            257
+          ],
+          "connectedBoundsSource": [
+            1360,
+            89,
+            1479,
+            268
+          ],
+          "footColorBoundsSource": [
+            1363,
+            228,
+            1455,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 6,
+          "crop": [
+            1618,
+            80,
+            153,
+            179
+          ],
+          "anchor": [
+            48,
+            174
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            1666,
+            254
+          ],
+          "connectedBoundsSource": [
+            1620,
+            82,
+            1769,
+            257
+          ],
+          "footColorBoundsSource": [
+            1624,
+            228,
+            1708,
+            252
+          ]
+        },
+        {
+          "row": 0,
+          "col": 7,
+          "crop": [
+            1874,
+            78,
+            92,
+            188
+          ],
+          "anchor": [
+            46,
+            176
+          ],
+          "rowBodyHeight": 174,
+          "bodyAnchorSource": [
+            1920,
+            254
+          ],
+          "connectedBoundsSource": [
+            1876,
+            80,
+            1964,
+            264
+          ],
+          "footColorBoundsSource": [
+            1880,
+            228,
+            1960,
+            252
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "crop": [
+            82,
+            314,
+            92,
+            186
+          ],
+          "anchor": [
+            46,
+            184
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            128,
+            498
+          ],
+          "connectedBoundsSource": [
+            84,
+            316,
+            172,
+            498
+          ],
+          "footColorBoundsSource": [
+            87,
+            472,
+            169,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "crop": [
+            263,
+            314,
+            163,
+            186
+          ],
+          "anchor": [
+            116.5,
+            184
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            379.5,
+            498
+          ],
+          "connectedBoundsSource": [
+            265,
+            316,
+            424,
+            498
+          ],
+          "footColorBoundsSource": [
+            338,
+            472,
+            421,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "crop": [
+            530,
+            306,
+            154,
+            194
+          ],
+          "anchor": [
+            107,
+            192
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            637,
+            498
+          ],
+          "connectedBoundsSource": [
+            532,
+            308,
+            682,
+            498
+          ],
+          "footColorBoundsSource": [
+            596,
+            472,
+            678,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "crop": [
+            847,
+            269,
+            93,
+            231
+          ],
+          "anchor": [
+            46,
+            229
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            893,
+            498
+          ],
+          "connectedBoundsSource": [
+            849,
+            271,
+            938,
+            498
+          ],
+          "footColorBoundsSource": [
+            852,
+            472,
+            934,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "crop": [
+            1108,
+            285,
+            126,
+            216
+          ],
+          "anchor": [
+            47,
+            214
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1155,
+            499
+          ],
+          "connectedBoundsSource": [
+            1110,
+            287,
+            1232,
+            499
+          ],
+          "footColorBoundsSource": [
+            1114,
+            472,
+            1196,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 5,
+          "crop": [
+            1365,
+            284,
+            125,
+            217
+          ],
+          "anchor": [
+            46.5,
+            215
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1411.5,
+            499
+          ],
+          "connectedBoundsSource": [
+            1367,
+            286,
+            1488,
+            499
+          ],
+          "footColorBoundsSource": [
+            1370,
+            472,
+            1453,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 6,
+          "crop": [
+            1623,
+            291,
+            137,
+            210
+          ],
+          "anchor": [
+            48,
+            208
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1671,
+            499
+          ],
+          "connectedBoundsSource": [
+            1625,
+            293,
+            1758,
+            499
+          ],
+          "footColorBoundsSource": [
+            1629,
+            472,
+            1713,
+            496
+          ]
+        },
+        {
+          "row": 1,
+          "col": 7,
+          "crop": [
+            1874,
+            314,
+            92,
+            186
+          ],
+          "anchor": [
+            46,
+            184
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1920,
+            498
+          ],
+          "connectedBoundsSource": [
+            1876,
+            316,
+            1964,
+            498
+          ],
+          "footColorBoundsSource": [
+            1879,
+            472,
+            1961,
+            496
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "crop": [
+            86,
+            543,
+            117,
+            194
+          ],
+          "anchor": [
+            33.5,
+            192
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            119.5,
+            735
+          ],
+          "connectedBoundsSource": [
+            88,
+            545,
+            201,
+            735
+          ],
+          "footColorBoundsSource": [
+            91,
+            709,
+            148,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "crop": [
+            279,
+            543,
+            152,
+            195
+          ],
+          "anchor": [
+            106.5,
+            193
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            385.5,
+            736
+          ],
+          "connectedBoundsSource": [
+            281,
+            545,
+            429,
+            736
+          ],
+          "footColorBoundsSource": [
+            345,
+            709,
+            426,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 2,
+          "crop": [
+            534,
+            536,
+            154,
+            202
+          ],
+          "anchor": [
+            107.5,
+            200
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            641.5,
+            736
+          ],
+          "connectedBoundsSource": [
+            536,
+            538,
+            686,
+            736
+          ],
+          "footColorBoundsSource": [
+            601,
+            709,
+            682,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 3,
+          "crop": [
+            820,
+            510,
+            124,
+            228
+          ],
+          "anchor": [
+            77.5,
+            226
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            897.5,
+            736
+          ],
+          "connectedBoundsSource": [
+            822,
+            512,
+            942,
+            736
+          ],
+          "footColorBoundsSource": [
+            857,
+            709,
+            938,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "crop": [
+            1091,
+            543,
+            173,
+            194
+          ],
+          "anchor": [
+            46,
+            192
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            1137,
+            735
+          ],
+          "connectedBoundsSource": [
+            1093,
+            545,
+            1262,
+            735
+          ],
+          "footColorBoundsSource": [
+            1097,
+            709,
+            1177,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "crop": [
+            1352,
+            544,
+            159,
+            193
+          ],
+          "anchor": [
+            47,
+            191
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            1399,
+            735
+          ],
+          "connectedBoundsSource": [
+            1354,
+            546,
+            1509,
+            735
+          ],
+          "footColorBoundsSource": [
+            1358,
+            709,
+            1440,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "crop": [
+            1610,
+            544,
+            152,
+            193
+          ],
+          "anchor": [
+            47,
+            191
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            1657,
+            735
+          ],
+          "connectedBoundsSource": [
+            1612,
+            546,
+            1760,
+            735
+          ],
+          "footColorBoundsSource": [
+            1616,
+            709,
+            1698,
+            733
+          ]
+        },
+        {
+          "row": 2,
+          "col": 7,
+          "crop": [
+            1876,
+            543,
+            119,
+            194
+          ],
+          "anchor": [
+            34.5,
+            192
+          ],
+          "rowBodyHeight": 190,
+          "bodyAnchorSource": [
+            1910.5,
+            735
+          ],
+          "connectedBoundsSource": [
+            1878,
+            545,
+            1993,
+            735
+          ],
+          "footColorBoundsSource": [
+            1881,
+            709,
+            1940,
+            733
+          ]
+        }
+      ]
+    },
+    "pick": {
+      "file": "hero-pick-v2.png",
+      "size": [
+        2048,
+        768
+      ],
+      "sha256": "412b469329a4763c4cc8c126538013f1d636c275e0e0b15d96914f25ef15847f",
+      "componentCount": 24,
+      "rowBodyHeight": [
+        183,
+        182,
+        194
+      ],
+      "frames": [
+        {
+          "row": 0,
+          "col": 0,
+          "crop": [
+            80,
+            83,
+            102,
+            197
+          ],
+          "anchor": [
+            51,
+            184
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            131,
+            267
+          ],
+          "connectedBoundsSource": [
+            82,
+            85,
+            180,
+            278
+          ],
+          "footColorBoundsSource": [
+            85,
+            240.5,
+            177,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "crop": [
+            295,
+            73,
+            153,
+            194
+          ],
+          "anchor": [
+            103,
+            192
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            398,
+            265
+          ],
+          "connectedBoundsSource": [
+            297,
+            75,
+            446,
+            265
+          ],
+          "footColorBoundsSource": [
+            353,
+            240.5,
+            443,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "crop": [
+            548,
+            63,
+            148,
+            204
+          ],
+          "anchor": [
+            98,
+            202
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            646,
+            265
+          ],
+          "connectedBoundsSource": [
+            550,
+            65,
+            694,
+            265
+          ],
+          "footColorBoundsSource": [
+            602,
+            240.5,
+            690,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "crop": [
+            846,
+            18,
+            109,
+            249
+          ],
+          "anchor": [
+            60,
+            247
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            906,
+            265
+          ],
+          "connectedBoundsSource": [
+            848,
+            20,
+            953,
+            265
+          ],
+          "footColorBoundsSource": [
+            861,
+            240.5,
+            951,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "crop": [
+            1069,
+            83,
+            143,
+            184
+          ],
+          "anchor": [
+            88.5,
+            182
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            1157.5,
+            265
+          ],
+          "connectedBoundsSource": [
+            1071,
+            85,
+            1210,
+            265
+          ],
+          "footColorBoundsSource": [
+            1108,
+            240.5,
+            1207,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 5,
+          "crop": [
+            1358,
+            112,
+            130,
+            173
+          ],
+          "anchor": [
+            59,
+            158
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            1417,
+            270
+          ],
+          "connectedBoundsSource": [
+            1360,
+            114,
+            1486,
+            283
+          ],
+          "footColorBoundsSource": [
+            1363,
+            240.5,
+            1471,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 6,
+          "crop": [
+            1604,
+            101,
+            142,
+            180
+          ],
+          "anchor": [
+            61.5,
+            169
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            1665.5,
+            270
+          ],
+          "connectedBoundsSource": [
+            1606,
+            103,
+            1744,
+            279
+          ],
+          "footColorBoundsSource": [
+            1609,
+            240.5,
+            1722,
+            264.5
+          ]
+        },
+        {
+          "row": 0,
+          "col": 7,
+          "crop": [
+            1867,
+            82,
+            103,
+            198
+          ],
+          "anchor": [
+            51,
+            185
+          ],
+          "rowBodyHeight": 183,
+          "bodyAnchorSource": [
+            1918,
+            267
+          ],
+          "connectedBoundsSource": [
+            1869,
+            84,
+            1968,
+            278
+          ],
+          "footColorBoundsSource": [
+            1872,
+            240.5,
+            1964,
+            264.5
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "crop": [
+            79,
+            319,
+            103,
+            186
+          ],
+          "anchor": [
+            51.5,
+            184
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            130.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            81,
+            321,
+            180,
+            503
+          ],
+          "footColorBoundsSource": [
+            84,
+            476,
+            177,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "crop": [
+            337,
+            311,
+            151,
+            194
+          ],
+          "anchor": [
+            52,
+            192
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            389,
+            503
+          ],
+          "connectedBoundsSource": [
+            339,
+            313,
+            486,
+            503
+          ],
+          "footColorBoundsSource": [
+            342,
+            476,
+            436,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "crop": [
+            582,
+            310,
+            138,
+            195
+          ],
+          "anchor": [
+            51.5,
+            193
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            633.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            584,
+            312,
+            718,
+            503
+          ],
+          "footColorBoundsSource": [
+            587,
+            476,
+            680,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "crop": [
+            851,
+            284,
+            103,
+            221
+          ],
+          "anchor": [
+            51.5,
+            219
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            902.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            853,
+            286,
+            952,
+            503
+          ],
+          "footColorBoundsSource": [
+            856,
+            476,
+            949,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "crop": [
+            1094,
+            313,
+            152,
+            192
+          ],
+          "anchor": [
+            53.5,
+            190
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1147.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            1096,
+            315,
+            1244,
+            503
+          ],
+          "footColorBoundsSource": [
+            1099,
+            476,
+            1196,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 5,
+          "crop": [
+            1359,
+            334,
+            106,
+            171
+          ],
+          "anchor": [
+            52.5,
+            169
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1411.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            1361,
+            336,
+            1463,
+            503
+          ],
+          "footColorBoundsSource": [
+            1363,
+            476,
+            1460,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 6,
+          "crop": [
+            1611,
+            330,
+            124,
+            175
+          ],
+          "anchor": [
+            60.5,
+            173
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1671.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            1613,
+            332,
+            1733,
+            503
+          ],
+          "footColorBoundsSource": [
+            1616,
+            476,
+            1727,
+            500
+          ]
+        },
+        {
+          "row": 1,
+          "col": 7,
+          "crop": [
+            1867,
+            319,
+            103,
+            186
+          ],
+          "anchor": [
+            51.5,
+            184
+          ],
+          "rowBodyHeight": 182,
+          "bodyAnchorSource": [
+            1918.5,
+            503
+          ],
+          "connectedBoundsSource": [
+            1869,
+            321,
+            1968,
+            503
+          ],
+          "footColorBoundsSource": [
+            1872,
+            476,
+            1965,
+            500
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "crop": [
+            86,
+            539,
+            123,
+            197
+          ],
+          "anchor": [
+            39,
+            195
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            125,
+            734
+          ],
+          "connectedBoundsSource": [
+            88,
+            541,
+            207,
+            734
+          ],
+          "footColorBoundsSource": [
+            93,
+            707,
+            157,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "crop": [
+            304,
+            539,
+            145,
+            197
+          ],
+          "anchor": [
+            94.5,
+            195
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            398.5,
+            734
+          ],
+          "connectedBoundsSource": [
+            306,
+            541,
+            447,
+            734
+          ],
+          "footColorBoundsSource": [
+            354,
+            707,
+            443,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 2,
+          "crop": [
+            568,
+            520,
+            134,
+            216
+          ],
+          "anchor": [
+            86,
+            214
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            654,
+            734
+          ],
+          "connectedBoundsSource": [
+            570,
+            522,
+            700,
+            734
+          ],
+          "footColorBoundsSource": [
+            611,
+            707,
+            697,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 3,
+          "crop": [
+            837,
+            511,
+            118,
+            225
+          ],
+          "anchor": [
+            69,
+            223
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            906,
+            734
+          ],
+          "connectedBoundsSource": [
+            839,
+            513,
+            953,
+            734
+          ],
+          "footColorBoundsSource": [
+            862,
+            707,
+            950,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "crop": [
+            1087,
+            538,
+            167,
+            198
+          ],
+          "anchor": [
+            52,
+            195
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            1139,
+            733
+          ],
+          "connectedBoundsSource": [
+            1089,
+            540,
+            1252,
+            734
+          ],
+          "footColorBoundsSource": [
+            1092,
+            707,
+            1186,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "crop": [
+            1347,
+            564,
+            158,
+            177
+          ],
+          "anchor": [
+            49,
+            170
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            1396,
+            734
+          ],
+          "connectedBoundsSource": [
+            1349,
+            566,
+            1503,
+            739
+          ],
+          "footColorBoundsSource": [
+            1352,
+            707,
+            1440,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "crop": [
+            1604,
+            550,
+            164,
+            185
+          ],
+          "anchor": [
+            50,
+            183
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            1654,
+            733
+          ],
+          "connectedBoundsSource": [
+            1606,
+            552,
+            1766,
+            733
+          ],
+          "footColorBoundsSource": [
+            1609,
+            707,
+            1699,
+            731
+          ]
+        },
+        {
+          "row": 2,
+          "col": 7,
+          "crop": [
+            1875,
+            538,
+            121,
+            198
+          ],
+          "anchor": [
+            36.5,
+            196
+          ],
+          "rowBodyHeight": 194,
+          "bodyAnchorSource": [
+            1911.5,
+            734
+          ],
+          "connectedBoundsSource": [
+            1877,
+            540,
+            1994,
+            734
+          ],
+          "footColorBoundsSource": [
+            1880,
+            707,
+            1943,
+            731
+          ]
+        }
+      ]
+    },
+    "sword": {
+      "file": "hero-sword-v2.png",
+      "size": [
+        2048,
+        768
+      ],
+      "sha256": "5255438f271c77df59e831f09df9d469be9a654117332ff7d7a5f73f62f98675",
+      "componentCount": 24,
+      "rowBodyHeight": [
+        176,
+        189,
+        200
+      ],
+      "frames": [
+        {
+          "row": 0,
+          "col": 0,
+          "crop": [
+            84,
+            66,
+            94,
+            196
+          ],
+          "anchor": [
+            47,
+            178
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            131,
+            244
+          ],
+          "connectedBoundsSource": [
+            86,
+            68,
+            176,
+            260
+          ],
+          "footColorBoundsSource": [
+            89,
+            217,
+            173,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "crop": [
+            270,
+            70,
+            183,
+            176
+          ],
+          "anchor": [
+            131,
+            174
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            401,
+            244
+          ],
+          "connectedBoundsSource": [
+            272,
+            72,
+            451,
+            244
+          ],
+          "footColorBoundsSource": [
+            354,
+            217,
+            448,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "crop": [
+            532,
+            66,
+            180,
+            180
+          ],
+          "anchor": [
+            126,
+            178
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            658,
+            244
+          ],
+          "connectedBoundsSource": [
+            534,
+            68,
+            710,
+            244
+          ],
+          "footColorBoundsSource": [
+            611,
+            217,
+            705,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "crop": [
+            854,
+            70,
+            177,
+            176
+          ],
+          "anchor": [
+            53.5,
+            174
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            907.5,
+            244
+          ],
+          "connectedBoundsSource": [
+            856,
+            72,
+            1029,
+            244
+          ],
+          "footColorBoundsSource": [
+            859,
+            217,
+            956,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "crop": [
+            1110,
+            70,
+            205,
+            177
+          ],
+          "anchor": [
+            54,
+            175
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            1164,
+            245
+          ],
+          "connectedBoundsSource": [
+            1112,
+            72,
+            1313,
+            245
+          ],
+          "footColorBoundsSource": [
+            1115,
+            217,
+            1213,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 5,
+          "crop": [
+            1367,
+            74,
+            169,
+            178
+          ],
+          "anchor": [
+            53,
+            171
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            1420,
+            245
+          ],
+          "connectedBoundsSource": [
+            1369,
+            76,
+            1534,
+            250
+          ],
+          "footColorBoundsSource": [
+            1372,
+            217,
+            1468,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 6,
+          "crop": [
+            1622,
+            70,
+            151,
+            184
+          ],
+          "anchor": [
+            51.5,
+            176
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            1673.5,
+            246
+          ],
+          "connectedBoundsSource": [
+            1624,
+            72,
+            1771,
+            252
+          ],
+          "footColorBoundsSource": [
+            1627,
+            217,
+            1720,
+            241
+          ]
+        },
+        {
+          "row": 0,
+          "col": 7,
+          "crop": [
+            1875,
+            66,
+            94,
+            196
+          ],
+          "anchor": [
+            47,
+            178
+          ],
+          "rowBodyHeight": 176,
+          "bodyAnchorSource": [
+            1922,
+            244
+          ],
+          "connectedBoundsSource": [
+            1877,
+            68,
+            1967,
+            260
+          ],
+          "footColorBoundsSource": [
+            1880,
+            217,
+            1964,
+            241
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "crop": [
+            84,
+            287,
+            94,
+            201
+          ],
+          "anchor": [
+            46.5,
+            191
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            130.5,
+            478
+          ],
+          "connectedBoundsSource": [
+            86,
+            289,
+            176,
+            486
+          ],
+          "footColorBoundsSource": [
+            89,
+            452,
+            172,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "crop": [
+            341,
+            289,
+            169,
+            191
+          ],
+          "anchor": [
+            52.5,
+            189
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            393.5,
+            478
+          ],
+          "connectedBoundsSource": [
+            343,
+            291,
+            508,
+            478
+          ],
+          "footColorBoundsSource": [
+            346,
+            452,
+            441,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "crop": [
+            542,
+            288,
+            168,
+            192
+          ],
+          "anchor": [
+            115,
+            190
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            657,
+            478
+          ],
+          "connectedBoundsSource": [
+            544,
+            290,
+            708,
+            478
+          ],
+          "footColorBoundsSource": [
+            610,
+            452,
+            704,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "crop": [
+            854,
+            289,
+            185,
+            191
+          ],
+          "anchor": [
+            52.5,
+            189
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            906.5,
+            478
+          ],
+          "connectedBoundsSource": [
+            856,
+            291,
+            1037,
+            478
+          ],
+          "footColorBoundsSource": [
+            859,
+            452,
+            954,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "crop": [
+            1110,
+            288,
+            205,
+            192
+          ],
+          "anchor": [
+            52.5,
+            190
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            1162.5,
+            478
+          ],
+          "connectedBoundsSource": [
+            1112,
+            290,
+            1313,
+            478
+          ],
+          "footColorBoundsSource": [
+            1115,
+            452,
+            1210,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 5,
+          "crop": [
+            1366,
+            289,
+            171,
+            191
+          ],
+          "anchor": [
+            53,
+            189
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            1419,
+            478
+          ],
+          "connectedBoundsSource": [
+            1368,
+            291,
+            1535,
+            478
+          ],
+          "footColorBoundsSource": [
+            1371,
+            452,
+            1467,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 6,
+          "crop": [
+            1624,
+            291,
+            160,
+            189
+          ],
+          "anchor": [
+            51.5,
+            187
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            1675.5,
+            478
+          ],
+          "connectedBoundsSource": [
+            1626,
+            293,
+            1782,
+            478
+          ],
+          "footColorBoundsSource": [
+            1629,
+            452,
+            1722,
+            476
+          ]
+        },
+        {
+          "row": 1,
+          "col": 7,
+          "crop": [
+            1875,
+            287,
+            94,
+            201
+          ],
+          "anchor": [
+            46.5,
+            191
+          ],
+          "rowBodyHeight": 189,
+          "bodyAnchorSource": [
+            1921.5,
+            478
+          ],
+          "connectedBoundsSource": [
+            1877,
+            289,
+            1967,
+            486
+          ],
+          "footColorBoundsSource": [
+            1880,
+            452,
+            1963,
+            476
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "crop": [
+            84,
+            514,
+            126,
+            205
+          ],
+          "anchor": [
+            41.5,
+            202
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            125.5,
+            716
+          ],
+          "connectedBoundsSource": [
+            86,
+            516,
+            208,
+            717
+          ],
+          "footColorBoundsSource": [
+            89,
+            687,
+            162,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "crop": [
+            297,
+            516,
+            156,
+            200
+          ],
+          "anchor": [
+            100,
+            198
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            397,
+            714
+          ],
+          "connectedBoundsSource": [
+            299,
+            518,
+            451,
+            714
+          ],
+          "footColorBoundsSource": [
+            346,
+            687,
+            448,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 2,
+          "crop": [
+            541,
+            512,
+            175,
+            204
+          ],
+          "anchor": [
+            118,
+            202
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            659,
+            714
+          ],
+          "connectedBoundsSource": [
+            543,
+            514,
+            714,
+            714
+          ],
+          "footColorBoundsSource": [
+            613,
+            687,
+            705,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 3,
+          "crop": [
+            823,
+            518,
+            145,
+            198
+          ],
+          "anchor": [
+            88,
+            196
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            911,
+            714
+          ],
+          "connectedBoundsSource": [
+            825,
+            520,
+            966,
+            714
+          ],
+          "footColorBoundsSource": [
+            861,
+            687,
+            961,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "crop": [
+            1100,
+            516,
+            215,
+            200
+          ],
+          "anchor": [
+            56,
+            198
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            1156,
+            714
+          ],
+          "connectedBoundsSource": [
+            1102,
+            518,
+            1313,
+            714
+          ],
+          "footColorBoundsSource": [
+            1105,
+            687,
+            1207,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "crop": [
+            1359,
+            522,
+            183,
+            192
+          ],
+          "anchor": [
+            56.5,
+            190
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            1415.5,
+            712
+          ],
+          "connectedBoundsSource": [
+            1361,
+            524,
+            1540,
+            712
+          ],
+          "footColorBoundsSource": [
+            1364,
+            687,
+            1467,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "crop": [
+            1628,
+            514,
+            149,
+            202
+          ],
+          "anchor": [
+            48,
+            200
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            1676,
+            714
+          ],
+          "connectedBoundsSource": [
+            1630,
+            516,
+            1775,
+            714
+          ],
+          "footColorBoundsSource": [
+            1633,
+            687,
+            1719,
+            711
+          ]
+        },
+        {
+          "row": 2,
+          "col": 7,
+          "crop": [
+            1876,
+            515,
+            126,
+            204
+          ],
+          "anchor": [
+            41.5,
+            201
+          ],
+          "rowBodyHeight": 200,
+          "bodyAnchorSource": [
+            1917.5,
+            716
+          ],
+          "connectedBoundsSource": [
+            1878,
+            517,
+            2000,
+            717
+          ],
+          "footColorBoundsSource": [
+            1881,
+            687,
+            1954,
+            711
+          ]
+        }
+      ]
+    }
   }
 }

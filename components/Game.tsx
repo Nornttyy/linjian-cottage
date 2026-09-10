@@ -10,13 +10,13 @@ function Icon({ name, size = 28 }: {
     size?: number;
 }) { const ref = useRef<HTMLCanvasElement>(null); useEffect(() => { let active = true; loadArt().then(art => { if (active && ref.current)
     paintIcon(ref.current.getContext('2d')!, name, art, 32); }); return () => { active = false; }; }, [name]); return <canvas className="item-icon" ref={ref} width={32} height={32} style={{ width: size, height: size }} aria-hidden="true"/>; }
-export default function Game() {
+export default function Game({ apiUrl = '/api/game' }: { apiUrl?: string }) {
     const canvas = useRef<HTMLCanvasElement>(null), mapCanvas = useRef<HTMLCanvasElement>(null), client = useRef<GameClient | null>(null), noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [state, setState] = useState<ClientState | null>(null), [map, setMap] = useState(false), [room, setRoom] = useState(false), [roomCode, setRoomCode] = useState(''), [notice, setNotice] = useState('');
     const showNotice = (text: string) => { setNotice(text); if (noticeTimer.current)
         clearTimeout(noticeTimer.current); noticeTimer.current = setTimeout(() => setNotice(''), 1400); };
-    useEffect(() => { const game = new GameClient(canvas.current!, setState, showNotice, () => setMap(v => !v)); client.current = game; game.connect(); return () => { game.destroy(); if (noticeTimer.current)
-        clearTimeout(noticeTimer.current); }; }, []);
+    useEffect(() => { const game = new GameClient(canvas.current!, setState, showNotice, () => setMap(v => !v), apiUrl); client.current = game; game.connect(); return () => { game.destroy(); if (noticeTimer.current)
+        clearTimeout(noticeTimer.current); }; }, [apiUrl]);
     useEffect(() => { if (client.current) {
         client.current.paused = map || room;
         client.current.keys.clear();

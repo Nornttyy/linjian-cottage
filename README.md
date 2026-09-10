@@ -2,6 +2,10 @@
 
 第一版实现固定大地图、独立矿洞、采集、单层模块化建造、史莱姆战斗和最多四人的共享世界。
 
+公开网页：https://nornttyy.github.io/linjian-cottage/
+
+GitHub Pages 托管游戏前端，Sites + D1 提供多人房间和持久存档。相同房间号可用于两个网页入口。
+
 ## 运行
 
 需要 Node.js 22.13 以上版本。
@@ -14,6 +18,17 @@ npm run dev
 本地世界保存在 `.local/worlds.sqlite`，线上使用 D1。浏览器只保存房间连接凭证。
 
 每个房间最多保留四个角色席位，离线后席位与角色进度仍保留；当前没有移除成员功能。
+
+## GitHub Pages
+
+```sh
+npm run build:pages
+npm run preview:pages
+```
+
+`main` 保存源码，`gh-pages` 只保存网页构建产物。在已登录 GitHub、源码已提交并推送后，运行 `npm run publish:pages` 更新网页分支。Pages 发布来源设为 `gh-pages` 分支根目录。
+
+静态构建默认连接现有公开游戏后端。自建部署时，通过 `GAME_API_URL` 设置自己的接口地址、`PAGES_BASE_PATH` 设置仓库子路径，并把自己的 Pages 来源加入后端 CORS 允许列表。GitHub Pages 本身不运行数据库或游戏服务端。连接凭证保存在各网页来源自己的浏览器存储里。
 
 ## 操作
 
@@ -38,6 +53,7 @@ npm run dev
 ```sh
 npm test
 node scripts/test-regression.mjs
+node scripts/test-animation.mjs
 node scripts/test-room.mjs
 npm run build
 ```
@@ -45,6 +61,8 @@ npm run build
 房间接口测试需要本地预览运行。接口测试创建独立的测试世界。
 
 回归测试覆盖短按移动、转向顺序、延迟确认、请求重试、连续采集、右键拆除、怪物出生点和屋顶预览坐标。此类检查不代替浏览器中的完整实机操作检查。
+
+动作测试覆盖延迟确认不倒退、不抹除或重播出招，出招朝向和工具锁定，以及动作接触帧与服务端伤害时机的一致性。
 
 ## 素材
 

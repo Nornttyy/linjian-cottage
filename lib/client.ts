@@ -2,6 +2,7 @@ import { loadArt, type Atlas } from './art';
 import { createWorld, move, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
 import { render, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
 import { SPAWN, sceneAt } from './world';
+import type { HeroSwing } from './animation';
 type ApiReply = {
     room: string;
     playerId: string;
@@ -45,6 +46,7 @@ export class GameClient {
     } | null = null;
     held = false;
     private heldButton=0;
+    private localSwing: HeroSwing | null = null;
     private movements:Movement[]=[];
     connected = false;
     error = '';
@@ -59,7 +61,7 @@ export class GameClient {
     private buildStamp = '';
     private generation = 0;
     private fadeUntil = 0;
-    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void) {
+    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game') {
         canvas.addEventListener('pointermove', this.pointerMove);
         canvas.addEventListener('pointerdown', this.pointerDown);
         canvas.addEventListener('contextmenu', this.contextMenu);
@@ -73,7 +75,7 @@ export class GameClient {
     }
     notify() { if (!this.disposed)
         this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art }); }
-    private async request(body: unknown) { const response = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) }); const result = await response.json() as ApiReply; if (!response.ok || !result.state)
+    private async request(body: unknown) { const response = await fetch(this.apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) }); const result = await response.json() as ApiReply; if (!response.ok || !result.state)
         throw new Error(result.error || '连接失败'); return result; }
     async connect(mode: 'resume' | 'create' | 'join' = 'resume', room = '') {
         const generation = ++this.generation;
@@ -81,6 +83,7 @@ export class GameClient {
             clearTimeout(this.timer);
         this.keys.clear();
         this.pending = null;
+        this.localSwing = null;
         this.movements = [];
         this.commands = [];
         this.connected = false;
@@ -128,7 +131,7 @@ export class GameClient {
             this.error = '';
             const p = this.world.players[session.playerId];
             if(sceneAt(p.x)!==sceneAt(this.pos.x)){
-                this.movements=[];this.keys.clear();this.held=false;this.fadeUntil=Date.now()+500;
+                this.movements=[];this.keys.clear();this.held=false;this.localSwing=null;this.fadeUntil=Date.now()+500;
             }
             this.pos.x=p.x;this.pos.y=p.y;
             for(const segment of this.movements)move(this.world,this.pos,segment.dx*(segment.speed??4.2)*segment.seconds,segment.dy*(segment.speed??4.2)*segment.seconds);
@@ -177,11 +180,10 @@ export class GameClient {
             const aimX=point.x-this.pos.x,aimY=point.y-this.pos.y;
             if(Math.hypot(aimX,aimY)>.1)this.pos.face=Math.abs(aimX)>Math.abs(aimY)?aimX>0?'right':'left':aimY>0?'down':'up';
             const target = this.tool === 'sword' ? this.world.mobs.filter(m => m.hp > 0 && Math.hypot(point.x - m.x, point.y - m.y) < 1.8).sort((a, b) => Math.hypot(a.x - point.x, a.y - point.y) - Math.hypot(b.x - point.x, b.y - point.y))[0]?.id : pickResource(point, this.world, this.pos)?.id;
-            this.command({ type: 'attack', tool: this.tool, target });
-            const p = this.world.players[this.session.playerId];
-            if (p) {
-                p.swingStart=now;p.swingUntil=now+(this.tool==='sword'?370:490);p.equipped=this.tool;
-            }
+            const face = this.pos.face;
+            this.command({ type: 'attack', tool: this.tool, target, face });
+            // Local presentation has its own clock; snapshots still own damage and inventory.
+            this.localSwing = { tool: this.tool, face, start: now, until: now + (this.tool === 'sword' ? 370 : 490) };
         }
         this.lastClick = now;
     }
@@ -206,7 +208,7 @@ export class GameClient {
         if (this.held)
             this.act();
         if (this.art)
-            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: Date.now(), fadeUntil:this.fadeUntil }, this.art);
+            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: Date.now(), fadeUntil:this.fadeUntil, localSwing:this.localSwing }, this.art);
         this.frame = requestAnimationFrame(this.animate);
     };
     private pointerMove = (e: PointerEvent) => { this.screenPointer = { x: e.clientX, y: e.clientY }; this.pointer = pointerWorld(this.canvas, this.pos, e.clientX, e.clientY); };

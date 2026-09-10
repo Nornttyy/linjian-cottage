@@ -1,9 +1,25 @@
 import { getStore } from '@/lib/store';
 import { applyInput, createPlayer, createWorld, publicWorld, tickWorld, type Input, type WorldState } from '@/lib/simulation';
 export const dynamic = 'force-dynamic';
-const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
+const allowedOrigins = new Set(['https://nornttyy.github.io']);
+const corsHeaders = (req: Request): Record<string, string> => {
+    const origin = req.headers.get('Origin');
+    return origin && allowedOrigins.has(origin) ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' } : {};
+};
+const allowedRequest = (req: Request) => {
+    const origin = req.headers.get('Origin');
+    return !origin || origin === new URL(req.url).origin || allowedOrigins.has(origin);
+};
+export function OPTIONS(req: Request) {
+    return new Response(null, { status: allowedRequest(req) ? 204 : 403, headers: {
+        ...corsHeaders(req), 'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600',
+    } });
+}
 async function hash(token: string) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(b), n => n.toString(16).padStart(2, '0')).join(''); }
 export async function POST(req: Request) {
+    const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
+    if (!allowedRequest(req)) return reply({ error: '来源不受支持' }, 403);
     try {
         if (Number(req.headers.get('content-length') ?? 0) > 12000)
             return reply({ error: '请求过大' }, 413);

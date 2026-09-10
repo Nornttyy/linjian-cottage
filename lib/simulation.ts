@@ -32,6 +32,7 @@ export type Player = {
     equipped?: Tool;
     movingUntil?: number;
     swingStart?: number;
+    swingFace?: Player['face'];
     hurtAt?: number;
     pendingStrike?: {command:Command;at:number};
 };
@@ -79,6 +80,7 @@ export type Command = {
     tool?: Tool;
     part?: Part;
     target?: string;
+    face?: Player['face'];
 };
 export type Movement = { dx:number; dy:number; seconds:number; speed?:number };
 export type Input = {
@@ -303,6 +305,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         p.swingStart=now;
         p.swingUntil = now + (c.tool==='sword'?370:490);
         p.equipped=c.tool;
+        p.swingFace=c.face&&['up','down','left','right'].includes(c.face)?c.face:p.face;
         if(c.tool!=='sword'){
             const r=c.target?RESOURCE_MAP.get(c.target):undefined;
             if(r&&!s.depleted[r.id]){

@@ -1,9 +1,9 @@
 import { COLORS, RESOURCES, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { canBuild, distance, type WorldState, type Player, type Part, type Tool } from './simulation';
-import { type Atlas, type Sprite } from './art';
+import { HERO_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
 import {atmosphere,treeShadows} from './atmosphere';
-import {heroFrame,slimeFrame} from './animation';
+import {heroFrame,heroFacing,slimeFrame,type HeroSwing} from './animation';
 export const TILE = 24;
 export function roofRect(x:number,y:number,ox:number,oy:number){return [x*TILE+ox,y*TILE+oy-22,24,24] as const;}
 export function buildTarget(point:{x:number;y:number},s:WorldState,remove:boolean){
@@ -21,6 +21,7 @@ export type View = {
     } | null;
     time: number;
     fadeUntil?: number;
+    localSwing?: HeroSwing | null;
 };
 export type Position = {
     x: number;
@@ -153,11 +154,12 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         if (!visible(point.x, point.y))
             continue;
         drawables.push({ y: point.y, draw: () => {
-                const moving=local?pos.moving:t<(p.movingUntil??0),face=local?pos.face:p.face;
-                const frame=heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe');
+                const moving=local?pos.moving:t<(p.movingUntil??0),swing=local?view.localSwing:undefined;
+                const face=heroFacing(p,local?pos.face:p.face,t,swing);
+                const frame=heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing);
                 ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-6,point.y*TILE+oy-2,12,3);
                 ctx.save();ctx.translate(Math.round(point.x*TILE+ox),Math.round(point.y*TILE+oy));
-                if(face==='left')ctx.scale(-1,1);ctx.drawImage(art[frame],-24,-44,48,56);ctx.restore();
+                if(face==='left')ctx.scale(-1,1);ctx.drawImage(art[frame],-HERO_SIZE.anchorX,-HERO_SIZE.anchorY,HERO_SIZE.width,HERO_SIZE.height);ctx.restore();
                 if(!local){ctx.fillStyle=['#ffe7a1','#f8a77d','#7cc9e2','#c8a0e8'][p.color%4];ctx.fillRect(point.x*TILE+ox-3,point.y*TILE+oy-37,6,2);}
             } });
     }

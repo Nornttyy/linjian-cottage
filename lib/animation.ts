@@ -1,13 +1,25 @@
 import {frameKey,type Sprite,type Direction} from './art';
 import type {Player,Mob,Tool} from './simulation';
-export function heroFrame(p:Player,face:Player['face'],moving:boolean,time:number,tool:Tool):Sprite{
-    const direction:Direction=face==='left'?'right':face;
+export type HeroSwing={tool:Exclude<Tool,'build'>;face:Player['face'];start:number;until:number};
+const swingTimes = { axe:[0,60,110,155,200,245,325,415], pick:[0,60,110,155,200,245,325,415], sword:[0,45,80,120,170,215,275,330] };
+export function swingFrame(action:Exclude<Tool,'build'>,elapsed:number){
+    let frame=0;for(let i=1;i<8;i++)if(elapsed>=swingTimes[action][i])frame=i;return frame;
+}
+// undefined selects the authoritative timeline; null explicitly means no local swing.
+export function heroFacing(p:Player,face:Player['face'],time:number,swing?:HeroSwing|null):Player['face']{
+    if(time<p.dodgeUntil||(p.hurtAt&&time-p.hurtAt<600))return face;
+    if(swing!==undefined)return swing&&time<swing.until?swing.face:face;
+    return time<p.swingUntil?p.swingFace??face:face;
+}
+export function heroFrame(p:Player,face:Player['face'],moving:boolean,time:number,tool:Tool,swing?:HeroSwing|null):Sprite{
+    const facing=heroFacing(p,face,time,swing);
+    const direction:Direction=facing==='left'?'right':facing;
     if(time<p.dodgeUntil)return frameKey('dodge',direction,Math.max(0,Math.min(7,Math.floor((time-(p.dodgeUntil-330))/330*8))));
     if(p.hurtAt&&time-p.hurtAt<600)return frameKey('hurt',direction,Math.max(0,Math.min(7,Math.floor((time-p.hurtAt)/600*8))));
-    if(time<p.swingUntil){
-        const action=p.equipped==='pick'?'pick':p.equipped==='sword'?'sword':p.equipped==='axe'?'axe':tool==='sword'?'sword':tool==='pick'?'pick':'axe';
-        const duration=action==='sword'?370:490,start=p.swingStart??p.swingUntil-duration;
-        return frameKey(action,direction,Math.max(0,Math.min(7,Math.floor((time-start)/duration*8))));
+    if(swing===undefined?time<p.swingUntil:!!swing&&time<swing.until){
+        const action=swing?.tool??(p.equipped==='pick'?'pick':p.equipped==='sword'?'sword':p.equipped==='axe'?'axe':tool==='sword'?'sword':tool==='pick'?'pick':'axe');
+        const duration=action==='sword'?370:490,start=swing?.start??p.swingStart??p.swingUntil-duration;
+        return frameKey(action,direction,swingFrame(action,time-start));
     }
     if(moving)return frameKey('walk',direction,Math.floor(time/85)%8);
     return frameKey('idle',direction,Math.floor(time/380)%(direction==='down'?4:2));
