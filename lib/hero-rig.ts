@@ -49,13 +49,14 @@ export function createHeroFrames(parts:Parts,blinkParts:Parts){
         for(const action of ['idle','walk','axe','pick','sword','hurt','dodge'] as const){
             const count=action==='idle'?HERO_IDLE_FRAME_COUNT:HERO_FRAME_COUNT;
             for(let frame=0;frame<count;frame++){
-                const p=frame/count,walk=action==='walk',dodge=action==='dodge',using=action==='axe'||action==='pick'||action==='sword';
+                const walk=action==='walk',dodge=action==='dodge',using=action==='axe'||action==='pick'||action==='sword';
+                const p=dodge?frame/(count-1):frame/count,rollTuck=dodge&&frame>0&&frame<count-1?Math.sin(p*Math.PI):0;
                 const out=make(),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;
-                const wave=Math.sin(p*Math.PI*2),crouch=dodge?Math.sin(p*Math.PI)*4:0;
+                const wave=Math.sin(p*Math.PI*2),crouch=rollTuck*4;
                 const bob=action==='idle'?Math.round(Math.sin(p*Math.PI*2)*.6):walk?Math.round(Math.cos(p*Math.PI*4)*.55):0;
                 const recoil=action==='hurt'?Math.round(Math.sin(p*Math.PI*3)*(1-p)*1.5):0;
                 const cx=32+recoil,hipY=35+(walk?bob:0)+crouch,neckY=25+bob+crouch;
-                if(dodge){
+                if(dodge&&frame>0&&frame<count-1){
                     ctx.translate(32,33);ctx.rotate(p*Math.PI*2*(side?1:-1));ctx.translate(-32,-33);
                 }
                 const leftHip={x:cx+(side?-1:-2),y:hipY},rightHip={x:cx+(side?1:2),y:hipY};
@@ -81,7 +82,7 @@ export function createHeroFrames(parts:Parts,blinkParts:Parts){
                 const armDraws=shoulders.map((shoulder,index)=>{
                     const step=walk?wave*(index?-1:1):0;
                     let hand={x:shoulder.x+(side?step*2.3:step*.35),y:shoulder.y+9-Math.abs(step)*.8};
-                    if(dodge)hand={x:shoulder.x+(index?-1:1)*2,y:shoulder.y+5};
+                    if(dodge)hand={x:lerp(hand.x,shoulder.x+(index?-1:1)*2,rollTuck),y:lerp(hand.y,shoulder.y+5,rollTuck)};
                     if(grip){const second=index===0?2:0;hand={x:grip.x-Math.sin(angle)*second,y:grip.y+Math.cos(angle)*second};}
                     const elbow=joint(shoulder,hand,4.5,4.5,index?1:-1);
                     return()=>{bone(ctx,upper,shoulder,elbow,.5);bone(ctx,fore,elbow,hand,.5);};
