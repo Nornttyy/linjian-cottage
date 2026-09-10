@@ -10,11 +10,11 @@ const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
 try{
-  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
+  for(const name of ['world','simulation','frame-layout','inventory','roof-visibility','connected-wall','tiles','animation','atmosphere','renderer','art','client']){
     let path=join(source,'lib',name+'.ts');
     if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
     const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
     await writeFile(join(temp,name+'.mjs'),code);
   }
   const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
@@ -121,6 +121,24 @@ try{
       const frames=new Set(Array.from({length:end},(_,i)=>animation.swingFrame(tool,i)));
       assert.equal(frames.size,8,`${tool} must use every generated pose`);
     }
+  });
+  await test('tool light peaks at contact, uses all eight phases and finishes with the original action',()=>{
+    const f=fixture();try{for(const tool of ['axe','pick','sword']){
+      const timing=sim.TOOL_TIMING[tool],start=now,swing={tool,face:'right',start,until:start+timing.duration};
+      assert.equal(animation.toolTrailFrame(f.p,start,swing),null);
+      assert.equal(animation.toolTrailFrame(f.p,start+timing.contact,swing),`trail-${tool}-4`);
+      const frames=new Set(Array.from({length:timing.duration},(_,i)=>animation.toolTrailFrame(f.p,start+i,swing)).filter(Boolean));
+      assert.equal(frames.size,8);assert.equal(animation.toolTrailFrame(f.p,swing.until,swing),null);
+      assert.equal(animation.toolTrailFrame(f.p,swing.until+600,swing),null);
+    }}finally{f.c.destroy();}
+  });
+  await test('late acknowledgements cannot replay local tool light; hurt and dodge suppress it',()=>{
+    const f=fixture();try{f.p.equipped='axe';f.p.swingStart=now;f.p.swingUntil=now+360;
+      assert.equal(animation.toolTrailFrame(f.p,now+180), 'trail-axe-4');
+      assert.equal(animation.toolTrailFrame(f.p,now+180,null),null);
+      f.p.hurtAt=now;assert.equal(animation.toolTrailFrame(f.p,now+180),null);f.p.hurtAt=0;
+      f.p.dodgeUntil=now+330;assert.equal(animation.toolTrailFrame(f.p,now+180),null);
+    }finally{f.c.destroy();}
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;
 }finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}

@@ -1,5 +1,7 @@
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
 export type Tool = 'axe' | 'pick' | 'sword' | 'build';
+// Match the bounded client request timeout: delayed input still represents elapsed movement.
+const INPUT_HISTORY_SECONDS=8;
 export const TOOL_TIMING = {
     axe: { duration: 360, contact: 180, cooldown: 380 },
     pick: { duration: 360, contact: 180, cooldown: 380 },
@@ -147,12 +149,19 @@ export function move(s: WorldState, p: {
 }, dx: number, dy: number) {
     const free = (x: number, y: number) => !isBlocked(s, x - .2, y - .2) && !isBlocked(s, x + .2, y - .2) && !isBlocked(s, x - .2, y + .2) && !isBlocked(s, x + .2, y + .2);
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / .2));
-    for (let i = 0; i < steps; i++) {
-        if (free(p.x + dx / steps, p.y))
-            p.x += dx / steps;
-        if (free(p.x, p.y + dy / steps))
-            p.y += dy / steps;
-    }
+    const axis=(amount:number,horizontal:boolean)=>{
+        if(!amount)return;
+        const clear=(fraction:number)=>free(p.x+(horizontal?amount*fraction:0),p.y+(horizontal?0:amount*fraction));
+        let fraction=1;
+        if(!clear(1)){
+            // Clip to the same collision boundary for a frame-sized move and a delayed batch.
+            let low=0,high=1;
+            for(let n=0;n<14;n++){const middle=(low+high)/2;if(clear(middle))low=middle;else high=middle;}
+            fraction=low;
+        }
+        if(horizontal)p.x+=amount*fraction;else p.y+=amount*fraction;
+    };
+    for (let i = 0; i < steps; i++) {axis(dx/steps,true);axis(dy/steps,false);}
 }
 function emit(s: WorldState, kind: GameEvent['kind'], x: number, y: number, amount: number, now: number) { s.events.push({ id: `${now}-${s.events.length}`, time: now, x, y, kind, amount }); }
 export function tickWorld(s: WorldState, now: number) {
@@ -179,6 +188,8 @@ export function tickWorld(s: WorldState, now: number) {
             else
                 continue;
         }
+        // Hurt and the visible landing/recovery frames finish before locomotion resumes.
+        if(now<mob.hitUntil||(mob.cooldown&&now>=mob.cooldown-1100&&now<mob.cooldown-750))continue;
         const beforeX=mob.x,beforeY=mob.y;
         let target: Player | undefined, closest = 8;
         for (const p of players) {
@@ -269,13 +280,14 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         return null;
     }
     if (c.type === 'interact') {
-        if(transitionScene(p,now,2))return null;
-        const door = Object.values(s.buildings).filter(b => b.kind === 'door' && distance(p, { x: b.x + .5, y: b.y + .5 }) < 2).sort((a, b) => distance(p, a) - distance(p, b))[0];
-        if (door) {
-            if (door.open && Object.values(s.players).some(q => Math.floor(q.x) === door.x && Math.floor(q.y) === door.y))
-                return '门口有人';
-            door.open = !door.open;
-        }
+        if(!c.target && transitionScene(p,now,2))return null;
+        const doorDistance=(b:Building)=>distance(p,{x:b.x+.5,y:b.y+.5});
+        const door=c.target?s.buildings[c.target]:Object.values(s.buildings).filter(b=>b.kind==='door'&&doorDistance(b)<2).sort((a,b)=>doorDistance(a)-doorDistance(b))[0];
+        // Explicit pointer targets obey exactly the same authoritative range and type checks.
+        if(!door || door.kind!=='door' || doorDistance(door)>=2)return null;
+        if(door.open && Object.values(s.players).some(q=>
+            now-q.seen<8000 && q.x+.2>door.x && q.x-.2<door.x+1 && q.y+.2>door.y && q.y-.2<door.y+1))return '门口有人';
+        door.open=!door.open;
         return null;
     }
     if (c.type === 'build') {
@@ -377,7 +389,7 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
     if (!Number.isSafeInteger(input.seq) || input.seq <= p.seq)
         return null;
     const previousSeen=p.seen;
-    const dt = Math.max(0, Math.min(1, (now - previousSeen) / 1000));
+    const dt = Math.max(0, Math.min(INPUT_HISTORY_SECONDS, (now - previousSeen) / 1000));
     p.seen = now;
     p.seq = input.seq;
     let message: string | null = null,movementApplied=false;
@@ -385,8 +397,8 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
         if(movementApplied)return;movementApplied=true;
         // Locked time never becomes movement credit, including inputs arriving after unlock.
         const locked=now<p.swingUntil;
-        const elapsed=Math.max(0,Math.min(1,(now-Math.max(previousSeen,p.swingUntil))/1000));
-        let credit=locked?0:Math.min(.75,(previousSeen<p.swingUntil?0:p.moveCredit??.05)+elapsed);
+        const elapsed=Math.max(0,Math.min(INPUT_HISTORY_SECONDS,(now-Math.max(previousSeen,p.swingUntil))/1000));
+        let credit=locked?0:Math.min(INPUT_HISTORY_SECONDS,(previousSeen<p.swingUntil?0:p.moveCredit??.05)+elapsed);
         const movements=Array.isArray(input.movements)?input.movements.slice(0,64):[{dx:input.dx,dy:input.dy,seconds:Math.min(.35,dt)}];
         if(locked)p.movingUntil=0;
         for(const segment of movements){
@@ -410,8 +422,8 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
     };
     for (const command of (Array.isArray(input.commands) ? input.commands : []).slice(0, 5)) {
         // The client records movement before clicking and stops recording once the swing begins.
-        // Commit that earlier movement before beginning this packet's first attack.
-        if(command.type==='attack')applyMovement();
+        // Interaction also uses the final walked-to position, especially when leaving a doorway.
+        if(command.type==='attack'||command.type==='interact')applyMovement();
         const result = runCommand(s, p, command, now);
         if (result)message = result;
     }

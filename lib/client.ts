@@ -3,6 +3,7 @@ import { createWorld, move, TOOL_TIMING, type WorldState, type Tool, type Part, 
 import { render, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
 import { SPAWN, sceneAt } from './world';
 import type { HeroSwing } from './animation';
+import {HOTBAR_SIZE,ITEMS,defaultSlots,restoreSlots,swapSlots,quickTransfer,type ItemKey,type ItemSlot} from './inventory';
 type ApiReply = {
     room: string;
     playerId: string;
@@ -25,6 +26,8 @@ export type ClientState = {
     connected: boolean;
     error: string;
     art?: Atlas;
+    slots:ItemSlot[];
+    selectedSlot:number;
 };
 export class GameClient {
     world = createWorld();
@@ -33,6 +36,8 @@ export class GameClient {
     tool: Tool = 'axe';
     part: Part = 'floor';
     remove = false;
+    slots=defaultSlots();
+    selectedSlot=0;
     paused = false;
     art?: Atlas;
     keys = new Set<string>();
@@ -66,10 +71,11 @@ export class GameClient {
     private buildStamp = '';
     private generation = 0;
     private fadeUntil = 0;
-    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game') {
+    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{}) {
         canvas.addEventListener('pointermove', this.pointerMove);
         canvas.addEventListener('pointerdown', this.pointerDown);
         canvas.addEventListener('contextmenu', this.contextMenu);
+        canvas.addEventListener('wheel',this.wheel,{passive:false});
         window.addEventListener('pointerup', this.pointerUp);
         window.addEventListener('keydown', this.keyDown);
         window.addEventListener('keyup', this.keyUp);
@@ -79,7 +85,7 @@ export class GameClient {
         this.frame = requestAnimationFrame(this.animate);
     }
     notify() { if (!this.disposed)
-        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art }); }
+        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot }); }
     private async request(body: unknown) { const response = await fetch(this.apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) }); const result = await response.json() as ApiReply; if (!response.ok || !result.state)
         throw new Error(result.error || '连接失败'); return result; }
     async connect(mode: 'resume' | 'create' | 'join' = 'resume', room = '') {
@@ -113,6 +119,7 @@ export class GameClient {
             const p = this.world.players[this.session.playerId];
             this.pos = { x: p.x, y: p.y, face: p.face, moving: false };
             this.seq = p.seq;
+            this.loadLayout();
             this.connected = true;
             this.notify();
             this.timer = setTimeout(() => this.sync(), 160);
@@ -174,9 +181,28 @@ export class GameClient {
             else this.timer = setTimeout(() => this.sync(), this.connected ? 150 : 1600);
         }
     }
-    setTool(tool: Tool) { this.tool = tool; this.remove = false; this.buildStamp = ''; this.notify(); }
-    setPart(part: Part) { this.tool = 'build'; this.part = part; this.remove = false; this.notify(); }
-    toggleRemove() { this.tool = 'build'; this.remove = !this.remove; this.notify(); }
+    private layoutKey(){return this.session?`linjian-layout:${this.session.room}:${this.session.playerId}`:null;}
+    private loadLayout(){
+        this.slots=defaultSlots();this.selectedSlot=0;
+        try{const key=this.layoutKey(),saved=key?JSON.parse(localStorage.getItem(key)||'null'):null;
+            if(saved){this.slots=restoreSlots(saved.slots);if(Number.isInteger(saved.selected)&&saved.selected>=0&&saved.selected<HOTBAR_SIZE)this.selectedSlot=saved.selected;}
+        }catch{}
+        this.applySlot();
+    }
+    private saveLayout(){try{const key=this.layoutKey();if(key)localStorage.setItem(key,JSON.stringify({slots:this.slots,selected:this.selectedSlot}));}catch{}}
+    private applySlot(){
+        const item=this.slots[this.selectedSlot];this.remove=false;this.buildStamp='';
+        if(item&&ITEMS[item].kind==='plan'){this.tool='build';this.part=item as Part;}
+        else this.tool=item==='pick'||item==='sword'?item:'axe';
+    }
+    selectSlot(index:number){if(!Number.isInteger(index)||index<0||index>=HOTBAR_SIZE)return;this.selectedSlot=index;this.applySlot();this.saveLayout();this.notify();}
+    moveSlot(from:number,to:number){this.slots=swapSlots(this.slots,from,to);this.applySlot();this.saveLayout();this.notify();}
+    quickMoveSlot(from:number){const p=this.session?this.world.players[this.session.playerId]:undefined;this.slots=quickTransfer(this.slots,from,p?.inventory);this.applySlot();this.saveLayout();this.notify();}
+    private equipItem(item:ItemKey){const index=this.slots.indexOf(item);if(index>=0&&index<HOTBAR_SIZE)this.selectSlot(index);else if(index>=0){this.moveSlot(index,this.selectedSlot);} }
+    setTool(tool: Tool) { this.equipItem(tool==='build'?this.part:tool); }
+    setPart(part: Part) { this.equipItem(part); }
+    toggleRemove() {const next=!this.remove;this.setPart(this.part);this.remove=next;this.notify();}
+    pauseControls(){this.keys.clear();this.held=false;this.heldButton=0;this.buildStamp='';}
     press(key: string, down: boolean) { if (down)
         this.keys.add(key);
     else
@@ -193,9 +219,9 @@ export class GameClient {
     }
     command(command: Command) {
         if(command.type==='dodge' && this.toolLocked())return false;
-        if(!this.connected || this.commands.length>=5)return false;
+        if(this.paused || !this.connected || this.commands.length>=5)return false;
         this.commands.push(command);
-        if(command.type==='attack'||command.type==='dodge')this.flushActions();
+        if(command.type==='attack'||command.type==='dodge'||command.type==='interact')this.flushActions();
         return true;
     }
     private movement() { if (this.paused || !this.connected || this.toolLocked())
@@ -205,6 +231,12 @@ export class GameClient {
             return;
         const now = Date.now();
         const p=this.world.players[this.session.playerId];
+        const item=this.slots[this.selectedSlot];
+        if(!item)return;
+        if(ITEMS[item].kind==='resource'){
+            if(item==='essence'&&now-this.lastClick>=400){this.command({type:'heal'});this.lastClick=now;}
+            return;
+        }
         if(this.tool!=='build' && (this.toolLocked(now) || now<(p?.actionAt??0) || now<(p?.dodgeUntil??0) || this.dodgePending()))return;
         if (now - this.lastClick < (this.tool === 'build' ? 150 : TOOL_TIMING[this.tool].cooldown))
             return;
@@ -255,18 +287,25 @@ export class GameClient {
         const now=Date.now(),pose=now<(this.localSwing?.until??0)?'tool':this.pos.moving?'walk':'idle';
         if(pose!==this.poseState){this.poseState=pose;this.poseStarted=now;}
         if (this.art)
-            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now, fadeUntil:this.fadeUntil, localSwing:this.localSwing, motionElapsed:now-this.poseStarted }, this.art);
+            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now, roomKey: this.session?.room, fadeUntil:this.fadeUntil, localSwing:this.localSwing, motionElapsed:now-this.poseStarted }, this.art);
         this.frame = requestAnimationFrame(this.animate);
     };
     private pointerMove = (e: PointerEvent) => { this.screenPointer = { x: e.clientX, y: e.clientY }; this.pointer = pointerWorld(this.canvas, this.pos, e.clientX, e.clientY); };
     private pointerDown=(e:PointerEvent)=>{
         if(e.button!==0&&e.button!==2)return;
-        if(e.button===2&&this.tool!=='build')return;
+        if(this.paused)return;
+        if(e.button===2&&this.tool!=='build'){
+            e.preventDefault();this.pointerMove(e);
+            const point=this.pointer,door=point?this.world.buildings[`${Math.floor(point.x)}:${Math.floor(point.y)}:wall`]:undefined;
+            if(door?.kind==='door')this.command({type:'interact',target:door.id});
+            return;
+        }
         e.preventDefault();this.pointerMove(e);this.held=true;this.heldButton=e.button;this.buildStamp='';
         if(e.button===0||this.tool==='build')this.act();
     };
     private pointerUp = () => { this.held = false; this.heldButton=0; this.buildStamp = ''; };
     private contextMenu = (e: Event) => e.preventDefault();
+    private wheel=(e:WheelEvent)=>{if(this.paused||!e.deltaY||e.ctrlKey)return;e.preventDefault();this.selectSlot((this.selectedSlot+(e.deltaY>0?1:-1)+HOTBAR_SIZE)%HOTBAR_SIZE);};
     private keyDown = (e: KeyboardEvent) => {
         if ((e.target as HTMLElement)?.matches('input,textarea'))
             return;
@@ -276,25 +315,21 @@ export class GameClient {
         this.keys.add(key);
         if (e.repeat)
             return;
+        if(key==='e'){e.preventDefault();this.pauseControls();this.inventoryToggle();return;}
         if (key === 'm') {
             this.mapToggle();
             return;
         }
         if (this.paused)
             return;
-        if (key === '1')
-            this.setTool('axe');
-        if (key === '2')
-            this.setTool('pick');
-        if (key === '3')
-            this.setTool('sword');
-        if (key === '4' || key === 'b')
+        if (/^[1-9]$/.test(key)){e.preventDefault();this.selectSlot(Number(key)-1);return;}
+        if (key === 'b')
             this.setTool(this.tool === 'build' ? 'axe' : 'build');
         if (key === 'x')
             this.toggleRemove();
         if (key === 'r')
             this.command({ type: 'heal' });
-        if (key === 'e')
+        if (key === 'f')
             this.command({ type: 'interact' });
         if (key === ' ')
             this.command({ type: 'dodge' });
@@ -302,5 +337,5 @@ export class GameClient {
     private keyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
     private blur = () => { this.keys.clear(); this.held = false; this.heldButton=0; };
     destroy() { this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
-        clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu); window.removeEventListener('pointerup', this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur); }
+        clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu);this.canvas.removeEventListener('wheel',this.wheel); window.removeEventListener('pointerup', this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur); }
 }

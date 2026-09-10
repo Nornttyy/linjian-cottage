@@ -1,9 +1,11 @@
-import { COLORS, resourcesInRect, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
+import { COLORS, resourcesInRect, resourceAt, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { canBuild, distance, type WorldState, type Player, type Part, type Tool } from './simulation';
 import { HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
+import {drawConnectedWall,floorWallInsets} from './connected-wall';
 import {atmosphere,treeShadows} from './atmosphere';
-import {heroFrame,heroFacing,slimeFrame,type HeroSwing} from './animation';
+import {heroFrame,heroFacing,toolTrailFrame,slimeFrame,type HeroSwing} from './animation';
+import {roofVisibility} from './roof-visibility';
 export const TILE = 24;
 export function roofRect(x:number,y:number,ox:number,oy:number){return [x*TILE+ox,y*TILE+oy-22,24,24] as const;}
 export function buildTarget(point:{x:number;y:number},s:WorldState,remove:boolean){
@@ -20,6 +22,7 @@ export type View = {
         y: number;
     } | null;
     time: number;
+    roomKey?: string;
     fadeUntil?: number;
     localSwing?: HeroSwing | null;
     motionElapsed?: number;
@@ -55,6 +58,23 @@ function roofGroup(s: WorldState, p: Position) { const start = Math.floor(p.x) +
         if (!visited.has(nx + ':' + ny))
             todo.push(nx + ':' + ny);
 } return visited; }
+type SlimeDrawPosition={x:number;y:number;fromX:number;fromY:number;toX:number;toY:number;started:number;duration:number;tick:number;lastDraw:number;dead:boolean;phase:string};
+function slimeDrawPosition(positions:Map<string,SlimeDrawPosition>,m:WorldState['mobs'][number],time:number,tick:number,phase:string){
+    let point=positions.get(m.id);
+    const dead=m.hp<=0;
+    if(!point||(point.phase!==phase&&phase!=='move')||point.dead!==dead||time<point.lastDraw||time-point.lastDraw>500||Math.hypot(m.x-point.toX,m.y-point.toY)>3){
+        point={x:m.x,y:m.y,fromX:m.x,fromY:m.y,toX:m.x,toY:m.y,started:time,duration:0,tick,lastDraw:time,dead,phase};positions.set(m.id,point);return point;
+    }
+    const progress=point.duration?Math.max(0,Math.min(1,(time-point.started)/point.duration)):1;
+    point.x=point.fromX+(point.toX-point.fromX)*progress;point.y=point.fromY+(point.toY-point.fromY)*progress;
+    if(m.x!==point.toX||m.y!==point.toY){
+        point.fromX=point.x;point.fromY=point.y;point.toX=m.x;point.toY=m.y;point.started=time;point.duration=Math.max(80,Math.min(120,tick-point.tick));
+    }
+    point.tick=tick;point.lastDraw=time;point.phase=phase;return point;
+}
+
+const slimeViews=new WeakMap<HTMLCanvasElement,{roomKey:string;created:number;poses:Map<string,{phase:string;started:number}>;positions:Map<string,SlimeDrawPosition>}>();
+
 export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos: Position, view: View, art: Atlas) {
     const w = Math.max(1, Math.floor(canvas.clientWidth / 2)), h = Math.max(1, Math.floor(canvas.clientHeight / 2));
     if (canvas.width !== w)
@@ -99,8 +119,13 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     else
         ctx.drawImage(art[name], Math.round(px - width / 2), py - height, width, height); ctx.restore(); };
     for (const b of Object.values(s.buildings)) {
-        if (b.kind === 'floor' && visible(b.x, b.y))
-            material(ctx,art.floor,b.x,b.y,b.x*TILE+ox,b.y*TILE+oy);
+        if (b.kind === 'floor' && visible(b.x, b.y)) {
+            const inset = floorWallInsets(s.buildings,b.x,b.y);
+            if(inset.left || inset.right){
+                ctx.save();ctx.beginPath();ctx.rect(b.x*TILE+ox+inset.left,b.y*TILE+oy,TILE-inset.left-inset.right,TILE);ctx.clip();
+                material(ctx,art.floor,b.x,b.y,b.x*TILE+ox,b.y*TILE+oy);ctx.restore();
+            }else material(ctx,art.floor,b.x,b.y,b.x*TILE+ox,b.y*TILE+oy);
+        }
     }
     const fireX = (SPAWN.x) * TILE + ox, fireY = (SPAWN.y - 1.4) * TILE + oy;
     const drawables: {
@@ -125,11 +150,8 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             continue;
         drawables.push({ y: b.y + .9, draw: () => {
                 const fade = b.y > pos.y - .3 && b.y < pos.y + 1.2 && Math.abs(b.x + .5 - pos.x) < 1.05;
-                const name=b.kind==='door'&&b.open?'door-open':b.kind;
-                const img=art[name],left=!!s.buildings[`${b.x-1}:${b.y}:wall`],right=!!s.buildings[`${b.x+1}:${b.y}:wall`];
-                const insetL=left&&b.kind==='wall'?Math.floor(img.width*.12):0,insetR=right&&b.kind==='wall'?Math.floor(img.width*.12):0;
                 ctx.save();ctx.globalAlpha=fade?.42:1;
-                ctx.drawImage(img,insetL,0,img.width-insetL-insetR,img.height,b.x*TILE+ox,b.y*TILE+oy-7,24,31);ctx.restore();
+                drawConnectedWall(ctx,art,s.buildings,b,ox,oy);ctx.restore();
             } });
     }
     if(!underground&&visible(CAVE_ENTRANCE.x,CAVE_ENTRANCE.y))drawables.push({y:CAVE_ENTRANCE.y-1.6,draw:()=>{
@@ -140,14 +162,24 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         for(const [x,y] of MINE_TORCHES)if(visible(x,y))drawables.push({y:y+1,draw:()=>ctx.drawImage(art.torch,x*TILE+ox+5,y*TILE+oy-10,14,27)});
         drawables.push({y:MINE.exit.y,draw:()=>ctx.drawImage(art['door-open'],MINE.exit.x*TILE+ox-20,MINE.exit.y*TILE+oy-34,40,42)});
     }
+    let slimeView=slimeViews.get(canvas);
+    const roomKey=view.roomKey??'';
+    if(!slimeView||slimeView.roomKey!==roomKey||slimeView.created!==s.created){slimeView={roomKey,created:s.created,poses:new Map(),positions:new Map()};slimeViews.set(canvas,slimeView);}
     for(const m of s.mobs){
         if(!visible(m.x,m.y))continue;
-        const moving=t<(m.movingUntil??0),frame=slimeFrame(m,t,moving);if(!frame)continue;
-        drawables.push({y:m.y,draw:()=>{
-            ctx.fillStyle='#48615730';ctx.fillRect(m.x*TILE+ox-8,m.y*TILE+oy-2,16,3);
-            ctx.drawImage(art[frame],Math.round(m.x*TILE+ox-SLIME_SIZE.anchorX),Math.round(m.y*TILE+oy-SLIME_SIZE.anchorY),SLIME_SIZE.width,SLIME_SIZE.height);
-            if(m.windup){ctx.globalAlpha=.45;ctx.drawImage(art.spark,m.x*TILE+ox-7,m.y*TILE+oy-29,14,14);ctx.globalAlpha=1;}
-            if(m.hp>0&&(m.hp<54||distance(pos,m)<4)){ctx.fillStyle='#58724b';ctx.fillRect(m.x*TILE+ox-11,m.y*TILE+oy-34,22,3);ctx.fillStyle='#bbe685';ctx.fillRect(m.x*TILE+ox-10,m.y*TILE+oy-33,20*m.hp/54,1);}
+        // Keep the last received movement state until a newer snapshot changes it.
+        const moving=(m.movingUntil??0)>s.tick;
+        const contact=m.windup||(m.cooldown?m.cooldown-1100:0),recovering=contact&&t>=contact&&t<contact+350;
+        const phase=m.hp<=0?'death':t<m.hitUntil?'hurt':m.windup>t||recovering?'attack':moving?'move':'idle';
+        let pose=slimeView.poses.get(m.id);
+        if(!pose||pose.phase!==phase||t<pose.started){pose={phase,started:t};slimeView.poses.set(m.id,pose);}
+        const frame=slimeFrame(m,t,moving,t-pose.started);if(!frame)continue;
+        const point=slimeDrawPosition(slimeView.positions,m,t,s.tick,phase);
+        drawables.push({y:point.y,draw:()=>{
+            ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-8,point.y*TILE+oy-2,16,3);
+            ctx.drawImage(art[frame],Math.round(point.x*TILE+ox-SLIME_SIZE.anchorX),Math.round(point.y*TILE+oy-SLIME_SIZE.anchorY),SLIME_SIZE.width,SLIME_SIZE.height);
+            if(m.windup>t){ctx.globalAlpha=.45;ctx.drawImage(art.spark,point.x*TILE+ox-7,point.y*TILE+oy-29,14,14);ctx.globalAlpha=1;}
+            if(m.hp>0&&(m.hp<54||distance(pos,m)<4)){ctx.fillStyle='#58724b';ctx.fillRect(point.x*TILE+ox-11,point.y*TILE+oy-34,22,3);ctx.fillStyle='#bbe685';ctx.fillRect(point.x*TILE+ox-10,point.y*TILE+oy-33,20*m.hp/54,1);}
         }});
     }
     for (const p of Object.values(s.players)) {
@@ -160,17 +192,24 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                 const moving=local?pos.moving:t<(p.movingUntil??0),swing=local?view.localSwing:undefined;
                 const face=heroFacing(p,local?pos.face:p.face,t,swing);
                 const frame=heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
+                const trail=toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
+                const drawTrail=()=>{if(!trail||!art[trail])return;const size=trail.startsWith('trail-sword')?56:44;
+                    ctx.save();ctx.translate(px,py-12);ctx.rotate(face==='down'?Math.PI/2:face==='up'?-Math.PI/2:face==='left'?Math.PI:0);
+                    ctx.globalAlpha=.8;ctx.drawImage(art[trail],-size/2,-size/2,size,size);ctx.restore();};
                 ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-6,point.y*TILE+oy-2,12,3);
-                ctx.save();ctx.translate(Math.round(point.x*TILE+ox),Math.round(point.y*TILE+oy));
+                if(face==='up')drawTrail();
+                ctx.save();ctx.translate(px,py);
                 if(face==='left')ctx.scale(-1,1);ctx.drawImage(art[frame],-HERO_SIZE.anchorX,-HERO_SIZE.anchorY,HERO_SIZE.width,HERO_SIZE.height);ctx.restore();
+                if(face!=='up')drawTrail();
                 if(!local){ctx.fillStyle=['#ffe7a1','#f8a77d','#7cc9e2','#c8a0e8'][p.color%4];ctx.fillRect(point.x*TILE+ox-3,point.y*TILE+oy-37,6,2);}
             } });
     }
     drawables.sort((a, b) => a.y - b.y).forEach(d => d.draw());
-    const indoors = roofGroup(s, pos);
-    for (const b of Object.values(s.buildings))
-        if (b.kind === 'roof' && visible(b.x, b.y)) {
-            ctx.globalAlpha = indoors.has(b.x + ':' + b.y) ? .14 : 1;
+    const indoors = roofGroup(s, pos), roofs = Object.values(s.buildings).filter(b => b.kind === 'roof');
+    const roofOpacity = roofVisibility(canvas, `${view.roomKey ?? s.created}:${id}:${sceneAt(pos.x)}`, roofs, indoors, t);
+    for (const b of roofs)
+        if (visible(b.x, b.y)) {
+            ctx.globalAlpha = roofOpacity.get(b.x + ':' + b.y) ?? 1;
             material(ctx,art.roof,b.x,b.y,...roofRect(b.x,b.y,ox,oy));
             const [rx,ry]=roofRect(b.x,b.y,ox,oy);
             if(!s.buildings[`${b.x}:${b.y+1}:roof`]){ctx.drawImage(art.beam,0,0,art.beam.width,Math.max(1,art.beam.height/8),rx,ry+22,24,3);}
@@ -193,7 +232,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             ctx.strokeRect(x * TILE + ox + .5, y * TILE + oy + .5, 23, 23);
             if (!view.remove) {
                 ctx.globalAlpha = .55;
-                if(view.part==='roof')material(ctx,art.roof,x,y,...roofRect(x,y,ox,oy));else ctx.drawImage(art[view.part],x*TILE+ox,y*TILE+oy-(view.part==='floor'?0:7),24,view.part==='floor'?24:31);
+                if(view.part==='roof')material(ctx,art.roof,x,y,...roofRect(x,y,ox,oy));else if(view.part==='floor')ctx.drawImage(art.floor,x*TILE+ox,y*TILE+oy,24,24);else drawConnectedWall(ctx,art,s.buildings,{id:'preview',x,y,kind:view.part,open:view.part==='door'},ox,oy);
                 ctx.globalAlpha = 1;
             }
         }
@@ -218,8 +257,15 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             ctx.font = 'bold 8px monospace';
             if (e.amount > 1)
                 ctx.fillText(String(e.amount), x - 4, y);
-            for (let i = 0; i < 4; i++)
-                ctx.fillRect(x + Math.cos(i * 1.7) * f * 17, y + Math.sin(i * 1.7) * f * 12, 2, 2);
+            if(age<340){
+                const progress=age/340,resource=e.kind==='hit'&&e.amount===1?resourceAt(Math.floor(e.x),Math.floor(e.y)):undefined;
+                const particle=resource?(resource.kind==='tree'||resource.kind==='pine'?art.wood:resource.kind==='berry'?art.berry:resource.kind==='copper'?art['copper-icon']:art['stone-icon']):art.spark;
+                ctx.globalAlpha=1-progress;
+                for(let i=0;i<4;i++){
+                    const angle=i*1.7,dx=Math.round(e.x*TILE+ox+Math.cos(angle)*progress*16),dy=Math.round(e.y*TILE+oy-12+Math.sin(angle)*progress*9-8*Math.sin(progress*Math.PI));
+                    ctx.drawImage(particle,dx-2,dy-2,resource?4:6,resource?4:6);
+                }
+            }
         }
         else if (e.amount) {
             const type = e.kind === 'wood' ? 'stump' : e.kind === 'essence' ? 'slime' : e.kind;

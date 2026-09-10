@@ -17,11 +17,11 @@ let now = 100000;
 let failures = 0;
 try {
   const ts = (await import(pathToFileURL(join(source, 'node_modules/typescript/lib/typescript.js')))).default;
-  for (const name of ['world', 'simulation', 'frame-layout', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
+  for (const name of ['world', 'simulation', 'frame-layout', 'inventory', 'roof-visibility', 'connected-wall', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
     const text = await readFile(join(source, 'lib', name + '.ts'), 'utf8');
     const js = ts.transpileModule(text, { compilerOptions: {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
+    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
     await writeFile(join(temp, name + '.mjs'), js);
   }
   const sim = await import(pathToFileURL(join(temp, 'simulation.mjs')));
@@ -146,7 +146,7 @@ try {
       f.reposition(246.1, 315.5);
       f.state.resourceHp[resource.id] = 100;
       f.client.world = clone(f.state);
-      f.client.tool = 'axe';
+      f.client.setTool('axe');
       f.client.pointer = { x: resource.x + .5, y: resource.y + .5 };
       let attempts = 0;
       for (let elapsed = 10; elapsed <= 12000; elapsed += 10) {
@@ -183,7 +183,7 @@ try {
       f.player.inventory.wood = 100;
       const id = sim.buildingKey(259, 322, 'floor');
       f.state.buildings[id] = { id, x: 259, y: 322, kind: 'floor' };
-      f.client.world = clone(f.state); f.client.tool = 'build';
+      f.client.world = clone(f.state); f.client.setPart('floor');
       f.client.pointerDown({ preventDefault() {}, clientX: 944, clientY: 496, button: 2, pointerId: 1 });
       for (let i = 0; i < 3; i++) { f.advance(150); await f.sync(); }
       f.client.pointerUp({ pointerId: 1 });

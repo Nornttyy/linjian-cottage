@@ -26,11 +26,20 @@ export function heroFrame(p:Player,face:Player['face'],moving:boolean,time:numbe
     if(moving)return frameKey('walk',direction,Math.floor(motionElapsed/85)%HERO_FRAME_COUNT);
     return frameKey('idle',direction,Math.floor(motionElapsed/125)%HERO_IDLE_FRAME_COUNT);
 }
-export function slimeFrame(m:Mob,time:number,moving:boolean):Sprite|null{
+export function toolTrailFrame(p:Player,time:number,swing?:HeroSwing|null):Sprite|null{
+    const action=swing?.tool??p.equipped;
+    if(swing===null||!action||action==='build'||time<p.dodgeUntil||(p.hurtAt&&time-p.hurtAt<600))return null;
+    const timing=TOOL_TIMING[action],end=swing?.until??p.swingUntil,start=swing?.start??p.swingStart??end-timing.duration;
+    const elapsed=time-start;
+    if(time>=end||elapsed<timing.contact*.1)return null;
+    const frame=elapsed<timing.contact?Math.floor(elapsed/timing.contact*4):4+Math.floor((elapsed-timing.contact)/(timing.duration-timing.contact)*4);
+    return `trail-${action}-${Math.max(0,Math.min(7,frame))}`;
+}
+export function slimeFrame(m:Mob,time:number,moving:boolean,motionElapsed=time):Sprite|null{
     if(m.hp<=0){const age=time-(m.deadUntil-90000);return age>=0&&age<480?`slime-death-${Math.min(3,Math.floor(age/120))}`:null;}
     if(time<m.hitUntil)return `slime-hurt-${Math.max(0,Math.min(3,Math.floor((time-m.hitUntil+350)/350*4)))}`;
-    if(m.windup)return `slime-attack-${Math.max(0,Math.min(3,Math.floor((time-m.windup+650)/650*4)))}`;
-    const sinceAttack=time-(m.cooldown-1100);
-    if(m.cooldown&&sinceAttack>=0&&sinceAttack<350)return `slime-attack-${4+Math.min(3,Math.floor(sinceAttack/350*4))}`;
-    return `slime-${moving?'move':'idle'}-${Math.floor(time/(moving?90:140))%8}`;
+    if(m.windup>time)return `slime-attack-${Math.max(0,Math.min(3,Math.floor((time-m.windup+650)/650*4)))}`;
+    const contact=m.windup||(m.cooldown?m.cooldown-1100:0),sinceAttack=time-contact;
+    if(contact&&sinceAttack>=0&&sinceAttack<350)return `slime-attack-${4+Math.min(3,Math.floor(sinceAttack/350*4))}`;
+    return `slime-${moving?'move':'idle'}-${Math.floor(Math.max(0,motionElapsed)/(moving?90:140))%8}`;
 }
