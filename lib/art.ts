@@ -6,6 +6,8 @@ export type Sprite='tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wil
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
 export const HERO_SIZE={width:64,height:64,anchorX:32,anchorY:48};
 export const FIRE_SIZE={width:64,height:64,anchorX:32,anchorY:52};
+export const FIRE_FRAME_COUNT=24;
+export const FIRE_FRAME_MS=50;
 export const SLIME_SIZE={width:40,height:40,anchorX:20,anchorY:35};
 // Source-cell pivots, before the 2 px inset. Shared ground per action retains jumps.
 const slimeAnchors=[
@@ -90,9 +92,9 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
 let cached:Promise<Atlas>|undefined;
 export function loadArt(){return cached??=loadAll();}
 async function loadAll():Promise<Atlas>{
-    const [materials,objects,icons,walk,motion,axe,pick,sword,slime,entrance,hurt,fire]=await Promise.all([
+    const [materials,objects,icons,walk,motion,axe,pick,sword,slime,entrance,hurt,fire,flames]=await Promise.all([
         sheet('surfaces-final.png',4,4,'texture'),sheet('objects-final.png',4,4,'prop'),sheet('icons-final.png',4,4,'prop'),
-        sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v2.png',8,3,'hero'),sheet('hero-pick-v2.png',8,3,'hero'),sheet('hero-sword-v2.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect')
+        sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v2.png',8,3,'hero'),sheet('hero-pick-v2.png',8,3,'hero'),sheet('hero-sword-v2.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect'),sheet('campfire-flames-24.png',6,4,'effect')
     ]);
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
@@ -102,9 +104,14 @@ async function loadAll():Promise<Atlas>{
     baseContext.imageSmoothingEnabled=false;
     baseContext.drawImage(fire[0],FIRE_SIZE.anchorX-(184-2)*baseScale,FIRE_SIZE.anchorY-(343-2)*baseScale,fire[0].width*baseScale,fire[0].height*baseScale);
     // Register the fire root, not the changing silhouette or detached sparks.
-    const flameRoots=[[194,290],[178,290],[181,290],[166,290],[175,285],[179,285],[182,285],[181,285]];
+    const flameRoots=[
+        [127,246],[127,244],[129,246],[126,245],[130,245],[131,244],
+        [123,241],[128,241],[128,241],[125.5,242],[130,244],[130,243],
+        [127,231],[127,231],[126,230],[128,231],[130,231],[131,231],
+        [126,213],[126,214],[127,213],[129,213],[130,214],[130,213]
+    ];
     flameRoots.forEach(([x,y],i)=>{
-        const out=canvas(FIRE_SIZE.width,FIRE_SIZE.height),ctx=out.getContext('2d')!,flame=fire[4+i],scale=.1;
+        const out=canvas(FIRE_SIZE.width,FIRE_SIZE.height),ctx=out.getContext('2d')!,flame=flames[i],scale=.116;
         ctx.imageSmoothingEnabled=false;ctx.drawImage(base,0,0);
         ctx.drawImage(flame,32-(x-2)*scale,45-(y-2)*scale,flame.width*scale,flame.height*scale);
         art[`fire${i}`]=out;

@@ -1,6 +1,6 @@
 import { COLORS, RESOURCES, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { canBuild, distance, type WorldState, type Player, type Part, type Tool } from './simulation';
-import { HERO_SIZE, FIRE_SIZE, SLIME_SIZE, type Atlas, type Sprite } from './art';
+import { HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
 import {atmosphere,treeShadows} from './atmosphere';
 import {heroFrame,heroFacing,slimeFrame,type HeroSwing} from './animation';
@@ -107,7 +107,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         draw: () => void;
     }[] = [];
     if(!underground&&visible(SPAWN.x,SPAWN.y-1.4))drawables.push({y:SPAWN.y-1.4,draw:()=>{
-        ctx.drawImage(art[`fire${Math.floor(t/100)%8}`],Math.round(fireX-FIRE_SIZE.anchorX),Math.round(fireY-FIRE_SIZE.anchorY),FIRE_SIZE.width,FIRE_SIZE.height);
+        ctx.drawImage(art[`fire${Math.floor(t/FIRE_FRAME_MS)%FIRE_FRAME_COUNT}`],Math.round(fireX-FIRE_SIZE.anchorX),Math.round(fireY-FIRE_SIZE.anchorY),FIRE_SIZE.width,FIRE_SIZE.height);
     }});
     for (const r of RESOURCES) {
         if (!visible(r.x, r.y))
