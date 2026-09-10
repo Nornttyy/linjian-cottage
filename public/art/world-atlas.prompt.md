@@ -1,0 +1,14 @@
+# Pixel game atlas
+
+Generated with the built-in image_gen tool. The original atlas is retained in world-atlas.png; sprite regions and transparent-matte sampling are defined in lib/art.ts.
+
+Use case: stylized-concept
+Asset type: production game sprite atlas, square image, exactly 4 columns by 4 rows of equal cells, TRANSPARENT BACKGROUND with real alpha.
+Create sixteen isolated pixel-art game sprites for the cozy overhead game “林间小筑”. No text in the image. Use the attached image only as a palette and pixel-art mood reference; do not draw a scene or houses from it.
+Critical: orthogonal top-down RPG sprite style, ground axes horizontal and vertical, front-facing architecture, NO isometric diamonds. Clean low-resolution pixel art with visible square clusters and limited 3-tone shading. Each sprite centered in its own cell, aligned at the bottom with generous transparent margins of at least 15 percent on every side. No sprite may cross a cell boundary. Four equal columns and four equal rows. No visible grid or divider lines.
+EXACT atlas positions, from left to right:
+ROW 1: (1) one leafy round broadleaf tree, straight brown trunk, green canopy; (2) one evergreen pine tree, compact layered dark-green canopy; (3) one small chunky gray stone boulder; (4) one gray rock with bright copper-orange ore flecks.
+ROW 2: (1) a single small friendly adventurer facing directly DOWN toward the screen, brown hair, teal tunic, tan trousers, brown boots, empty hands; (2) the SAME adventurer facing UP away from the screen; (3) the SAME adventurer in SIDE profile facing RIGHT; (4) one plump turquoise slime monster with tiny friendly eyes.
+ROW 3: (1) a square honey-brown wooden floor tile viewed directly from above with straight horizontal plank lines, square outline; (2) a straight timber wall panel viewed directly from the front, same width as the floor tile, warm cream plaster inside timber frame; (3) the SAME wall panel with a small warm amber square window; (4) a straight front-facing closed wooden door in a timber doorframe.
+ROW 4: (1) a square red-brown roof tile module viewed in the straight overhead RPG view, horizontal rows of tiles and a rectangular screen-aligned silhouette; (2) one small wooden storage chest viewed from above and front, front edge horizontal; (3) one freshly cut tree stump with visible growth rings; (4) one low green berry bush with a few golden berries.
+All trees and rocks sit on invisible ground with NO ground patch, no scene backgrounds, no borders, no labels, no text. Ground contact at bottom of each sprite. Keep character proportions identical across its three directions. Other sprites match the same gentle handcrafted palette and readable outline. True transparent canvas around every isolated sprite. Clean consistent pixel size, not tiny painterly detail. This atlas will be cropped into sixteen independent game sprites.

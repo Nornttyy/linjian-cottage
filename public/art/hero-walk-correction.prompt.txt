@@ -1,0 +1,13 @@
+Use case: precise-object-edit
+Edit target: supplied 8-column by 4-row RGBA player animation atlas.
+Change ONLY the eight right-facing walking sprites in ROW 3. Preserve all other rows exactly, preserve the same original brown-haired, teal-blue-shirt adventurer, natural 16-bit farm RPG proportions, palette, pixel scale, canvas 1536x1024, 8 columns and 4 rows of 192x256 cells, fixed foot baseline, and TRUE transparent alpha=0 empty background. The hidden RGB color under the existing alpha must remain invisible; do not add a visible backdrop.
+Problem to fix: Row 3 currently shows nearly the same wide-legged stance eight times. Replace it with an anatomically clear complete 8-frame WALK CYCLE facing RIGHT, with visibly DIFFERENT leg silhouettes in every adjacent frame. It is essential to include NARROW FEET-TOGETHER and ONE-LEG-RAISED passing poses, not eight wide stances.
+ROW 3 COL 1: wide contact, near leg stretched forward to right, far leg stretched backward to left; far arm forward.
+ROW 3 COL 2: near foot supports weight under front of body, far boot lifts from behind with bent knee; arms mid swing.
+ROW 3 COL 3: NARROW PASSING POSE: near leg straight vertically under body, far knee bent and lifted forward with lifted boot at calf height, both feet horizontally close; arms nearly vertical.
+ROW 3 COL 4: far knee extends forward preparing far-foot contact, near heel rising behind; near arm forward.
+ROW 3 COL 5: opposite wide contact, far leg forward, near leg back; near arm forward, opposite near/far overlap from col 1.
+ROW 3 COL 6: far foot supports beneath front torso; near boot lifted behind with bent knee; arms mid swing.
+ROW 3 COL 7: opposite NARROW PASSING POSE: far leg straight beneath torso, near knee raised forward and near boot at calf height; arms near vertical.
+ROW 3 COL 8: near knee extends preparing contact, far heel rising behind, far arm forward, looping into col 1.
+Use shading consistently to distinguish near and far legs and arms. Do not move the whole character to fake animation. Show real bent knees, raised heels, and arm swings. Nose points right in ALL eight frames. No blur, effects, ground shadow, text, labels, grid or other objects.

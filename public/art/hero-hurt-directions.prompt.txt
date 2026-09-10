@@ -1,0 +1,25 @@
+Use case: stylized-concept
+Asset type: final game-ready directional HIT/RECOIL animation sprite atlas, exactly 16 sprites in 8 columns by 2 rows.
+Reference image: character appearance and pixel-art style only. Use the exact same original warm-brown-haired adventurer, bright clear teal-blue long-sleeve shirt, brown belt, indigo blue trousers, brown boots, peach skin, natural 16-bit farming RPG character proportions. The reference is only for identity; do NOT copy its sheet, existing poses, or checkerboard background.
+Style: natural pixel RPG art in the grounded spirit of Stardew Valley, approximately 16x32 logical-pixel humanoid, total body height about 3.5 times head height. Normal legs and arms, moderate pixel texture, clear bright natural colors, crisp square pixels. No big-head chibi exaggeration, no cartoon sticker outline, no weapons or held items.
+Canvas: exactly 1536 by 512 pixels. EXACTLY 8 columns x 2 rows, each invisible cell exactly 192 x 256 pixels. No outside margins or gutters. Each cell is 24 x 32 logical pixels uniformly enlarged 8 times. Every character has consistent head/body size and is centered on x=96 of its cell; boot soles rest at the same local y=240 baseline in ALL 16 frames. Knees bend and torso leans during recoil while the feet stay planted at the shared baseline. Do not vertically shift entire sprites to imitate animation. Keep complete bodies inside cells.
+BACKGROUND: entirely flat, uniform PURE CHROMA MAGENTA #FF00FF wherever there is no character. This is intentional for game asset extraction. Every empty background pixel must be the same magenta. NO CHECKERBOARD, no patterns, no gradients, no ground, no shadows, no borders, no cell grid, no text, no labels, no numbers, no effects or motion lines.
+ROW 1 (top) = facing NORTH/UP/AWAY from viewer for ALL EIGHT FRAMES, showing back of brown hair and back of teal shirt. Absolutely no eyes or face ever visible in this row. Eight sequential phases of being struck and recovering, while holding rear orientation:
+1. rear-view mild impact: knees soften, shoulders just lift, hands start to flex.
+2. shoulders scrunch more, elbows bend and forearms rise slightly to guard the front of chest (mostly occluded from rear).
+3. upper back arches and head tilts back modestly from the hit, knees brace; still only rear of head visible.
+4. peak controlled recoil: strongest backward lean and tucked shoulders, elbows lifted a little, both boots planted.
+5. begin recovering: torso midway toward upright, shoulders still hunched, elbows descending.
+6. shoulders relaxing, torso almost upright, hands lowering.
+7. slight final guarded stance, arms nearly neutral, knees less bent.
+8. stable relaxed rear-view neutral stance.
+ROW 2 (bottom) = facing EAST/SCREEN RIGHT in profile for ALL EIGHT FRAMES. The nose always points to the right; never switch to front-facing or left-facing. Eight phases:
+1. slight impact start: right-facing stance, knees soften, near hand just lifts.
+2. shoulders scrunch upward, elbows bend toward chest, torso pulls slightly back to the left.
+3. clear modest backward lean toward screen left, chin tips up, forearms guarding chest, knees brace.
+4. peak recoil: deepest but restrained backward torso lean, both boots anchored, shoulders tucked.
+5. recovery begins: torso halfway upright, hands still partly raised, chin settles.
+6. almost upright, forearms lowering and shoulders easing.
+7. slight residual guarded stance, knees straightening, hands near sides.
+8. relaxed upright right-facing neutral stance.
+All 16 cells must contain independently drawn anatomical poses with actual shoulder, elbow, knee and torso changes. Movement is restrained and readable, not a huge fall or somersault. Directional orientation and consistent scale are the highest priorities. Keep normal natural proportions identical to reference and feet perfectly anchored. Exactly 16 sprites, no extra row or column.
