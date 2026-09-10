@@ -152,6 +152,14 @@ try {
         if (elapsed <= 10400 && elapsed % 520 === 0) { f.client.act(); attempts++; }
         if (elapsed % 150 === 0) await f.sync();
       }
+      // Full 490 ms swings can start only on a 150 ms authoritative tick; drain the
+      // remaining recovery/contact without changing the 20 original input times.
+      const drainDeadline = now + 1500;
+      while ((f.player.attackQueue?.length || f.player.pendingStrike) && now < drainDeadline) {
+        f.advance(150); await f.sync();
+      }
+      assert.equal(f.player.attackQueue?.length ?? 0, 0, 'all queued attacks drained');
+      assert.equal(f.player.pendingStrike, undefined, 'last contact resolved within the bounded drain');
       const accepted = 100 - (f.state.resourceHp[resource.id] ?? 0);
       assert.equal(attempts, 20);
       assert.equal(accepted, attempts, `${attempts} requested; ${accepted} actually harvested`);

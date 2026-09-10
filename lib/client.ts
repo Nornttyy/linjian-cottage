@@ -47,6 +47,7 @@ export class GameClient {
     held = false;
     private heldButton=0;
     private localSwing: HeroSwing | null = null;
+    private unconfirmedSwing: Command | null = null;
     private movements:Movement[]=[];
     connected = false;
     error = '';
@@ -84,6 +85,7 @@ export class GameClient {
         this.keys.clear();
         this.pending = null;
         this.localSwing = null;
+        this.unconfirmedSwing = null;
         this.movements = [];
         this.commands = [];
         this.connected = false;
@@ -122,16 +124,18 @@ export class GameClient {
         const delta = this.movement();
         this.pending ??= { seq: ++this.seq, dx: delta.x, dy: delta.y, face: this.pos.face, commands: this.commands.splice(0, 5), movements: this.movements.splice(0,64) };
         try {
-            const result = await this.request({ action: 'sync', ...session, input: this.pending });
+            const submitted = this.pending;
+            const result = await this.request({ action: 'sync', ...session, input: submitted });
             if (this.disposed || generation !== this.generation || session !== this.session)
                 return;
             this.world = result.state;
+            if(this.unconfirmedSwing && submitted.commands.includes(this.unconfirmedSwing))this.unconfirmedSwing=null;
             this.pending = null;
             this.connected = true;
             this.error = '';
             const p = this.world.players[session.playerId];
             if(sceneAt(p.x)!==sceneAt(this.pos.x)){
-                this.movements=[];this.keys.clear();this.held=false;this.localSwing=null;this.fadeUntil=Date.now()+500;
+                this.movements=[];this.keys.clear();this.held=false;this.localSwing=null;this.unconfirmedSwing=null;this.fadeUntil=Date.now()+500;
             }
             this.pos.x=p.x;this.pos.y=p.y;
             for(const segment of this.movements)move(this.world,this.pos,segment.dx*(segment.speed??4.2)*segment.seconds,segment.dy*(segment.speed??4.2)*segment.seconds);
@@ -156,14 +160,30 @@ export class GameClient {
         this.keys.add(key);
     else
         this.keys.delete(key); }
-    command(command: Command) { if (this.connected && this.commands.length < 5)
-        this.commands.push(command); }
-    private movement() { if (this.paused || !this.connected)
+    private toolLockUntil() {
+        const p=this.session?this.world.players[this.session.playerId]:undefined;
+        return Math.max(this.localSwing?.until??0,p?.swingUntil??0);
+    }
+    private toolLocked(now=Date.now()) {
+        const p=this.session?this.world.players[this.session.playerId]:undefined;
+        return !!this.unconfirmedSwing || !!p?.attackQueue?.length || now<this.toolLockUntil();
+    }
+    private dodgePending() {
+        return this.commands.some(c=>c.type==='dodge') || !!this.pending?.commands.some(c=>c.type==='dodge');
+    }
+    command(command: Command) {
+        if(command.type==='dodge' && this.toolLocked())return false;
+        if(!this.connected || this.commands.length>=5)return false;
+        this.commands.push(command);return true;
+    }
+    private movement() { if (this.paused || !this.connected || this.toolLocked())
         return { x: 0, y: 0 }; const x = Number(this.keys.has('d') || this.keys.has('arrowright')) - Number(this.keys.has('a') || this.keys.has('arrowleft')), y = Number(this.keys.has('s') || this.keys.has('arrowdown')) - Number(this.keys.has('w') || this.keys.has('arrowup')); const n = Math.max(1, Math.hypot(x, y)); return { x: x / n, y: y / n }; }
     private act() {
         if (this.paused || !this.connected || !this.session)
             return;
         const now = Date.now();
+        const p=this.world.players[this.session.playerId];
+        if(this.tool!=='build' && (now<(this.localSwing?.until??0) || now<(p?.dodgeUntil??0) || this.dodgePending()))return;
         if (now - this.lastClick < (this.tool === 'build' ? 150 : this.tool === 'sword' ? 400 : 520))
             return;
         const point = this.pointer || { x: this.pos.x + (this.pos.face === 'right' ? 1 : this.pos.face === 'left' ? -1 : 0), y: this.pos.y + (this.pos.face === 'down' ? 1 : this.pos.face === 'up' ? -1 : 0) };
@@ -181,7 +201,9 @@ export class GameClient {
             if(Math.hypot(aimX,aimY)>.1)this.pos.face=Math.abs(aimX)>Math.abs(aimY)?aimX>0?'right':'left':aimY>0?'down':'up';
             const target = this.tool === 'sword' ? this.world.mobs.filter(m => m.hp > 0 && Math.hypot(point.x - m.x, point.y - m.y) < 1.8).sort((a, b) => Math.hypot(a.x - point.x, a.y - point.y) - Math.hypot(b.x - point.x, b.y - point.y))[0]?.id : pickResource(point, this.world, this.pos)?.id;
             const face = this.pos.face;
-            this.command({ type: 'attack', tool: this.tool, target, face });
+            const command:Command={ type: 'attack', tool: this.tool, target, face };
+            if(!this.command(command))return;
+            this.unconfirmedSwing=command;
             // Local presentation has its own clock; snapshots still own damage and inventory.
             this.localSwing = { tool: this.tool, face, start: now, until: now + (this.tool === 'sword' ? 370 : 490) };
         }
@@ -190,7 +212,8 @@ export class GameClient {
     private animate = (time: number) => {
         if (this.disposed)
             return;
-        const dt = Math.min(.045, (time - this.last) / 1000 || 0);
+        const frameDt = Math.min(.045, (time - this.last) / 1000 || 0);
+        const dt = Math.max(0,Math.min(frameDt,(Date.now()-this.toolLockUntil())/1000));
         this.last = time;
         const d = this.movement();
         this.pos.moving = !!(d.x || d.y);

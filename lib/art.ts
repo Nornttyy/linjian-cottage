@@ -2,9 +2,18 @@ import type { Terrain } from './world';
 import {toolFrames,toolAnchors,toolBodyHeights,baseAnchorX} from './frame-layout';
 export type Direction='down'|'up'|'right';
 export type HeroAction='idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword';
-export type Sprite='tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|'fire0'|'fire1'|'fire2'|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
+export type Sprite='tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
 export const HERO_SIZE={width:64,height:64,anchorX:32,anchorY:48};
+export const FIRE_SIZE={width:64,height:64,anchorX:32,anchorY:52};
+export const SLIME_SIZE={width:40,height:40,anchorX:20,anchorY:35};
+// Source-cell pivots, before the 2 px inset. Shared ground per action retains jumps.
+const slimeAnchors=[
+    [114,188],[113,188],[111,188],[111.5,188],[119.5,188],[113.5,188],[112,188],[111.5,188],
+    [114,195],[113,195],[111,195],[112.5,195],[113.5,195],[114,195],[112.5,195],[112,195],
+    [113,191],[113,199],[110,199],[110,199],[108,199],[117,199],[112.5,199],[111.5,191],
+    [116.5,180],[112,180],[105.5,180],[112.5,180],[111,185],[111,185],[110.5,185],[111,185]
+];
 export const frameKey=(action:HeroAction,direction:Direction,frame:number)=>`${action}-${direction}-${frame}` as Sprite;
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c;};
 const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('素材加载失败'));img.src='.'+src;});
@@ -45,7 +54,7 @@ function bounds(c:HTMLCanvasElement){
     return {x0,y0,x1,y1};
 }
 function cropped(c:HTMLCanvasElement){const b=bounds(c),out=canvas(b.x1-b.x0+1,b.y1-b.y0+1);out.getContext('2d')!.drawImage(c,b.x0,b.y0,out.width,out.height,0,0,out.width,out.height);return out;}
-async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'hero'|'slime'){
+async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'hero'|'slime'|'effect'){
     const img=await load('/art/'+file),cells:HTMLCanvasElement[]=[];
     const tool=file.match(/^hero-(axe|pick|sword)/)?.[1] as keyof typeof toolFrames|undefined;
     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
@@ -71,20 +80,35 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
                 ctx.drawImage(c,drawX,HERO_SIZE.anchorY-anchor*scale,c.width*scale,c.height*scale);cells[row*cols+col]=out;});
         }
     }
-    if(kind==='slime')cells.forEach((c,i)=>{const out=canvas(40,40),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(c,0,0,40,40);cells[i]=out;});
+    if(kind==='slime')cells.forEach((c,i)=>{
+        const out=canvas(SLIME_SIZE.width,SLIME_SIZE.height),ctx=out.getContext('2d')!,scale=40/218,[x,y]=slimeAnchors[i];
+        ctx.imageSmoothingEnabled=false;
+        ctx.drawImage(c,SLIME_SIZE.anchorX-(x-2)*scale,SLIME_SIZE.anchorY-(y-2)*scale,c.width*scale,c.height*scale);cells[i]=out;
+    });
     return cells;
 }
 let cached:Promise<Atlas>|undefined;
 export function loadArt(){return cached??=loadAll();}
 async function loadAll():Promise<Atlas>{
-    const [materials,objects,icons,walk,motion,axe,pick,sword,slime,entrance,hurt]=await Promise.all([
+    const [materials,objects,icons,walk,motion,axe,pick,sword,slime,entrance,hurt,fire]=await Promise.all([
         sheet('surfaces-final.png',4,4,'texture'),sheet('objects-final.png',4,4,'prop'),sheet('icons-final.png',4,4,'prop'),
-        sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v2.png',8,3,'hero'),sheet('hero-pick-v2.png',8,3,'hero'),sheet('hero-sword-v2.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero')
+        sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v2.png',8,3,'hero'),sheet('hero-pick-v2.png',8,3,'hero'),sheet('hero-sword-v2.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect')
     ]);
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
     assign(['ground-grass','ground-forest','ground-path','ground-sand','ground-rock','ground-snow','ground-marsh','ground-water','floor','roof','plaster','ground-cave-floor','ground-cave-wall','beam','bridge','foundation'],materials);
     assign(['tree','pine','stone','copper','berry','stump','daisies','reeds','wall','window','door','door-open','fire0','fire1','fire2','chest'],objects);
+    const base=canvas(FIRE_SIZE.width,FIRE_SIZE.height),baseContext=base.getContext('2d')!,baseScale=34/263;
+    baseContext.imageSmoothingEnabled=false;
+    baseContext.drawImage(fire[0],FIRE_SIZE.anchorX-(184-2)*baseScale,FIRE_SIZE.anchorY-(343-2)*baseScale,fire[0].width*baseScale,fire[0].height*baseScale);
+    // Register the fire root, not the changing silhouette or detached sparks.
+    const flameRoots=[[194,290],[178,290],[181,290],[166,290],[175,285],[179,285],[182,285],[181,285]];
+    flameRoots.forEach(([x,y],i)=>{
+        const out=canvas(FIRE_SIZE.width,FIRE_SIZE.height),ctx=out.getContext('2d')!,flame=fire[4+i],scale=.1;
+        ctx.imageSmoothingEnabled=false;ctx.drawImage(base,0,0);
+        ctx.drawImage(flame,32-(x-2)*scale,45-(y-2)*scale,flame.width*scale,flame.height*scale);
+        art[`fire${i}`]=out;
+    });
     assign(['axe','pick','sword','remove','wood','stone-icon','copper-icon','essence','heart','stamina','map','room','torch','tuft','mushrooms','spark'],icons);
     for(const [row,dir] of (['down','up','right'] as const).entries())for(let f=0;f<8;f++){
         art[frameKey('walk',dir,f)]=walk[row*8+f];art[frameKey('hurt',dir,f)]=walk[24+f];art[frameKey('dodge',dir,f)]=motion[row*8+f];

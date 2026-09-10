@@ -54,6 +54,7 @@ export type Mob = {
     cooldown: number;
     deadUntil: number;
     hitUntil: number;
+    movingUntil?: number;
 };
 export type WorldState = {
     players: Record<string, Player>;
@@ -155,16 +156,17 @@ export function tickWorld(s: WorldState, now: number) {
     for (const p of players) {
         p.stamina = Math.min(100, p.stamina + dt * 17);
         if(p.pendingStrike && now>=p.pendingStrike.at){const strike=p.pendingStrike;p.pendingStrike=undefined;resolveAttack(s,p,strike.command,now);}
-        if (p.attackQueue?.length && now >= p.actionAt) {
+        if (p.attackQueue?.length && now >= Math.max(p.actionAt,p.swingUntil,p.dodgeUntil)) {
             const next=p.attackQueue.shift()!;
             const scheduled=Math.max(p.actionAt,now-200);
             runCommand(s,p,next,now);
-            p.actionAt=scheduled+(next.tool==='sword'?390:510);
+            p.actionAt=Math.max(p.swingUntil,scheduled+(next.tool==='sword'?390:510));
         }
         if (distance(p, SPAWN) < 2 && now > p.hitUntil + 1500)
             p.hp = Math.min(100, p.hp + dt * 8);
     }
     for (const mob of s.mobs) {
+        mob.movingUntil=0;
         if (mob.hp <= 0) {
             if (now >= mob.deadUntil) {
                 mob.hp = 54;
@@ -174,6 +176,7 @@ export function tickWorld(s: WorldState, now: number) {
             else
                 continue;
         }
+        const beforeX=mob.x,beforeY=mob.y;
         let target: Player | undefined, closest = 8;
         for (const p of players) {
             const d = distance(p, mob);
@@ -211,6 +214,7 @@ export function tickWorld(s: WorldState, now: number) {
             if (d > .1)
                 move(s, mob, (x - mob.x) / d * .45 * dt, (y - mob.y) / d * .45 * dt);
         }
+        if(Math.hypot(mob.x-beforeX,mob.y-beforeY)>.00001)mob.movingUntil=now+250;
     }
     for (const p of players)
         if (p.hp <= 0) {
@@ -251,6 +255,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         return null;
     }
     if (c.type === 'dodge') {
+        if(now<p.swingUntil || p.attackQueue?.length)return null;
         if (now < p.dodgeUntil + 450 || p.stamina < 28)
             return null;
         p.stamina -= 28;
@@ -296,7 +301,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         return null;
     }
     if (c.type === 'attack') {
-        if (now < p.actionAt) {
+        if (now < Math.max(p.actionAt,p.swingUntil,p.dodgeUntil)) {
             p.attackQueue ??= [];
             if(p.attackQueue.length<3)p.attackQueue.push({...c});
             return null;
@@ -304,6 +309,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         p.actionAt = now + (c.tool === 'sword' ? 390 : 510);
         p.swingStart=now;
         p.swingUntil = now + (c.tool==='sword'?370:490);
+        p.moveCredit=0;p.movingUntil=0;
         p.equipped=c.tool;
         p.swingFace=c.face&&['up','down','left','right'].includes(c.face)?c.face:p.face;
         if(c.tool!=='sword'){
@@ -367,33 +373,45 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
         return '角色不存在';
     if (!Number.isSafeInteger(input.seq) || input.seq <= p.seq)
         return null;
-    const dt = Math.max(0, Math.min(1, (now - p.seen) / 1000));
+    const previousSeen=p.seen;
+    const dt = Math.max(0, Math.min(1, (now - previousSeen) / 1000));
     p.seen = now;
     p.seq = input.seq;
-    let message: string | null = null;
+    let message: string | null = null,movementApplied=false;
+    const applyMovement=()=>{
+        if(movementApplied)return;movementApplied=true;
+        // Locked time never becomes movement credit, including inputs arriving after unlock.
+        const locked=now<p.swingUntil || !!p.attackQueue?.length;
+        const elapsed=Math.max(0,Math.min(1,(now-Math.max(previousSeen,p.swingUntil))/1000));
+        let credit=locked?0:Math.min(.75,(previousSeen<p.swingUntil?0:p.moveCredit??.05)+elapsed);
+        const movements=Array.isArray(input.movements)?input.movements.slice(0,64):[{dx:input.dx,dy:input.dy,seconds:Math.min(.35,dt)}];
+        if(locked)p.movingUntil=0;
+        for(const segment of movements){
+            const dx=Number.isFinite(segment.dx)?Math.max(-1,Math.min(1,segment.dx)):0;
+            const dy=Number.isFinite(segment.dy)?Math.max(-1,Math.min(1,segment.dy)):0;
+            const seconds=Number.isFinite(segment.seconds)?Math.max(0,Math.min(credit,segment.seconds)):0;
+            const length=Math.max(1,Math.hypot(dx,dy)),speed=now<p.dodgeUntil?9:4.2;
+            const x=p.x,y=p.y;
+            move(s,p,dx/length*speed*seconds,dy/length*speed*seconds);credit-=seconds;
+            if(Math.hypot(p.x-x,p.y-y)>.00001)p.movingUntil=now+220;
+        }
+        p.moveCredit=credit;
+    };
     for (const command of (Array.isArray(input.commands) ? input.commands : []).slice(0, 5)) {
+        // The client records movement before clicking and stops recording once the swing begins.
+        // Commit that earlier movement before beginning this packet's first attack.
+        if(command.type==='attack')applyMovement();
         const result = runCommand(s, p, command, now);
-        if (result)
-            message = result;
+        if (result)message = result;
     }
-    let credit=Math.min(.75,(p.moveCredit??.05)+dt);
-    const movements=Array.isArray(input.movements)?input.movements.slice(0,64):[{dx:input.dx,dy:input.dy,seconds:Math.min(.35,dt)}];
-    for(const segment of movements){
-        const dx=Number.isFinite(segment.dx)?Math.max(-1,Math.min(1,segment.dx)):0;
-        const dy=Number.isFinite(segment.dy)?Math.max(-1,Math.min(1,segment.dy)):0;
-        const seconds=Number.isFinite(segment.seconds)?Math.max(0,Math.min(credit,segment.seconds)):0;
-        const length=Math.max(1,Math.hypot(dx,dy)),speed=now<p.dodgeUntil?9:4.2;
-        move(s,p,dx/length*speed*seconds,dy/length*speed*seconds);credit-=seconds;
-        if(seconds>0&&(dx||dy))p.movingUntil=now+220;
-    }
-    p.moveCredit=credit;
+    applyMovement();
     transitionScene(p,now,.78);
     if (input.face && ['up', 'down', 'left', 'right'].includes(input.face))
         p.face = input.face;
     return message;
 }
 export function transitionScene(p:Player,now:number,radius:number){
-    if(now<(p.portalUntil??0))return false;
+    if(now<p.swingUntil||now<(p.portalUntil??0))return false;
     const underground=sceneAt(p.x)==='mine',portal=underground?MINE.exit:CAVE_ENTRANCE;
     if(distance(p,portal)>radius)return false;
     const destination=underground?{x:CAVE_ENTRANCE.x,y:CAVE_ENTRANCE.y+2}:MINE.spawn;

@@ -1,0 +1,163 @@
+// Real client/server movement-lock regressions. Run: node scripts/test-movement.mjs.
+import assert from 'node:assert/strict';
+import { readFile, writeFile, mkdtemp, rm, access } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+const source=resolve(process.env.LINJIAN_SOURCE || fileURLToPath(new URL('..',import.meta.url)));
+const ts=(await import(pathToFileURL(join(source,'node_modules/typescript/lib/typescript.js')))).default;
+const overlay=process.env.LINJIAN_LOCK_OVERLAY;
+const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
+let now=100000,failures=0;
+const actual={now:Date.now,setTimeout,clearTimeout};
+try{
+  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
+    let path=join(source,'lib',name+'.ts');
+    if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
+    const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+    await writeFile(join(temp,name+'.mjs'),code);
+  }
+  const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
+  const world=await import(pathToFileURL(join(temp,'world.mjs')));
+  const animation=await import(pathToFileURL(join(temp,'animation.mjs')));
+  const {GameClient}=await import(pathToFileURL(join(temp,'client.mjs')));
+  Date.now=()=>now;
+  globalThis.window={addEventListener(){},removeEventListener(){}};
+  globalThis.Image=class{};
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+  globalThis.setTimeout=()=>1;globalThis.clearTimeout=()=>{};
+  const clone=x=>JSON.parse(JSON.stringify(x));
+  function fixture(){
+    now+=10000;
+    const state=sim.createWorld(now),p=sim.createPlayer('p','secret','Audit',0,now);state.players.p=p;
+    const canvas={width:800,height:400,clientWidth:1600,clientHeight:800,addEventListener(){},removeEventListener(){},getBoundingClientRect(){return{left:0,top:0,width:1600,height:800};}};
+    const c=new GameClient(canvas,()=>{},()=>{},()=>{},'https://example.test/api/game');
+    c.connected=true;c.session={playerId:'p',room:'TESTROOM',token:'test-token'};c.world=clone(state);c.pos={x:p.x,y:p.y,face:'down',moving:false};
+    const f={c,state,p,defer:false,release:null};
+    c.request=async body=>{
+      sim.tickWorld(state,now);const message=body.input?sim.applyInput(state,'p',body.input,now):null;
+      const reply={room:'TESTROOM',playerId:'p',state:clone(sim.publicWorld(state)),message};
+      if(f.defer){f.defer=false;return new Promise(resolve=>{f.release=()=>resolve(reply);});}
+      return reply;
+    };
+    c.animate(now);
+    f.advance=ms=>{for(let i=0;i<ms;i+=10){now+=Math.min(10,ms-i);c.animate(now);}};
+    f.frame=()=>animation.heroFrame(c.world.players.p,c.pos.face,c.pos.moving,now,c.tool,c.localSwing);
+    f.aim=(dx,dy)=>{c.pointer={x:c.pos.x+dx,y:c.pos.y+dy};};
+    return f;
+  }
+  async function test(name,fn){try{await fn();console.log('PASS',name);}catch(e){failures++;console.log('FAIL',name,'—',e.message);}}
+
+
+  const near=(a,b,message)=>assert.ok(Math.abs(a-b)<1e-8,`${message}: ${a} vs ${b}`);
+  function packet(f,{move=0,commands=[]}={}){return sim.applyInput(f.state,'p',{seq:f.p.seq+1,dx:move?1:0,dy:0,movements:move?[{dx:1,dy:0,seconds:move}]:[],commands},now);}
+  for(const [tool,duration] of [['axe',490],['pick',490],['sword',370]]){
+    await test(`${tool}: held movement is locked for the complete local + authoritative swing then resumes`,async()=>{
+      const f=fixture();try{
+        const x=f.c.pos.x;f.c.setTool(tool);f.aim(1,0);f.c.act();f.c.press('d',true);
+        f.advance(100);near(f.c.pos.x,x,'before acknowledgement');await f.c.sync();
+        f.advance(duration-1);near(f.c.pos.x,x,'through server recovery');
+        assert.equal(f.c.keys.has('d'),true,'direction input survives lock');
+        f.advance(1);near(f.c.pos.x,x,'no retroactive movement at exact unlock');
+        f.advance(100);near(f.c.pos.x,x+.42,'held movement resumes');await f.c.sync();
+        near(f.p.x,x+.42,'authoritative movement matches prediction');near(f.c.pos.x,f.p.x,'no correction');
+      }finally{f.c.destroy();}
+    });
+    await test(`${tool}: server rejects fabricated movement and discards all locked movement credit`,()=>{
+      const f=fixture();try{
+        const x=f.p.x;packet(f,{commands:[{type:'attack',tool}]});
+        now+=duration-1;packet(f,{move:.75});near(f.p.x,x,'cannot move during tool');near(f.p.moveCredit,0,'no credit accumulated');
+        now+=3;packet(f,{move:.75});near(f.p.x,x+.0084,'only the two unlocked milliseconds may move');
+      }finally{f.c.destroy();}
+    });
+  }
+  await test('a walk followed by click in one request keeps the exact earlier predicted displacement',async()=>{
+    const f=fixture();try{
+      const x=f.c.pos.x;f.c.press('d',true);f.advance(100);near(f.c.pos.x,x+.42,'pre-click displacement');
+      f.aim(1,0);f.c.act();f.advance(50);near(f.c.pos.x,x+.42,'stopped after click');await f.c.sync();
+      near(f.p.x,x+.42,'server commits movement before this packet attack');near(f.c.pos.x,f.p.x,'no snap backward');
+      f.advance(100);await f.c.sync();near(f.c.pos.x,x+.42,'no extra movement in later locked packet');
+    }finally{f.c.destroy();}
+  });
+  await test('an old reply cannot release the movement lock for a newer unacknowledged action',async()=>{
+    const f=fixture();try{
+      f.defer=true;const older=f.c.sync();f.advance(20);f.aim(1,0);f.c.act();f.c.press('d',true);const x=f.c.pos.x;
+      f.advance(600);f.release();await older;f.advance(10);near(f.c.pos.x,x,'unacknowledged action remains locked after old reply');
+      await f.c.sync();f.advance(489);near(f.c.pos.x,x,'server action still active');
+      f.advance(11);assert.ok(f.c.pos.x>x,'finite real server deadline releases movement');
+    }finally{f.c.destroy();}
+  });
+  await test('late acknowledgement of a completed server action does not add a new movement-lock duration',async()=>{
+    const f=fixture();try{
+      f.aim(1,0);f.c.act();f.c.press('d',true);const x=f.c.pos.x;f.defer=true;const sent=f.c.sync();
+      f.advance(1000);f.release();await sent;f.advance(10);near(f.c.pos.x,x+.042,'move on next frame, without restarting lock');
+    }finally{f.c.destroy();}
+  });
+  await test('dodge cannot interrupt a tool, including an unconfirmed tool or attack+dodge in one packet',async()=>{
+    const f=fixture();try{
+      f.aim(1,0);f.c.act();assert.equal(f.c.command({type:'dodge'}),false);assert.ok(!f.c.commands.some(c=>c.type==='dodge'));
+      packet(f,{commands:[{type:'attack',tool:'axe'},{type:'dodge'}]});assert.equal(f.p.dodgeUntil,0);assert.equal(f.p.stamina,100);
+      now+=200;packet(f,{commands:[{type:'dodge'}]});assert.equal(f.p.dodgeUntil,0);assert.equal(f.p.stamina,100);
+    }finally{f.c.destroy();}
+  });
+  await test('client waits for pending/active dodge; server queues tool until all 330 ms of dodge finish',async()=>{
+    const f=fixture();try{
+      assert.equal(f.c.command({type:'dodge'}),true);f.aim(1,0);f.c.act();assert.equal(f.c.localSwing,null,'pending dodge wins');await f.c.sync();
+      f.advance(200);f.c.act();assert.equal(f.c.localSwing,null,'active dodge wins');
+      packet(f,{commands:[{type:'attack',tool:'sword'}]});assert.equal(f.p.swingStart,undefined);assert.equal(f.p.attackQueue.length,1);
+      now+=129;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,undefined);
+      now+=1;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,now);assert.equal(f.p.swingUntil-now,370);
+    }finally{f.c.destroy();}
+  });
+  await test('unlocked dodge retains existing 9 tile/s movement and 28 stamina cost',()=>{
+    const f=fixture();try{
+      const x=f.p.x;now+=100;packet(f,{move:.1,commands:[{type:'dodge'}]});near(f.p.x,x+.9,'dodge displacement');assert.equal(f.p.stamina,72);assert.equal(f.p.dodgeUntil-now,330);
+    }finally{f.c.destroy();}
+  });
+  await test('queued attacks cannot overlap recovery even when the previous scheduling time is behind now',()=>{
+    const f=fixture();try{
+      packet(f,{commands:[{type:'attack',tool:'axe'}]});const firstStart=now;now+=200;packet(f,{commands:[{type:'attack',tool:'axe'},{type:'attack',tool:'sword'}]});
+      now=firstStart+600;sim.tickWorld(f.state,now);const secondStart=f.p.swingStart;assert.equal(secondStart,now);assert.ok(f.p.actionAt>=f.p.swingUntil);
+      now=secondStart+489;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,secondStart,'second axe must complete before queued sword');
+      const x=f.p.x;packet(f,{move:.75});near(f.p.x,x,'queued action also locks movement');
+      now=secondStart+490;sim.tickWorld(f.state,now);assert.equal(f.p.equipped,'sword');assert.equal(f.p.swingStart,now);
+    }finally{f.c.destroy();}
+  });
+  await test('changing selected tool cannot release or shorten an axe recovery',()=>{
+    const f=fixture();try{
+      f.aim(1,0);f.c.act();const first=f.c.localSwing;f.advance(410);f.c.setTool('sword');f.c.act();assert.equal(f.c.localSwing,first);f.c.press('d',true);const x=f.c.pos.x;f.advance(70);near(f.c.pos.x,x,'no tool-switch escape');
+    }finally{f.c.destroy();}
+  });
+  await test('slime marks real wandering motion beyond player aggro radius and clears marker when idle or blocked',()=>{
+    const f=fixture();try{
+      const m=f.state.mobs[0];m.x=259.5;m.y=320.5;m.homeX=m.x;m.homeY=m.y;
+      f.p.x=249.5;f.p.y=320.5;now+=150;f.p.seen=now;const x=m.x,y=m.y;sim.tickWorld(f.state,now);
+      assert.ok(Math.hypot(m.x-x,m.y-y)>0,'wander really moved');assert.equal(m.movingUntil,now+250,'wander uses movement frames despite player being >8 tiles away');
+      f.p.x=300;f.p.y=320;now+=150;sim.tickWorld(f.state,now);assert.equal(m.movingUntil,0,'no nearby active player means no movement');
+      m.x=259.5;m.y=320.5;f.p.x=262;f.p.y=320.5;
+      f.state.buildings['259:320:wall']={id:'259:320:wall',x:259,y:320,kind:'wall'};now+=150;sim.tickWorld(f.state,now);assert.equal(m.movingUntil,0,'blocked movement is not animated');
+      delete m.movingUntil;assert.equal(now<(m.movingUntil??0),false,'older room snapshots are safe');
+    }finally{f.c.destroy();}
+  });
+  await test('the 20th harvest eventually resolves once after its full animation without dropping a request',async()=>{
+    const f=fixture();try{
+      f.p.x=246.1;f.p.y=315.5;f.state.resourceHp['247:315']=100;f.c.world=clone(f.state);f.c.pos.x=f.p.x;f.c.pos.y=f.p.y;f.c.pointer={x:247.5,y:315.5};
+      let requested=0;for(let elapsed=10;elapsed<=12000;elapsed+=10){f.advance(10);if(elapsed<=10400&&elapsed%520===0){f.c.act();requested++;}if(elapsed%150===0)await f.c.sync();}
+      assert.equal(requested,20);const deadline=now+1500;
+      while((f.p.attackQueue?.length||f.p.pendingStrike)&&now<deadline){f.advance(150);await f.c.sync();}
+      assert.equal(f.state.resourceHp['247:315'],80);assert.equal(f.p.attackQueue?.length??0,0);assert.equal(f.p.pendingStrike,undefined);
+    }finally{f.c.destroy();}
+  });
+  await test('a cave transition waits for the active swing to finish',()=>{
+    const f=fixture();try{
+      f.p.x=world.CAVE_ENTRANCE.x;f.p.y=world.CAVE_ENTRANCE.y;
+      packet(f,{commands:[{type:'attack',tool:'axe'},{type:'interact'}]});
+      assert.equal(world.sceneAt(f.p.x),'surface');
+      now+=489;assert.equal(sim.transitionScene(f.p,now,2),false);
+      now+=1;assert.equal(sim.transitionScene(f.p,now,2),true);
+      assert.equal(world.sceneAt(f.p.x),'mine');
+    }finally{f.c.destroy();}
+  });
+  console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;
+}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}

@@ -1,6 +1,6 @@
 import { COLORS, RESOURCES, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { canBuild, distance, type WorldState, type Player, type Part, type Tool } from './simulation';
-import { HERO_SIZE, type Atlas, type Sprite } from './art';
+import { HERO_SIZE, FIRE_SIZE, SLIME_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
 import {atmosphere,treeShadows} from './atmosphere';
 import {heroFrame,heroFacing,slimeFrame,type HeroSwing} from './animation';
@@ -102,11 +102,13 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             material(ctx,art.floor,b.x,b.y,b.x*TILE+ox,b.y*TILE+oy);
     }
     const fireX = (SPAWN.x) * TILE + ox, fireY = (SPAWN.y - 1.4) * TILE + oy;
-    if(!underground)ctx.drawImage(art[(['fire0','fire1','fire2'] as const)[Math.floor(t/220)%3]],Math.round(fireX-17),Math.round(fireY-24),34,34);
     const drawables: {
         y: number;
         draw: () => void;
     }[] = [];
+    if(!underground&&visible(SPAWN.x,SPAWN.y-1.4))drawables.push({y:SPAWN.y-1.4,draw:()=>{
+        ctx.drawImage(art[`fire${Math.floor(t/100)%8}`],Math.round(fireX-FIRE_SIZE.anchorX),Math.round(fireY-FIRE_SIZE.anchorY),FIRE_SIZE.width,FIRE_SIZE.height);
+    }});
     for (const r of RESOURCES) {
         if (!visible(r.x, r.y))
             continue;
@@ -139,10 +141,10 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     }
     for(const m of s.mobs){
         if(!visible(m.x,m.y))continue;
-        const moving=Object.values(s.players).some(p=>distance(p,m)<8),frame=slimeFrame(m,t,moving);if(!frame)continue;
+        const moving=t<(m.movingUntil??0),frame=slimeFrame(m,t,moving);if(!frame)continue;
         drawables.push({y:m.y,draw:()=>{
             ctx.fillStyle='#48615730';ctx.fillRect(m.x*TILE+ox-8,m.y*TILE+oy-2,16,3);
-            ctx.drawImage(art[frame],Math.round(m.x*TILE+ox-20),Math.round(m.y*TILE+oy-35),40,40);
+            ctx.drawImage(art[frame],Math.round(m.x*TILE+ox-SLIME_SIZE.anchorX),Math.round(m.y*TILE+oy-SLIME_SIZE.anchorY),SLIME_SIZE.width,SLIME_SIZE.height);
             if(m.windup){ctx.globalAlpha=.45;ctx.drawImage(art.spark,m.x*TILE+ox-7,m.y*TILE+oy-29,14,14);ctx.globalAlpha=1;}
             if(m.hp>0&&(m.hp<54||distance(pos,m)<4)){ctx.fillStyle='#58724b';ctx.fillRect(m.x*TILE+ox-11,m.y*TILE+oy-34,22,3);ctx.fillStyle='#bbe685';ctx.fillRect(m.x*TILE+ox-10,m.y*TILE+oy-33,20*m.hp/54,1);}
         }});
