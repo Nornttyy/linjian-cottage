@@ -1,6 +1,6 @@
 {
   "coordinateSystem": "crop is source [x,y,w,h]; anchor is local to that exact crop BEFORE any inset; rowBodyHeight is neutral skull-top to boot-sole in source pixels, excludes tool",
-  "apply": "scale=32/rowBodyHeight; draw crop at [targetX-anchor[0]*scale,44-anchor[1]*scale]. If trimming 2px off crop, also subtract 2 from both anchors. targetX=32 for 64-wide canvas (24 for 48-wide).",
+  "apply": "scale=32/rowBodyHeight; place crop anchor at HERO_SIZE.anchorX,HERO_SIZE.anchorY. Subtract loader inset from both source anchor coordinates.",
   "notes": [
     "Crops are connected complete figure bounds plus 2px, not nominal 256px columns. Tool tips may cross nominal columns.",
     "Do not rescale individual active frames. Use one rowBodyHeight per actor direction.",

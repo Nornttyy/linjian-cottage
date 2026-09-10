@@ -4,7 +4,7 @@ export type Direction='down'|'up'|'right';
 export type HeroAction='idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword';
 export type Sprite='tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|'fire0'|'fire1'|'fire2'|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
-export const HERO_SIZE={width:64,height:56,anchorX:32,anchorY:44};
+export const HERO_SIZE={width:64,height:64,anchorX:32,anchorY:48};
 export const frameKey=(action:HeroAction,direction:Direction,frame:number)=>`${action}-${direction}-${frame}` as Sprite;
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c;};
 const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('素材加载失败'));img.src='.'+src;});
@@ -12,9 +12,15 @@ function transparentMatte(c:HTMLCanvasElement){
     const ctx=c.getContext('2d',{willReadFrequently:true})!,data=ctx.getImageData(0,0,c.width,c.height),p=data.data,w=c.width,h=c.height;
     let transparent=0;for(let i=3;i<p.length;i+=4)if(p[i]<8)transparent++;
     if(transparent>w*h*.02)return;
-    // Remove only edge-connected matte when a generated PNG encodes a gray backdrop.
+    // Decode the actual backdrop color; gray tool highlights are not magenta matte.
+    const magenta=(r:number,g:number,b:number)=>r>90&&b>90&&g<Math.min(r,b)*.55&&r<b*1.65&&b<r*1.65;
+    const gray=(r:number,g:number,b:number)=>Math.min(r,g,b)>145&&Math.max(r,g,b)-Math.min(r,g,b)<28;
+    let magentaEdge=0,grayEdge=0;
+    const sample=(i:number)=>{const k=i*4;if(magenta(p[k],p[k+1],p[k+2]))magentaEdge++;if(gray(p[k],p[k+1],p[k+2]))grayEdge++;};
+    for(let x=0;x<w;x++){sample(x);sample((h-1)*w+x);}for(let y=1;y<h-1;y++){sample(y*w);sample(y*w+w-1);}
+    const matte=magentaEdge>grayEdge?magenta:gray;
     const seen=new Uint8Array(w*h),queue:number[]=[];
-    const add=(i:number)=>{if(i<0||i>=w*h||seen[i])return;const k=i*4,a=p[k],b=p[k+1],d=p[k+2];if((Math.min(a,b,d)>145&&Math.max(a,b,d)-Math.min(a,b,d)<28)||(a>175&&b<110&&d>175)){seen[i]=1;queue.push(i);}};
+    const add=(i:number)=>{if(i<0||i>=w*h||seen[i])return;const k=i*4;if(matte(p[k],p[k+1],p[k+2])){seen[i]=1;queue.push(i);}};
     for(let x=0;x<w;x++){add(x);add((h-1)*w+x);}for(let y=0;y<h;y++){add(y*w);add(y*w+w-1);}
     for(let q=0;q<queue.length;q++){const i=queue[q];p[i*4+3]=0;if(i%w)add(i-1);if(i%w<w-1)add(i+1);if(i>=w)add(i-w);if(i<w*(h-1))add(i+w);}
     ctx.putImageData(data,0,0);
@@ -60,7 +66,8 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
             group.forEach((c,col)=>{const out=canvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;const scale=tool?32/toolBodyHeights[tool][row]:32/height;
                 const anchor=tool?toolAnchors[tool][row*cols+col][1]-2:file==='hero-motion.png'&&row<3?y1+1:boxes[col].y1+1;
                 const anchorX=tool?toolAnchors[tool][row*cols+col][0]:baseAnchorX[file]?.[row*cols+col];
-                const drawX=anchorX===undefined?(HERO_SIZE.width-c.width*scale)/2:HERO_SIZE.anchorX-(anchorX-2)*scale;
+                const correction=file==='hero-walk.png'&&row===2?[-1.5,-.5,0,.5,.5,0,0,1.5][col]:file==='hero-motion.png'&&row===0&&col===7?2:file==='hero-motion.png'&&row===2&&col===3?-3.5:0;
+                const drawX=(anchorX===undefined?(HERO_SIZE.width-c.width*scale)/2:HERO_SIZE.anchorX-(anchorX-2)*scale)+correction;
                 ctx.drawImage(c,drawX,HERO_SIZE.anchorY-anchor*scale,c.width*scale,c.height*scale);cells[row*cols+col]=out;});
         }
     }
