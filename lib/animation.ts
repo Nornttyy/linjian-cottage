@@ -1,9 +1,12 @@
 import {frameKey,type Sprite,type Direction} from './art';
-import type {Player,Mob,Tool} from './simulation';
+import {TOOL_TIMING,type Player,type Mob,type Tool} from './simulation';
+import {HERO_FRAME_COUNT,HERO_IDLE_FRAME_COUNT} from './hero-rig';
 export type HeroSwing={tool:Exclude<Tool,'build'>;face:Player['face'];start:number;until:number};
-const swingTimes = { axe:[0,60,110,155,200,245,325,415], pick:[0,60,110,155,200,245,325,415], sword:[0,45,80,120,170,215,275,330] };
+
 export function swingFrame(action:Exclude<Tool,'build'>,elapsed:number){
-    let frame=0;for(let i=1;i<8;i++)if(elapsed>=swingTimes[action][i])frame=i;return frame;
+    const timing=TOOL_TIMING[action],contactFrame=action==='sword'?10:12;
+    const frame=elapsed<timing.contact?Math.floor(elapsed/timing.contact*contactFrame):contactFrame+Math.floor((elapsed-timing.contact)/(timing.duration-timing.contact)*(HERO_FRAME_COUNT-contactFrame));
+    return Math.max(0,Math.min(HERO_FRAME_COUNT-1,frame));
 }
 // undefined selects the authoritative timeline; null explicitly means no local swing.
 export function heroFacing(p:Player,face:Player['face'],time:number,swing?:HeroSwing|null):Player['face']{
@@ -11,18 +14,18 @@ export function heroFacing(p:Player,face:Player['face'],time:number,swing?:HeroS
     if(swing!==undefined)return swing&&time<swing.until?swing.face:face;
     return time<p.swingUntil?p.swingFace??face:face;
 }
-export function heroFrame(p:Player,face:Player['face'],moving:boolean,time:number,tool:Tool,swing?:HeroSwing|null):Sprite{
+export function heroFrame(p:Player,face:Player['face'],moving:boolean,time:number,tool:Tool,swing?:HeroSwing|null,motionElapsed=time):Sprite{
     const facing=heroFacing(p,face,time,swing);
     const direction:Direction=facing==='left'?'right':facing;
-    if(time<p.dodgeUntil)return frameKey('dodge',direction,Math.max(0,Math.min(7,Math.floor((time-(p.dodgeUntil-330))/330*8))));
-    if(p.hurtAt&&time-p.hurtAt<600)return frameKey('hurt',direction,Math.max(0,Math.min(7,Math.floor((time-p.hurtAt)/600*8))));
+    if(time<p.dodgeUntil)return frameKey('dodge',direction,Math.max(0,Math.min(HERO_FRAME_COUNT-1,Math.floor((time-(p.dodgeUntil-330))/330*HERO_FRAME_COUNT))));
+    if(p.hurtAt&&time-p.hurtAt<600)return frameKey('hurt',direction,Math.max(0,Math.min(HERO_FRAME_COUNT-1,Math.floor((time-p.hurtAt)/600*HERO_FRAME_COUNT))));
     if(swing===undefined?time<p.swingUntil:!!swing&&time<swing.until){
         const action=swing?.tool??(p.equipped==='pick'?'pick':p.equipped==='sword'?'sword':p.equipped==='axe'?'axe':tool==='sword'?'sword':tool==='pick'?'pick':'axe');
-        const duration=action==='sword'?370:490,start=swing?.start??p.swingStart??p.swingUntil-duration;
+        const duration=TOOL_TIMING[action].duration,start=swing?.start??p.swingStart??p.swingUntil-duration;
         return frameKey(action,direction,swingFrame(action,time-start));
     }
-    if(moving)return frameKey('walk',direction,Math.floor(time/85)%8);
-    return frameKey('idle',direction,Math.floor(time/380)%(direction==='down'?4:2));
+    if(moving)return frameKey('walk',direction,Math.floor(motionElapsed/30)%HERO_FRAME_COUNT);
+    return frameKey('idle',direction,Math.floor(motionElapsed/125)%HERO_IDLE_FRAME_COUNT);
 }
 export function slimeFrame(m:Mob,time:number,moving:boolean):Sprite|null{
     if(m.hp<=0){const age=time-(m.deadUntil-90000);return age>=0&&age<480?`slime-death-${Math.min(3,Math.floor(age/120))}`:null;}

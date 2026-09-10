@@ -1,5 +1,5 @@
 import { loadArt, type Atlas } from './art';
-import { createWorld, move, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
+import { createWorld, move, TOOL_TIMING, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
 import { render, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
 import { SPAWN, sceneAt } from './world';
 import type { HeroSwing } from './animation';
@@ -47,6 +47,8 @@ export class GameClient {
     held = false;
     private heldButton=0;
     private localSwing: HeroSwing | null = null;
+    private poseState='';
+    private poseStarted=0;
     private unconfirmedSwing: Command | null = null;
     private movements:Movement[]=[];
     connected = false;
@@ -59,6 +61,8 @@ export class GameClient {
     private seq = 0;
     private commands: Command[] = [];
     private pending: Input | null = null;
+    private syncing = false;
+    private flushRequested = false;
     private buildStamp = '';
     private generation = 0;
     private fadeUntil = 0;
@@ -84,6 +88,7 @@ export class GameClient {
             clearTimeout(this.timer);
         this.keys.clear();
         this.pending = null;
+        this.flushRequested = false;
         this.localSwing = null;
         this.unconfirmedSwing = null;
         this.movements = [];
@@ -117,9 +122,18 @@ export class GameClient {
             this.notify();
         }
     }
+    private flushActions() {
+        this.flushRequested=true;
+        if(this.timer){clearTimeout(this.timer);this.timer=undefined;}
+        // Finish constructing the local action before starting its request.
+        queueMicrotask(()=>{if(this.flushRequested)void this.sync();});
+    }
     private async sync() {
-        if (this.disposed || !this.session)
+        if (this.disposed || !this.session || this.syncing)
             return;
+        this.syncing=true;
+        this.flushRequested=false;
+        if(this.timer){clearTimeout(this.timer);this.timer=undefined;}
         const session = this.session, generation = this.generation;
         const delta = this.movement();
         this.pending ??= { seq: ++this.seq, dx: delta.x, dy: delta.y, face: this.pos.face, commands: this.commands.splice(0, 5), movements: this.movements.splice(0,64) };
@@ -150,8 +164,15 @@ export class GameClient {
             this.error = e instanceof Error ? e.message : '连接中断';
             this.notify();
         }
-        if (!this.disposed && generation === this.generation)
-            this.timer = setTimeout(() => this.sync(), this.connected ? 150 : 1600);
+        finally {
+            this.syncing=false;
+            // A new connection may have attempted its first sync while the previous one was pending.
+            if(!this.disposed && generation!==this.generation && this.connected && this.session)this.flushActions();
+        }
+        if (!this.disposed && generation === this.generation) {
+            if(this.connected && this.flushRequested)this.flushActions();
+            else this.timer = setTimeout(() => this.sync(), this.connected ? 150 : 1600);
+        }
     }
     setTool(tool: Tool) { this.tool = tool; this.remove = false; this.buildStamp = ''; this.notify(); }
     setPart(part: Part) { this.tool = 'build'; this.part = part; this.remove = false; this.notify(); }
@@ -165,8 +186,7 @@ export class GameClient {
         return Math.max(this.localSwing?.until??0,p?.swingUntil??0);
     }
     private toolLocked(now=Date.now()) {
-        const p=this.session?this.world.players[this.session.playerId]:undefined;
-        return !!this.unconfirmedSwing || !!p?.attackQueue?.length || now<this.toolLockUntil();
+        return !!this.unconfirmedSwing || now<this.toolLockUntil();
     }
     private dodgePending() {
         return this.commands.some(c=>c.type==='dodge') || !!this.pending?.commands.some(c=>c.type==='dodge');
@@ -174,7 +194,9 @@ export class GameClient {
     command(command: Command) {
         if(command.type==='dodge' && this.toolLocked())return false;
         if(!this.connected || this.commands.length>=5)return false;
-        this.commands.push(command);return true;
+        this.commands.push(command);
+        if(command.type==='attack'||command.type==='dodge')this.flushActions();
+        return true;
     }
     private movement() { if (this.paused || !this.connected || this.toolLocked())
         return { x: 0, y: 0 }; const x = Number(this.keys.has('d') || this.keys.has('arrowright')) - Number(this.keys.has('a') || this.keys.has('arrowleft')), y = Number(this.keys.has('s') || this.keys.has('arrowdown')) - Number(this.keys.has('w') || this.keys.has('arrowup')); const n = Math.max(1, Math.hypot(x, y)); return { x: x / n, y: y / n }; }
@@ -183,8 +205,8 @@ export class GameClient {
             return;
         const now = Date.now();
         const p=this.world.players[this.session.playerId];
-        if(this.tool!=='build' && (now<(this.localSwing?.until??0) || now<(p?.dodgeUntil??0) || this.dodgePending()))return;
-        if (now - this.lastClick < (this.tool === 'build' ? 150 : this.tool === 'sword' ? 400 : 520))
+        if(this.tool!=='build' && (this.toolLocked(now) || now<(p?.actionAt??0) || now<(p?.dodgeUntil??0) || this.dodgePending()))return;
+        if (now - this.lastClick < (this.tool === 'build' ? 150 : TOOL_TIMING[this.tool].cooldown))
             return;
         const point = this.pointer || { x: this.pos.x + (this.pos.face === 'right' ? 1 : this.pos.face === 'left' ? -1 : 0), y: this.pos.y + (this.pos.face === 'down' ? 1 : this.pos.face === 'up' ? -1 : 0) };
         if (this.tool === 'build') {
@@ -205,7 +227,7 @@ export class GameClient {
             if(!this.command(command))return;
             this.unconfirmedSwing=command;
             // Local presentation has its own clock; snapshots still own damage and inventory.
-            this.localSwing = { tool: this.tool, face, start: now, until: now + (this.tool === 'sword' ? 370 : 490) };
+            this.localSwing = { tool: this.tool, face, start: now, until: now + TOOL_TIMING[this.tool].duration };
         }
         this.lastClick = now;
     }
@@ -230,8 +252,10 @@ export class GameClient {
             this.pointer = pointerWorld(this.canvas, this.pos, this.screenPointer.x, this.screenPointer.y);
         if (this.held)
             this.act();
+        const now=Date.now(),pose=now<(this.localSwing?.until??0)?'tool':this.pos.moving?'walk':'idle';
+        if(pose!==this.poseState){this.poseState=pose;this.poseStarted=now;}
         if (this.art)
-            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: Date.now(), fadeUntil:this.fadeUntil, localSwing:this.localSwing }, this.art);
+            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now, fadeUntil:this.fadeUntil, localSwing:this.localSwing, motionElapsed:now-this.poseStarted }, this.art);
         this.frame = requestAnimationFrame(this.animate);
     };
     private pointerMove = (e: PointerEvent) => { this.screenPointer = { x: e.clientX, y: e.clientY }; this.pointer = pointerWorld(this.canvas, this.pos, e.clientX, e.clientY); };

@@ -10,11 +10,11 @@ const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
 try{
-  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
+  for(const name of ['world','simulation','frame-layout','hero-rig','tiles','animation','atmosphere','renderer','art','client']){
     let path=join(source,'lib',name+'.ts');
     if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
     const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
     await writeFile(join(temp,name+'.mjs'),code);
   }
   const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
@@ -39,6 +39,8 @@ try{
       if(f.defer){f.defer=false;return new Promise(resolve=>{f.release=()=>resolve(reply);});}
       return reply;
     };
+    // This fixture controls delivery explicitly; test-input-latency covers immediate scheduling.
+    c.flushActions=()=>{};
     c.animate(now);
     f.advance=ms=>{for(let i=0;i<ms;i+=10){now+=Math.min(10,ms-i);c.animate(now);}};
     f.frame=()=>animation.heroFrame(c.world.players.p,c.pos.face,c.pos.moving,now,c.tool,c.localSwing);
@@ -61,7 +63,7 @@ try{
       f.release();await syncing;
       assert.equal(f.frame(),before,`before ${before}, after ${f.frame()}`);
       f.advance(10);await f.c.sync();
-      assert.match(f.frame(),/^axe-right-[12]$/);
+      assert.equal(f.frame(),`axe-right-${animation.swingFrame('axe',90)}`);
     }finally{f.c.destroy();}
   });
   await test('movement cannot turn a swing after its aim direction is chosen',async()=>{
@@ -99,7 +101,7 @@ try{
       f.p.x=246.1;f.p.y=315.5;f.c.world=clone(f.state);f.c.pos.x=f.p.x;f.c.pos.y=f.p.y;
       f.c.pointer={x:247.5,y:315.5};f.c.act();
       assert.equal(f.state.resourceHp['247:315'],undefined);
-      await f.c.sync();f.advance(244);sim.tickWorld(f.state,now);
+      await f.c.sync();f.advance(sim.TOOL_TIMING.axe.contact-1);sim.tickWorld(f.state,now);
       assert.equal(f.state.resourceHp['247:315'],undefined);
       f.advance(1);sim.tickWorld(f.state,now);
       assert.equal(f.state.resourceHp['247:315'],2);
@@ -109,15 +111,15 @@ try{
     const f=fixture();try{assert.equal(f.c.apiUrl,'https://example.test/api/game');}finally{f.c.destroy();}
   });
   await test('generated contact poses line up with authoritative strike timing',()=>{
-    assert.equal(animation.swingFrame('axe',244),4);
-    assert.equal(animation.swingFrame('axe',245),5);
-    assert.equal(animation.swingFrame('pick',245),5);
-    assert.equal(animation.swingFrame('sword',169),3);
-    assert.equal(animation.swingFrame('sword',170),4);
+    assert.equal(animation.swingFrame('axe',sim.TOOL_TIMING.axe.contact-1),11);
+    assert.equal(animation.swingFrame('axe',sim.TOOL_TIMING.axe.contact),12);
+    assert.equal(animation.swingFrame('pick',sim.TOOL_TIMING.pick.contact),12);
+    assert.equal(animation.swingFrame('sword',sim.TOOL_TIMING.sword.contact-1),9);
+    assert.equal(animation.swingFrame('sword',sim.TOOL_TIMING.sword.contact),10);
     for(const tool of ['axe','pick','sword']){
-      const end=tool==='sword'?370:490;
+      const end=sim.TOOL_TIMING[tool].duration;
       const frames=new Set(Array.from({length:end},(_,i)=>animation.swingFrame(tool,i)));
-      assert.equal(frames.size,8,`${tool} must use every generated pose`);
+      assert.equal(frames.size,24,`${tool} must use every generated pose`);
     }
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;

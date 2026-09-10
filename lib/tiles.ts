@@ -2,12 +2,15 @@ import { terrainAt, type Terrain } from './world';
 import type { Atlas } from './art';
 export const TILE=24;
 const mod=(v:number,n:number)=>((v%n)+n)%n;
+const materials = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
 export function material(ctx:CanvasRenderingContext2D,texture:HTMLCanvasElement,x:number,y:number,px:number,py:number,w=TILE,h=TILE){
-    const period=2, sw=texture.width/period, sh=texture.height/period;
-    ctx.drawImage(texture,mod(x,period)*sw,mod(y,period)*sh,sw,sh,px,py,w,h);
+ let entries=materials.get(texture);if(!entries)materials.set(texture,entries=new Map());
+ const sx=mod(x,2),sy=mod(y,2),key=sx+':'+sy+':'+w+':'+h;let tile=entries.get(key);
+ if(!tile){tile=document.createElement('canvas');tile.width=w;tile.height=h;const tc=tile.getContext('2d')!;tc.imageSmoothingEnabled=false;tc.drawImage(texture,sx*texture.width/2,sy*texture.height/2,texture.width/2,texture.height/2,0,0,w,h);entries.set(key,tile);}
+ ctx.drawImage(tile,px,py,w,h);
 }
 const priority:Record<Terrain,number>={water:0,path:1,'cave-floor':1,sand:2,rock:3,marsh:4,grass:5,forest:6,snow:7,'cave-wall':8};
-export function terrainTile(ctx:CanvasRenderingContext2D,art:Atlas,x:number,y:number,ox:number,oy:number){
+function terrainTileUncached(ctx:CanvasRenderingContext2D,art:Atlas,x:number,y:number,ox:number,oy:number){
     const terrain=terrainAt(x,y),px=x*TILE+ox,py=y*TILE+oy;
     material(ctx,art[`ground-${terrain}`],x,y,px,py);
     // Blend borders using the neighbouring material, while collision remains on the grid.
@@ -25,4 +28,13 @@ export function terrainTile(ctx:CanvasRenderingContext2D,art:Atlas,x:number,y:nu
         }
         ctx.clip();material(ctx,art[`ground-${other}`],x,y,px,py);ctx.restore();
     }
+}
+
+const composites=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
+export function terrainTile(ctx:CanvasRenderingContext2D,art:Atlas,x:number,y:number,ox:number,oy:number){
+ let entries=composites.get(art);if(!entries)composites.set(art,entries=new Map());
+ const terrain=terrainAt(x,y),top=terrainAt(x,y-1),right=terrainAt(x+1,y),bottom=terrainAt(x,y+1),left=terrainAt(x-1,y);
+ const key=terrain+':'+top+':'+right+':'+bottom+':'+left+':'+mod(x,20)+':'+mod(y,20);
+ let tile=entries.get(key);if(!tile){tile=document.createElement('canvas');tile.width=tile.height=TILE;const tc=tile.getContext('2d')!;tc.imageSmoothingEnabled=false;terrainTileUncached(tc,art,x,y,-x*TILE,-y*TILE);if(entries.size>=2048)entries.delete(entries.keys().next().value!);entries.set(key,tile);}
+ ctx.drawImage(tile,x*TILE+ox,y*TILE+oy);
 }

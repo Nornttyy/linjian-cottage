@@ -42,7 +42,7 @@ try{
  test('harvest damage waits for the generated swing contact frame',()=>{
   const f=fixture(),r=world.RESOURCE_MAP.get('247:315');f.p.x=r.x-.6;f.p.y=r.y+.5;
   sim.applyInput(f.state,'p',{seq:1,dx:0,dy:0,commands:[{type:'attack',tool:'axe',target:r.id}]},f.now+100);
-  assert.equal(f.state.resourceHp[r.id],undefined);sim.tickWorld(f.state,f.now+300);assert.equal(f.state.resourceHp[r.id],undefined);sim.tickWorld(f.state,f.now+350);assert.equal(f.state.resourceHp[r.id],2);
+  assert.equal(f.state.resourceHp[r.id],undefined);sim.tickWorld(f.state,f.now+100+sim.TOOL_TIMING.axe.contact-1);assert.equal(f.state.resourceHp[r.id],undefined);sim.tickWorld(f.state,f.now+100+sim.TOOL_TIMING.axe.contact);assert.equal(f.state.resourceHp[r.id],2);
   sim.tickWorld(f.state,f.now+450);assert.equal(f.state.resourceHp[r.id],2);
  });
  console.log(`${checks} game rules passed`);

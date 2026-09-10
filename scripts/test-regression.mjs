@@ -17,11 +17,11 @@ let now = 100000;
 let failures = 0;
 try {
   const ts = (await import(pathToFileURL(join(source, 'node_modules/typescript/lib/typescript.js')))).default;
-  for (const name of ['world', 'simulation', 'frame-layout', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
+  for (const name of ['world', 'simulation', 'frame-layout','hero-rig', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
     const text = await readFile(join(source, 'lib', name + '.ts'), 'utf8');
     const js = ts.transpileModule(text, { compilerOptions: {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
+    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
     await writeFile(join(temp, name + '.mjs'), js);
   }
   const sim = await import(pathToFileURL(join(temp, 'simulation.mjs')));
@@ -71,6 +71,8 @@ try {
       }
       return reply;
     };
+    // This fixture controls delivery explicitly; test-input-latency covers immediate scheduling.
+    client.flushActions=()=>{};
     client.animate(now);
     f.advance = ms => { for (let t = 0; t < ms; t += 10) { now += Math.min(10, ms - t); client.animate(now); } };
     f.sync = () => client.sync();
@@ -137,7 +139,7 @@ try {
     } finally { f.client.destroy(); }
   });
 
-  await test('20 held-harvest actions execute 20 times despite sync quantization', async () => {
+  await test('repeated harvest inputs execute accepted actions once without a queued backlog', async () => {
     const f = fixture(), resource = world.RESOURCE_MAP.get('247:315');
     assert.ok(resource, 'fixed test tree exists');
     try {
@@ -161,8 +163,11 @@ try {
       assert.equal(f.player.attackQueue?.length ?? 0, 0, 'all queued attacks drained');
       assert.equal(f.player.pendingStrike, undefined, 'last contact resolved within the bounded drain');
       const accepted = 100 - (f.state.resourceHp[resource.id] ?? 0);
+      const emitted = f.requests.flatMap(r=>r.input?.commands||[]).filter(c=>c.type==='attack').length;
       assert.equal(attempts, 20);
-      assert.equal(accepted, attempts, `${attempts} requested; ${accepted} actually harvested`);
+      assert.ok(emitted>0 && emitted<=attempts);
+      assert.equal(accepted, emitted, `${emitted} accepted inputs; ${accepted} actually harvested`);
+      assert.equal(f.player.attackQueue?.length??0,0,'no retained attack backlog');
       const attackInput = f.requests.filter(r => r.input?.commands?.some(c => c.type === 'attack')).at(-1)?.input;
       assert.ok(attackInput, 'an attack-bearing input was sent');
       const hp = f.state.resourceHp[resource.id];

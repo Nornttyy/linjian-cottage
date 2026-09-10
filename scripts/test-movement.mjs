@@ -11,11 +11,11 @@ const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
 try{
-  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
+  for(const name of ['world','simulation','frame-layout','hero-rig','tiles','animation','atmosphere','renderer','art','client']){
     let path=join(source,'lib',name+'.ts');
     if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
     const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
     await writeFile(join(temp,name+'.mjs'),code);
   }
   const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
@@ -41,6 +41,8 @@ try{
       if(f.defer){f.defer=false;return new Promise(resolve=>{f.release=()=>resolve(reply);});}
       return reply;
     };
+    // This fixture controls delivery explicitly; test-input-latency covers immediate scheduling.
+    c.flushActions=()=>{};
     c.animate(now);
     f.advance=ms=>{for(let i=0;i<ms;i+=10){now+=Math.min(10,ms-i);c.animate(now);}};
     f.frame=()=>animation.heroFrame(c.world.players.p,c.pos.face,c.pos.moving,now,c.tool,c.localSwing);
@@ -52,7 +54,7 @@ try{
 
   const near=(a,b,message)=>assert.ok(Math.abs(a-b)<1e-8,`${message}: ${a} vs ${b}`);
   function packet(f,{move=0,commands=[]}={}){return sim.applyInput(f.state,'p',{seq:f.p.seq+1,dx:move?1:0,dy:0,movements:move?[{dx:1,dy:0,seconds:move}]:[],commands},now);}
-  for(const [tool,duration] of [['axe',490],['pick',490],['sword',370]]){
+  for(const [tool,duration] of Object.entries(sim.TOOL_TIMING).map(([tool,timing])=>[tool,timing.duration])){
     await test(`${tool}: held movement is locked for the complete local + authoritative swing then resumes`,async()=>{
       const f=fixture();try{
         const x=f.c.pos.x;f.c.setTool(tool);f.aim(1,0);f.c.act();f.c.press('d',true);
@@ -84,7 +86,7 @@ try{
     const f=fixture();try{
       f.defer=true;const older=f.c.sync();f.advance(20);f.aim(1,0);f.c.act();f.c.press('d',true);const x=f.c.pos.x;
       f.advance(600);f.release();await older;f.advance(10);near(f.c.pos.x,x,'unacknowledged action remains locked after old reply');
-      await f.c.sync();f.advance(489);near(f.c.pos.x,x,'server action still active');
+      await f.c.sync();f.advance(sim.TOOL_TIMING.axe.duration-1);near(f.c.pos.x,x,'server action still active');
       f.advance(11);assert.ok(f.c.pos.x>x,'finite real server deadline releases movement');
     }finally{f.c.destroy();}
   });
@@ -101,13 +103,13 @@ try{
       now+=200;packet(f,{commands:[{type:'dodge'}]});assert.equal(f.p.dodgeUntil,0);assert.equal(f.p.stamina,100);
     }finally{f.c.destroy();}
   });
-  await test('client waits for pending/active dodge; server queues tool until all 330 ms of dodge finish',async()=>{
+  await test('client waits for pending/active dodge; server rejects early attacks until all 330 ms of dodge finish',async()=>{
     const f=fixture();try{
       assert.equal(f.c.command({type:'dodge'}),true);f.aim(1,0);f.c.act();assert.equal(f.c.localSwing,null,'pending dodge wins');await f.c.sync();
       f.advance(200);f.c.act();assert.equal(f.c.localSwing,null,'active dodge wins');
-      packet(f,{commands:[{type:'attack',tool:'sword'}]});assert.equal(f.p.swingStart,undefined);assert.equal(f.p.attackQueue.length,1);
+      packet(f,{commands:[{type:'attack',tool:'sword'}]});assert.equal(f.p.swingStart,undefined);assert.equal(f.p.attackQueue?.length??0,0);
       now+=129;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,undefined);
-      now+=1;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,now);assert.equal(f.p.swingUntil-now,370);
+      now+=1;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,undefined,'rejected input is not delayed');packet(f,{commands:[{type:'attack',tool:'sword'}]});assert.equal(f.p.swingStart,now);assert.equal(f.p.swingUntil-now,sim.TOOL_TIMING.sword.duration);
     }finally{f.c.destroy();}
   });
   await test('unlocked dodge retains existing 9 tile/s movement and 28 stamina cost',()=>{
@@ -115,18 +117,19 @@ try{
       const x=f.p.x;now+=100;packet(f,{move:.1,commands:[{type:'dodge'}]});near(f.p.x,x+.9,'dodge displacement');assert.equal(f.p.stamina,72);assert.equal(f.p.dodgeUntil-now,330);
     }finally{f.c.destroy();}
   });
-  await test('queued attacks cannot overlap recovery even when the previous scheduling time is behind now',()=>{
+  await test('early attacks neither interrupt recovery nor create a post-release backlog',()=>{
     const f=fixture();try{
-      packet(f,{commands:[{type:'attack',tool:'axe'}]});const firstStart=now;now+=200;packet(f,{commands:[{type:'attack',tool:'axe'},{type:'attack',tool:'sword'}]});
-      now=firstStart+600;sim.tickWorld(f.state,now);const secondStart=f.p.swingStart;assert.equal(secondStart,now);assert.ok(f.p.actionAt>=f.p.swingUntil);
-      now=secondStart+489;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,secondStart,'second axe must complete before queued sword');
-      const x=f.p.x;packet(f,{move:.75});near(f.p.x,x,'queued action also locks movement');
-      now=secondStart+490;sim.tickWorld(f.state,now);assert.equal(f.p.equipped,'sword');assert.equal(f.p.swingStart,now);
+      packet(f,{commands:[{type:'attack',tool:'axe'}]});const firstStart=now;now+=100;
+      packet(f,{commands:[{type:'attack',tool:'axe'},{type:'attack',tool:'sword'}]});
+      assert.equal(f.p.swingStart,firstStart);assert.equal(f.p.attackQueue?.length??0,0);
+      now=firstStart+sim.TOOL_TIMING.axe.duration-1;const x=f.p.x;packet(f,{move:.75});near(f.p.x,x,'current recovery still locks');
+      now=firstStart+1000;sim.tickWorld(f.state,now);assert.equal(f.p.swingStart,firstStart,'no second action after release');
+      packet(f,{move:.1});assert.ok(f.p.x>x,'movement resumes without queue drain');
     }finally{f.c.destroy();}
   });
   await test('changing selected tool cannot release or shorten an axe recovery',()=>{
     const f=fixture();try{
-      f.aim(1,0);f.c.act();const first=f.c.localSwing;f.advance(410);f.c.setTool('sword');f.c.act();assert.equal(f.c.localSwing,first);f.c.press('d',true);const x=f.c.pos.x;f.advance(70);near(f.c.pos.x,x,'no tool-switch escape');
+      f.aim(1,0);f.c.act();const first=f.c.localSwing;f.advance(sim.TOOL_TIMING.axe.duration-80);f.c.setTool('sword');f.c.act();assert.equal(f.c.localSwing,first);f.c.press('d',true);const x=f.c.pos.x;f.advance(70);near(f.c.pos.x,x,'no tool-switch escape');
     }finally{f.c.destroy();}
   });
   await test('slime marks real wandering motion beyond player aggro radius and clears marker when idle or blocked',()=>{
@@ -140,13 +143,14 @@ try{
       delete m.movingUntil;assert.equal(now<(m.movingUntil??0),false,'older room snapshots are safe');
     }finally{f.c.destroy();}
   });
-  await test('the 20th harvest eventually resolves once after its full animation without dropping a request',async()=>{
+  await test('continuous harvesting executes accepted actions once and releasing leaves only the current contact',async()=>{
     const f=fixture();try{
       f.p.x=246.1;f.p.y=315.5;f.state.resourceHp['247:315']=100;f.c.world=clone(f.state);f.c.pos.x=f.p.x;f.c.pos.y=f.p.y;f.c.pointer={x:247.5,y:315.5};
-      let requested=0;for(let elapsed=10;elapsed<=12000;elapsed+=10){f.advance(10);if(elapsed<=10400&&elapsed%520===0){f.c.act();requested++;}if(elapsed%150===0)await f.c.sync();}
-      assert.equal(requested,20);const deadline=now+1500;
-      while((f.p.attackQueue?.length||f.p.pendingStrike)&&now<deadline){f.advance(150);await f.c.sync();}
-      assert.equal(f.state.resourceHp['247:315'],80);assert.equal(f.p.attackQueue?.length??0,0);assert.equal(f.p.pendingStrike,undefined);
+      f.c.held=true;const starts=new Set();
+      for(let elapsed=10;elapsed<=4000;elapsed+=10){f.advance(10);if(f.c.localSwing)starts.add(f.c.localSwing.start);if(elapsed%150===0)await f.c.sync();assert.equal(f.p.attackQueue?.length??0,0);}
+      f.c.pointerUp();const lastLocal=f.c.localSwing.start;
+      for(let i=0;i<8;i++){f.advance(150);await f.c.sync();}
+      assert.ok(starts.size>3);assert.equal(100-f.state.resourceHp['247:315'],starts.size);assert.equal(f.c.localSwing.start,lastLocal);assert.equal(f.p.pendingStrike,undefined);assert.equal(f.p.attackQueue?.length??0,0);
     }finally{f.c.destroy();}
   });
   await test('a cave transition waits for the active swing to finish',()=>{
@@ -154,7 +158,7 @@ try{
       f.p.x=world.CAVE_ENTRANCE.x;f.p.y=world.CAVE_ENTRANCE.y;
       packet(f,{commands:[{type:'attack',tool:'axe'},{type:'interact'}]});
       assert.equal(world.sceneAt(f.p.x),'surface');
-      now+=489;assert.equal(sim.transitionScene(f.p,now,2),false);
+      now+=sim.TOOL_TIMING.axe.duration-1;assert.equal(sim.transitionScene(f.p,now,2),false);
       now+=1;assert.equal(sim.transitionScene(f.p,now,2),true);
       assert.equal(world.sceneAt(f.p.x),'mine');
     }finally{f.c.destroy();}

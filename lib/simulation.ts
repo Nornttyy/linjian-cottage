@@ -1,5 +1,10 @@
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
 export type Tool = 'axe' | 'pick' | 'sword' | 'build';
+export const TOOL_TIMING = {
+    axe: { duration: 360, contact: 180, cooldown: 380 },
+    pick: { duration: 360, contact: 180, cooldown: 380 },
+    sword: { duration: 280, contact: 120, cooldown: 300 },
+} as const;
 export type Part = 'floor' | 'wall' | 'window' | 'door' | 'roof';
 export type Inventory = {
     wood: number;
@@ -20,6 +25,8 @@ export type Player = {
     seen: number;
     actionAt: number;
     dodgeUntil: number;
+    dodgeMoveCredit?: number;
+    dodgeMoveUntil?: number;
     hitUntil: number;
     swingUntil: number;
     seq: number;
@@ -156,12 +163,8 @@ export function tickWorld(s: WorldState, now: number) {
     for (const p of players) {
         p.stamina = Math.min(100, p.stamina + dt * 17);
         if(p.pendingStrike && now>=p.pendingStrike.at){const strike=p.pendingStrike;p.pendingStrike=undefined;resolveAttack(s,p,strike.command,now);}
-        if (p.attackQueue?.length && now >= Math.max(p.actionAt,p.swingUntil,p.dodgeUntil)) {
-            const next=p.attackQueue.shift()!;
-            const scheduled=Math.max(p.actionAt,now-200);
-            runCommand(s,p,next,now);
-            p.actionAt=Math.max(p.swingUntil,scheduled+(next.tool==='sword'?390:510));
-        }
+        // Old rooms may still contain buffered attacks. Only the already-started strike survives.
+        if(p.attackQueue?.length)p.attackQueue=[];
         if (distance(p, SPAWN) < 2 && now > p.hitUntil + 1500)
             p.hp = Math.min(100, p.hp + dt * 8);
     }
@@ -255,11 +258,13 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         return null;
     }
     if (c.type === 'dodge') {
-        if(now<p.swingUntil || p.attackQueue?.length)return null;
+        if(now<p.swingUntil)return null;
         if (now < p.dodgeUntil + 450 || p.stamina < 28)
             return null;
         p.stamina -= 28;
         p.dodgeUntil = now + 330;
+        p.dodgeMoveCredit = .33;
+        p.dodgeMoveUntil = p.dodgeUntil + 1000;
         emit(s, 'dodge', p.x, p.y, 0, now);
         return null;
     }
@@ -301,14 +306,12 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         return null;
     }
     if (c.type === 'attack') {
-        if (now < Math.max(p.actionAt,p.swingUntil,p.dodgeUntil)) {
-            p.attackQueue ??= [];
-            if(p.attackQueue.length<3)p.attackQueue.push({...c});
-            return null;
-        }
-        p.actionAt = now + (c.tool === 'sword' ? 390 : 510);
+        // A held button sends the next action only when ready; early repeats never queue.
+        if (now < Math.max(p.actionAt,p.swingUntil,p.dodgeUntil)) return null;
+        const timing=TOOL_TIMING[c.tool==='sword'?'sword':c.tool==='pick'?'pick':'axe'];
+        p.actionAt = now + timing.cooldown;
         p.swingStart=now;
-        p.swingUntil = now + (c.tool==='sword'?370:490);
+        p.swingUntil = now + timing.duration;
         p.moveCredit=0;p.movingUntil=0;
         p.equipped=c.tool;
         p.swingFace=c.face&&['up','down','left','right'].includes(c.face)?c.face:p.face;
@@ -320,7 +323,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
                 if(c.tool!==required)return required==='axe'?'使用斧头':'使用镐';
             }
         }
-        p.pendingStrike={command:{...c},at:now+(c.tool==='sword'?170:245)};
+        p.pendingStrike={command:{...c},at:now+timing.contact};
         return null;
     }
     return null;
@@ -381,7 +384,7 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
     const applyMovement=()=>{
         if(movementApplied)return;movementApplied=true;
         // Locked time never becomes movement credit, including inputs arriving after unlock.
-        const locked=now<p.swingUntil || !!p.attackQueue?.length;
+        const locked=now<p.swingUntil;
         const elapsed=Math.max(0,Math.min(1,(now-Math.max(previousSeen,p.swingUntil))/1000));
         let credit=locked?0:Math.min(.75,(previousSeen<p.swingUntil?0:p.moveCredit??.05)+elapsed);
         const movements=Array.isArray(input.movements)?input.movements.slice(0,64):[{dx:input.dx,dy:input.dy,seconds:Math.min(.35,dt)}];
@@ -390,9 +393,17 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
             const dx=Number.isFinite(segment.dx)?Math.max(-1,Math.min(1,segment.dx)):0;
             const dy=Number.isFinite(segment.dy)?Math.max(-1,Math.min(1,segment.dy)):0;
             const seconds=Number.isFinite(segment.seconds)?Math.max(0,Math.min(credit,segment.seconds)):0;
-            const length=Math.max(1,Math.hypot(dx,dy)),speed=now<p.dodgeUntil?9:4.2;
+            const length=Math.max(1,Math.hypot(dx,dy));
+            // Segments describe past prediction, so receipt time cannot choose their speed.
+            // Each approved dodge grants at most 330 ms at 9 tiles/s, with a bounded delivery grace.
+            const rolling=segment.speed===9 || (segment.speed===undefined && now<p.dodgeUntil);
+            const dodgeValid=now<(p.dodgeMoveUntil??p.dodgeUntil);
+            const dodgeCredit=dodgeValid?p.dodgeMoveCredit??Math.min(.33,Math.max(0,(p.dodgeUntil-now)/1000)):0;
+            const fastSeconds=rolling?Math.min(seconds,Math.max(0,dodgeCredit)):0;
             const x=p.x,y=p.y;
-            move(s,p,dx/length*speed*seconds,dy/length*speed*seconds);credit-=seconds;
+            if(fastSeconds>0){move(s,p,dx/length*9*fastSeconds,dy/length*9*fastSeconds);p.dodgeMoveCredit=dodgeCredit-fastSeconds;}
+            if(seconds>fastSeconds)move(s,p,dx/length*4.2*(seconds-fastSeconds),dy/length*4.2*(seconds-fastSeconds));
+            credit-=seconds;
             if(Math.hypot(p.x-x,p.y-y)>.00001)p.movingUntil=now+220;
         }
         p.moveCredit=credit;

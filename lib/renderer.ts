@@ -1,4 +1,4 @@
-import { COLORS, RESOURCES, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
+import { COLORS, resourcesInRect, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { canBuild, distance, type WorldState, type Player, type Part, type Tool } from './simulation';
 import { HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
@@ -22,6 +22,7 @@ export type View = {
     time: number;
     fadeUntil?: number;
     localSwing?: HeroSwing | null;
+    motionElapsed?: number;
 };
 export type Position = {
     x: number;
@@ -41,7 +42,7 @@ export function pickResource(point: {
     x: number;
     y: number;
 }, s: WorldState, p: Position): Resource | undefined {
-    return RESOURCES.filter(r => !s.depleted[r.id] && Math.abs(r.x - p.x) < 9 && Math.abs(r.y - p.y) < 9 && point.x >= r.x - .6 && point.x <= r.x + 1.6 && point.y >= r.y - (r.kind === 'tree' || r.kind === 'pine' ? 2 : 0) && point.y <= r.y + 1.1).sort((a, b) => b.y - a.y)[0];
+    return resourcesInRect(p.x-9,p.y-9,p.x+9,p.y+9).filter(r => !s.depleted[r.id] && Math.abs(r.x - p.x) < 9 && Math.abs(r.y - p.y) < 9 && point.x >= r.x - .6 && point.x <= r.x + 1.6 && point.y >= r.y - (r.kind === 'tree' || r.kind === 'pine' ? 2 : 0) && point.y <= r.y + 1.1).sort((a, b) => b.y - a.y)[0];
 }
 function roofGroup(s: WorldState, p: Position) { const start = Math.floor(p.x) + ':' + Math.floor(p.y); const visited = new Set<string>(); if (!s.buildings[start + ':floor'])
     return visited; const todo = [start]; for (let i = 0; i < todo.length && i < 2048; i++) {
@@ -109,7 +110,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     if(!underground&&visible(SPAWN.x,SPAWN.y-1.4))drawables.push({y:SPAWN.y-1.4,draw:()=>{
         ctx.drawImage(art[`fire${Math.floor(t/FIRE_FRAME_MS)%FIRE_FRAME_COUNT}`],Math.round(fireX-FIRE_SIZE.anchorX),Math.round(fireY-FIRE_SIZE.anchorY),FIRE_SIZE.width,FIRE_SIZE.height);
     }});
-    for (const r of RESOURCES) {
+    for (const r of resourcesInRect(minX-4,minY-4,maxX+4,maxY+3)) {
         if (!visible(r.x, r.y))
             continue;
         if (s.depleted[r.id]) {
@@ -158,7 +159,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         drawables.push({ y: point.y, draw: () => {
                 const moving=local?pos.moving:t<(p.movingUntil??0),swing=local?view.localSwing:undefined;
                 const face=heroFacing(p,local?pos.face:p.face,t,swing);
-                const frame=heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing);
+                const frame=heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
                 ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-6,point.y*TILE+oy-2,12,3);
                 ctx.save();ctx.translate(Math.round(point.x*TILE+ox),Math.round(point.y*TILE+oy));
                 if(face==='left')ctx.scale(-1,1);ctx.drawImage(art[frame],-HERO_SIZE.anchorX,-HERO_SIZE.anchorY,HERO_SIZE.width,HERO_SIZE.height);ctx.restore();

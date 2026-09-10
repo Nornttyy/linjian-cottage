@@ -89,3 +89,11 @@ for(const [x,y] of [[40,77],[55,75],[39,69],[55,64],[36,60],[22,46],[28,35],[17,
 }
 export const RESOURCE_MAP = new Map(RESOURCES.map(r => [r.id, r]));
 export function resourceAt(x: number, y: number) { return RESOURCE_MAP.get(Math.floor(x) + ':' + Math.floor(y)); }
+
+const resourceBuckets=new Map<string,Resource[]>();
+for(const resource of RESOURCES){const key=Math.floor(resource.x/16)+':'+Math.floor(resource.y/16);let bucket=resourceBuckets.get(key);if(!bucket)resourceBuckets.set(key,bucket=[]);bucket.push(resource);}
+const resourceOrder=new Map(RESOURCES.map((r,i)=>[r,i]));
+export function resourcesInRect(x0:number,y0:number,x1:number,y1:number){const found:Resource[]=[];
+ for(let cy=Math.floor(y0/16);cy<=Math.floor(y1/16);cy++)for(let cx=Math.floor(x0/16);cx<=Math.floor(x1/16);cx++)for(const r of resourceBuckets.get(cx+':'+cy)??[])if(r.x>=x0&&r.x<=x1&&r.y>=y0&&r.y<=y1)found.push(r);
+ return found.sort((a,b)=>resourceOrder.get(a)!-resourceOrder.get(b)!);
+}
