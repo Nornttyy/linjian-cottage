@@ -1,0 +1,11 @@
+Use case: ads-marketing
+Asset type: one landscape social-preview cover for a cozy pixel-art browser game, aspect ratio approximately 1.91:1.
+Primary request: A beautifully composed branded game cover for “林间小筑”.
+Scene/backdrop: Crisp pixel-art woodland clearing in a classic front-facing overhead RPG viewpoint, all ground tiles perfectly square and aligned horizontally and vertically. Warm timber building modules and a small timber cabin appear naturally in the clearing, with a tiny explorer holding a little sword.
+Style/medium: Hand-crafted, crisp pixel art, deliberate square pixels, charming and calm, rich but restrained game cover.
+Composition/framing: Landscape card; generous uncluttered upper-center area for a very large title and smaller subtitle underneath, backed by a simple warm cream-colored plaque for exceptional legibility. Woodland gameplay scene fills the surrounding and lower space. Keep all meaningful content comfortably inside the edges.
+Lighting/mood: Inviting, cozy, gentle afternoon warmth.
+Color palette: Warm olive greens, honey timber, cream lettering and plaque accents.
+Text (verbatim): The title must read exactly “林间小筑” in large, highly legible Chinese display lettering. The subtitle must read exactly “采集 · 建造 · 冒险”, centered underneath in smaller clear Chinese typography. These are the only words in the image.
+Constraints: Exact Chinese text and punctuation. Orthogonal, front-facing overhead RPG map. Timber building modules and one tiny sword-bearing explorer. Professional polished social sharing card.
+Avoid: Isometric viewpoint, rotated map, diamond tiles, diagonal terrain grid, perspective ground-plane recession, blurry pixels, photorealistic rendering, additional words, watermarks.

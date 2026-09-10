@@ -1,0 +1,18 @@
+Use case: stylized-concept.
+Asset type: finished original pixel-art game sprite animation atlas, not a mockup or concept illustration.
+
+Create ONE original lake-blue / turquoise jelly slime enemy animation sheet, EXACTLY 8 columns by 4 rows, 32 separate cells. Canvas aspect ratio 2:1, ideally 1536x768. Every cell is the same 192x192 output area, representing an enlarged 24x24 native pixel sprite canvas. All sprites must be strictly aligned to this invisible uniform grid for direct slicing. No margins outside the grid.
+
+Art direction: natural, warm, appealing 16-bit pixel art suitable for a cozy farming and adventure game in the visual tradition of Stardew Valley. Original character design. Bright natural turquoise jelly body, two fixed small near-black pixel eyes, a simple rounded stepped silhouette. Use large readable pixel clusters, 2 or 3 turquoise shade levels plus one restrained pale highlight. Enough detail to feel finished, but no tiny noisy texture, no dark muddy body, no glossy rendered look. Every apparent pixel must be a crisp square. No antialiasing, no gradients, no vector curves, no 3D.
+
+The same slime throughout. Sprite roughly 12–18 native pixels wide and 8–17 native pixels high; the 24x24 cell leaves headroom for the jump. In each cell center the creature on the same horizontal centerline, with a consistent ground reference at logical y=21; airborne frames rise above that reference. No ground or cast shadow is drawn. Face visible from the front with a little visible top surface, matching a north-up, orthogonal top-down adventure game. Do not use an isometric or diagonal ground plane.
+
+Animation layout left to right:
+ROW 1 — IDLE, 8 visibly different gently breathing and wobbling frames: neutral dome; slightly taller; taller with body narrower; peak inhale; side wobble; wider low body; shallow squash; return toward neutral. Make every outline different; eyes remain a consistent character identity.
+ROW 2 — MOVE, 8 frames of a complete bouncing movement cycle: compress; push upward; rising stretch; high airborne round body; descending body; touch down; broad landing squash; recover. Clearly distinct poses, including transparent air under airborne frames.
+ROW 3 — ATTACK, 8 frames: ready; crouch; deep compressed anticipation; powerful upward stretch; airborne forward pounce; descending elongated pounce; broad heavy landing squash; recover. This must read as a stronger pounce than the move row.
+ROW 4 — first FOUR frames are HURT: impact squashed sideways; flattened wobble; uneven tilted recovery; normal-sized recovery. Last FOUR frames are DEATH: jelly body visibly ruptures; separated large turquoise drops; scattered smaller drops; a few final tiny particles. Death must not turn into a face or recover.
+
+Each cell contains exactly its one animation frame, no duplicates pasted across a row. Stable palette and scale across the whole sheet. Keep all body parts, droplets, and particles inside their own cell.
+Background: genuinely transparent alpha, including transparent empty cells around each sprite. Do not paint a checkerboard.
+No labels, text, numbers, border, visible grid, ground, background objects, effects outside the character, watermark, or shadow.

@@ -1,0 +1,1277 @@
+{
+  "axe": {
+    "path": "/private/tmp/linjian-axe-8x3.png",
+    "size": [
+      2048,
+      768
+    ],
+    "mode": "RGB",
+    "layout": "8 columns x 3 rows",
+    "directions": [
+      "down",
+      "up",
+      "right"
+    ],
+    "note": "RGB baked checkerboard; requires matte removal. Some tools cross uniform 256 px row boundaries. Use these per-column crops. Bounds measured from saturated/dark pixels only. Preserve common body scale rather than normalize each frame to its individual bounding box.",
+    "frames": [
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 0,
+        "crop": [
+          0,
+          0,
+          256,
+          269
+        ],
+        "foregroundBounds": [
+          87,
+          83,
+          170,
+          268
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 1,
+        "crop": [
+          256,
+          0,
+          256,
+          258
+        ],
+        "foregroundBounds": [
+          277,
+          83,
+          426,
+          257
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 2,
+        "crop": [
+          512,
+          0,
+          256,
+          258
+        ],
+        "foregroundBounds": [
+          538,
+          67,
+          683,
+          257
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 3,
+        "crop": [
+          768,
+          0,
+          256,
+          258
+        ],
+        "foregroundBounds": [
+          852,
+          17,
+          940,
+          257
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 4,
+        "crop": [
+          1024,
+          0,
+          256,
+          270
+        ],
+        "foregroundBounds": [
+          1108,
+          89,
+          1200,
+          269
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 5,
+        "crop": [
+          1280,
+          0,
+          256,
+          274
+        ],
+        "foregroundBounds": [
+          1364,
+          100,
+          1473,
+          273
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 6,
+        "crop": [
+          1536,
+          0,
+          256,
+          258
+        ],
+        "foregroundBounds": [
+          1625,
+          83,
+          1789,
+          257
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 7,
+        "crop": [
+          1792,
+          0,
+          256,
+          269
+        ],
+        "foregroundBounds": [
+          1880,
+          83,
+          1963,
+          268
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 0,
+        "crop": [
+          0,
+          269,
+          256,
+          243
+        ],
+        "foregroundBounds": [
+          87,
+          324,
+          170,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 1,
+        "crop": [
+          256,
+          258,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          341,
+          324,
+          491,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 2,
+        "crop": [
+          512,
+          258,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          544,
+          318,
+          683,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 3,
+        "crop": [
+          768,
+          258,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          855,
+          274,
+          938,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 4,
+        "crop": [
+          1024,
+          270,
+          256,
+          242
+        ],
+        "foregroundBounds": [
+          1111,
+          336,
+          1196,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 5,
+        "crop": [
+          1280,
+          274,
+          256,
+          238
+        ],
+        "foregroundBounds": [
+          1368,
+          342,
+          1456,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 6,
+        "crop": [
+          1536,
+          258,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          1556,
+          324,
+          1708,
+          504
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 7,
+        "crop": [
+          1792,
+          269,
+          256,
+          243
+        ],
+        "foregroundBounds": [
+          1879,
+          324,
+          1963,
+          504
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 0,
+        "crop": [
+          0,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          91,
+          560,
+          195,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 1,
+        "crop": [
+          256,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          295,
+          560,
+          426,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 2,
+        "crop": [
+          512,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          543,
+          554,
+          684,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 3,
+        "crop": [
+          768,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          835,
+          523,
+          937,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 4,
+        "crop": [
+          1024,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1098,
+          572,
+          1241,
+          744
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 5,
+        "crop": [
+          1280,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1356,
+          580,
+          1502,
+          745
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 6,
+        "crop": [
+          1536,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1625,
+          560,
+          1773,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 7,
+        "crop": [
+          1792,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1884,
+          560,
+          1988,
+          747
+        ]
+      }
+    ]
+  },
+  "pick": {
+    "path": "/private/tmp/linjian-pick-8x3.png",
+    "size": [
+      2048,
+      768
+    ],
+    "mode": "RGB",
+    "layout": "8 columns x 3 rows",
+    "directions": [
+      "down",
+      "up",
+      "right"
+    ],
+    "note": "RGB baked checkerboard; requires matte removal. Some tools cross uniform 256 px row boundaries. Use these per-column crops. Bounds measured from saturated/dark pixels only. Preserve common body scale rather than normalize each frame to its individual bounding box.",
+    "frames": [
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 0,
+        "crop": [
+          0,
+          0,
+          256,
+          269
+        ],
+        "foregroundBounds": [
+          85,
+          84,
+          172,
+          268
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 1,
+        "crop": [
+          256,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          284,
+          83,
+          427,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 2,
+        "crop": [
+          512,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          542,
+          72,
+          684,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 3,
+        "crop": [
+          768,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          837,
+          29,
+          941,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 4,
+        "crop": [
+          1024,
+          0,
+          256,
+          276
+        ],
+        "foregroundBounds": [
+          1108,
+          94,
+          1220,
+          275
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 5,
+        "crop": [
+          1280,
+          0,
+          256,
+          281
+        ],
+        "foregroundBounds": [
+          1362,
+          109,
+          1477,
+          280
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 6,
+        "crop": [
+          1536,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          1622,
+          84,
+          1778,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 7,
+        "crop": [
+          1792,
+          0,
+          256,
+          270
+        ],
+        "foregroundBounds": [
+          1879,
+          84,
+          1965,
+          269
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 0,
+        "crop": [
+          0,
+          269,
+          256,
+          245
+        ],
+        "foregroundBounds": [
+          85,
+          339,
+          172,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 1,
+        "crop": [
+          256,
+          260,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          340,
+          334,
+          486,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 2,
+        "crop": [
+          512,
+          260,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          542,
+          319,
+          685,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 3,
+        "crop": [
+          768,
+          260,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          853,
+          297,
+          941,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 4,
+        "crop": [
+          1024,
+          276,
+          256,
+          238
+        ],
+        "foregroundBounds": [
+          1109,
+          352,
+          1198,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 5,
+        "crop": [
+          1280,
+          281,
+          256,
+          233
+        ],
+        "foregroundBounds": [
+          1366,
+          356,
+          1457,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 6,
+        "crop": [
+          1536,
+          260,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          1563,
+          335,
+          1709,
+          513
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 7,
+        "crop": [
+          1792,
+          270,
+          256,
+          244
+        ],
+        "foregroundBounds": [
+          1877,
+          339,
+          1964,
+          513
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 0,
+        "crop": [
+          0,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          92,
+          561,
+          196,
+          748
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 1,
+        "crop": [
+          256,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          290,
+          561,
+          429,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 2,
+        "crop": [
+          512,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          554,
+          536,
+          684,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 3,
+        "crop": [
+          768,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          828,
+          525,
+          938,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 4,
+        "crop": [
+          1024,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          1098,
+          572,
+          1241,
+          746
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 5,
+        "crop": [
+          1280,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          1356,
+          582,
+          1496,
+          748
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 6,
+        "crop": [
+          1536,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          1625,
+          561,
+          1775,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 7,
+        "crop": [
+          1792,
+          514,
+          256,
+          254
+        ],
+        "foregroundBounds": [
+          1885,
+          560,
+          1989,
+          747
+        ]
+      }
+    ]
+  },
+  "sword": {
+    "path": "/private/tmp/linjian-sword-8x3.png",
+    "size": [
+      2048,
+      768
+    ],
+    "mode": "RGB",
+    "layout": "8 columns x 3 rows",
+    "directions": [
+      "down",
+      "up",
+      "right"
+    ],
+    "note": "RGB baked checkerboard; requires matte removal. Some tools cross uniform 256 px row boundaries. Use these per-column crops. Bounds measured from saturated/dark pixels only. Preserve common body scale rather than normalize each frame to its individual bounding box.",
+    "frames": [
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 0,
+        "crop": [
+          0,
+          0,
+          256,
+          273
+        ],
+        "foregroundBounds": [
+          86,
+          83,
+          170,
+          272
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 1,
+        "crop": [
+          256,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          289,
+          83,
+          426,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 2,
+        "crop": [
+          512,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          541,
+          69,
+          683,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 3,
+        "crop": [
+          768,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          849,
+          19,
+          939,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 4,
+        "crop": [
+          1024,
+          0,
+          256,
+          280
+        ],
+        "foregroundBounds": [
+          1108,
+          89,
+          1235,
+          279
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 5,
+        "crop": [
+          1280,
+          0,
+          256,
+          279
+        ],
+        "foregroundBounds": [
+          1364,
+          100,
+          1509,
+          278
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 6,
+        "crop": [
+          1536,
+          0,
+          256,
+          260
+        ],
+        "foregroundBounds": [
+          1623,
+          83,
+          1767,
+          259
+        ]
+      },
+      {
+        "row": 0,
+        "direction": "down",
+        "frame": 7,
+        "crop": [
+          1792,
+          0,
+          256,
+          273
+        ],
+        "foregroundBounds": [
+          1879,
+          83,
+          1963,
+          272
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 0,
+        "crop": [
+          0,
+          273,
+          256,
+          239
+        ],
+        "foregroundBounds": [
+          84,
+          326,
+          170,
+          505
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 1,
+        "crop": [
+          256,
+          260,
+          256,
+          252
+        ],
+        "foregroundBounds": [
+          339,
+          326,
+          476,
+          506
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 2,
+        "crop": [
+          512,
+          260,
+          256,
+          252
+        ],
+        "foregroundBounds": [
+          547,
+          323,
+          683,
+          506
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 3,
+        "crop": [
+          768,
+          260,
+          256,
+          251
+        ],
+        "foregroundBounds": [
+          853,
+          273,
+          939,
+          506
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 4,
+        "crop": [
+          1024,
+          280,
+          256,
+          232
+        ],
+        "foregroundBounds": [
+          1108,
+          335,
+          1237,
+          505
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 5,
+        "crop": [
+          1280,
+          279,
+          256,
+          233
+        ],
+        "foregroundBounds": [
+          1364,
+          342,
+          1509,
+          508
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 6,
+        "crop": [
+          1536,
+          260,
+          256,
+          252
+        ],
+        "foregroundBounds": [
+          1572,
+          326,
+          1708,
+          506
+        ]
+      },
+      {
+        "row": 1,
+        "direction": "up",
+        "frame": 7,
+        "crop": [
+          1792,
+          273,
+          256,
+          239
+        ],
+        "foregroundBounds": [
+          1877,
+          326,
+          1963,
+          506
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 0,
+        "crop": [
+          0,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          92,
+          560,
+          201,
+          748
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 1,
+        "crop": [
+          256,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          302,
+          560,
+          426,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 2,
+        "crop": [
+          512,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          553,
+          541,
+          683,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 3,
+        "crop": [
+          768,
+          511,
+          256,
+          257
+        ],
+        "foregroundBounds": [
+          836,
+          512,
+          938,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 4,
+        "crop": [
+          1024,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1098,
+          572,
+          1262,
+          745
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 5,
+        "crop": [
+          1280,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1356,
+          579,
+          1525,
+          745
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 6,
+        "crop": [
+          1536,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1624,
+          560,
+          1764,
+          747
+        ]
+      },
+      {
+        "row": 2,
+        "direction": "right",
+        "frame": 7,
+        "crop": [
+          1792,
+          512,
+          256,
+          256
+        ],
+        "foregroundBounds": [
+          1884,
+          560,
+          1994,
+          748
+        ]
+      }
+    ]
+  }
+}
