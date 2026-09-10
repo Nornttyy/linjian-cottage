@@ -10,11 +10,11 @@ const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
 try{
-  for(const name of ['world','simulation','frame-layout','hero-rig','tiles','animation','atmosphere','renderer','art','client']){
+  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
     let path=join(source,'lib',name+'.ts');
     if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
     const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
     await writeFile(join(temp,name+'.mjs'),code);
   }
   const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
@@ -111,15 +111,15 @@ try{
     const f=fixture();try{assert.equal(f.c.apiUrl,'https://example.test/api/game');}finally{f.c.destroy();}
   });
   await test('generated contact poses line up with authoritative strike timing',()=>{
-    assert.equal(animation.swingFrame('axe',sim.TOOL_TIMING.axe.contact-1),11);
-    assert.equal(animation.swingFrame('axe',sim.TOOL_TIMING.axe.contact),12);
-    assert.equal(animation.swingFrame('pick',sim.TOOL_TIMING.pick.contact),12);
-    assert.equal(animation.swingFrame('sword',sim.TOOL_TIMING.sword.contact-1),9);
-    assert.equal(animation.swingFrame('sword',sim.TOOL_TIMING.sword.contact),10);
+    assert.equal(animation.swingFrame('axe',sim.TOOL_TIMING.axe.contact-1),4);
+    assert.equal(animation.swingFrame('axe',sim.TOOL_TIMING.axe.contact),5);
+    assert.equal(animation.swingFrame('pick',sim.TOOL_TIMING.pick.contact),5);
+    assert.equal(animation.swingFrame('sword',sim.TOOL_TIMING.sword.contact-1),3);
+    assert.equal(animation.swingFrame('sword',sim.TOOL_TIMING.sword.contact),4);
     for(const tool of ['axe','pick','sword']){
       const end=sim.TOOL_TIMING[tool].duration;
       const frames=new Set(Array.from({length:end},(_,i)=>animation.swingFrame(tool,i)));
-      assert.equal(frames.size,24,`${tool} must use every generated pose`);
+      assert.equal(frames.size,8,`${tool} must use every generated pose`);
     }
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;

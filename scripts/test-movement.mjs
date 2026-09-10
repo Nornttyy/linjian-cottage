@@ -11,11 +11,11 @@ const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
 try{
-  for(const name of ['world','simulation','frame-layout','hero-rig','tiles','animation','atmosphere','renderer','art','client']){
+  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
     let path=join(source,'lib',name+'.ts');
     if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
     const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
     await writeFile(join(temp,name+'.mjs'),code);
   }
   const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));

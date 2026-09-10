@@ -11,11 +11,11 @@ const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
 try{
-  for(const name of ['world','simulation','frame-layout','hero-rig','tiles','animation','atmosphere','renderer','art','client']){
+  for(const name of ['world','simulation','frame-layout','tiles','animation','atmosphere','renderer','art','client']){
     let path=join(source,'lib',name+'.ts');
     if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
     const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
+      .replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
     await writeFile(join(temp,name+'.mjs'),code);
   }
   const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
@@ -164,7 +164,7 @@ try{
     }finally{f.c.destroy();}
   });
   await test('tool hit frames, client recovery and authoritative contact share one timing table',()=>{
-    for(const tool of ['axe','pick','sword']){const timing=sim.TOOL_TIMING[tool];assert.equal(animation.swingFrame(tool,timing.contact),tool==='sword'?10:12);assert.equal(animation.swingFrame(tool,timing.duration-1),23);}
+    for(const tool of ['axe','pick','sword']){const timing=sim.TOOL_TIMING[tool];assert.equal(animation.swingFrame(tool,timing.contact),tool==='sword'?4:5);assert.equal(animation.swingFrame(tool,timing.duration-1),7);}
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;
 }finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}

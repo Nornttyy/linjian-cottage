@@ -10,18 +10,18 @@ const source = resolve(process.env.LINJIAN_SOURCE || fileURLToPath(new URL('..',
 const temp = await mkdtemp(join(tmpdir(), 'linjian-regression-modules-'));
 const real = {
   now: Date.now, timeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout,
-  window: globalThis.window, Image: globalThis.Image,
+  window: globalThis.window, Image: globalThis.Image, document: globalThis.document,
   raf: globalThis.requestAnimationFrame, caf: globalThis.cancelAnimationFrame,
 };
 let now = 100000;
 let failures = 0;
 try {
   const ts = (await import(pathToFileURL(join(source, 'node_modules/typescript/lib/typescript.js')))).default;
-  for (const name of ['world', 'simulation', 'frame-layout','hero-rig', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
+  for (const name of ['world', 'simulation', 'frame-layout', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
     const text = await readFile(join(source, 'lib', name + '.ts'), 'utf8');
     const js = ts.transpileModule(text, { compilerOptions: {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|hero-rig|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
+    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
     await writeFile(join(temp, name + '.mjs'), js);
   }
   const sim = await import(pathToFileURL(join(temp, 'simulation.mjs')));
@@ -229,6 +229,17 @@ try {
         },
       };
       const ctx = new Proxy(target, { get: (obj, key) => key in obj ? obj[key] : () => {} });
+      // Cached materials render offscreen first; keep their source identity without
+      // mixing cache-local coordinates into the screen-space bounds under test.
+      globalThis.document = { createElement() {
+        const offscreen = { width: 1, height: 1 };
+        const offscreenContext = new Proxy({
+          drawImage(image) { offscreen.name = image.name; },
+          createRadialGradient() { return { addColorStop() {} }; },
+        }, { get: (obj, key) => key in obj ? obj[key] : () => {} });
+        offscreen.getContext = () => offscreenContext;
+        return offscreen;
+      } };
       const art = new Proxy({}, { get: (obj, name) => obj[name] ??= { name, width: 24, height: 24 } });
       const canvas = { width: 800, height: 400, clientWidth: 1600, clientHeight: 800, getContext: () => ctx };
       f.player.inventory.wood = 100;
@@ -248,7 +259,7 @@ try {
 } finally {
   Date.now = real.now;
   globalThis.setTimeout = real.timeout; globalThis.clearTimeout = real.clearTimeout;
-  globalThis.window = real.window; globalThis.Image = real.Image;
+  globalThis.window = real.window; globalThis.Image = real.Image; globalThis.document = real.document;
   globalThis.requestAnimationFrame = real.raf; globalThis.cancelAnimationFrame = real.caf;
   await rm(temp, { recursive: true, force: true });
 }

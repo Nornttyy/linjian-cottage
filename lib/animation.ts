@@ -1,10 +1,9 @@
-import {frameKey,type Sprite,type Direction} from './art';
+import {frameKey,HERO_FRAME_COUNT,HERO_IDLE_FRAME_COUNT,type Sprite,type Direction} from './art';
 import {TOOL_TIMING,type Player,type Mob,type Tool} from './simulation';
-import {HERO_FRAME_COUNT,HERO_IDLE_FRAME_COUNT} from './hero-rig';
 export type HeroSwing={tool:Exclude<Tool,'build'>;face:Player['face'];start:number;until:number};
 
 export function swingFrame(action:Exclude<Tool,'build'>,elapsed:number){
-    const timing=TOOL_TIMING[action],contactFrame=action==='sword'?10:12;
+    const timing=TOOL_TIMING[action],contactFrame=action==='sword'?4:5;
     const frame=elapsed<timing.contact?Math.floor(elapsed/timing.contact*contactFrame):contactFrame+Math.floor((elapsed-timing.contact)/(timing.duration-timing.contact)*(HERO_FRAME_COUNT-contactFrame));
     return Math.max(0,Math.min(HERO_FRAME_COUNT-1,frame));
 }
@@ -24,7 +23,7 @@ export function heroFrame(p:Player,face:Player['face'],moving:boolean,time:numbe
         const duration=TOOL_TIMING[action].duration,start=swing?.start??p.swingStart??p.swingUntil-duration;
         return frameKey(action,direction,swingFrame(action,time-start));
     }
-    if(moving)return frameKey('walk',direction,Math.floor(motionElapsed/30)%HERO_FRAME_COUNT);
+    if(moving)return frameKey('walk',direction,Math.floor(motionElapsed/85)%HERO_FRAME_COUNT);
     return frameKey('idle',direction,Math.floor(motionElapsed/125)%HERO_IDLE_FRAME_COUNT);
 }
 export function slimeFrame(m:Mob,time:number,moving:boolean):Sprite|null{
