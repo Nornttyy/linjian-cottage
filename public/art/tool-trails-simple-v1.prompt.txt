@@ -1,0 +1,8 @@
+Built-in image_gen. Identity-preserving simplification and bright, rich colored shading. Original PNG bytes retained. Source reference: tool-trails.png.
+
+Use case: precise-object-edit
+Input is the EXACT existing game asset. Simplify the same existing design's interior texture by70–75% while brightening its colors. Use broad readable angular pixel clusters and3–4shades per material. Preserve silhouettes, positions, proportions, framing and framecounts exactly.
+USER COLOR REQUIREMENT: bright, vivid, RICH harmonious colors throughout. Use many distinct cheerful color families with luminous midtones and softly colored shadows. Avoid black, nearblack, darknavy, deepbrown and deepforestgreen masses. Existing dark outlines must become medium colored edges related to the material (warmochre, lavendergray, mediumteal), with NO change to contour geometry. Small pupils may remain dark for readability. Do not wash out into pale monochrome; retain saturated aqua/lime/coral/gold/skyblue/lavender contrasts. No hard dark shadow blocks. No harsh contrast. All24effectframes exact8columns3rows. Samegoldwhite swordarcs, amberaxe arcs, bluewhitepickarcs, samepositions/reach/shapes/sparkpositions, sparseendframes retained. Simplify thininnerstripes to2–3boldlightbands withoutdeletingframes.
+Keep EXACT original canvas dimensions and allframecells/boundingpositions; do not recenter/rearrange/resize/crop. Same user-recognizable design, plain crisp pixel surfaces, no blur, no painterly gradients, no new details or expressions.
+KeepALLoutsideemptyareasand spriteholes a flat technical magenta #FF00FF backdrop with no gradients/checkerboard/shadows/spill; preserve white/steel/flowercolors inside sprites.
+No labels, words, borders or watermarks.

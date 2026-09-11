@@ -1,4 +1,5 @@
 import {beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading} from './asset-loading';
+import {ART_REVISIONS} from './art-sources';
 import {farmLayout} from './farm-layout';
 import type { Terrain } from './world';
 import {creatureLayouts} from './creature-layout';
@@ -30,22 +31,37 @@ export const frameKey=(action:HeroAction,direction:Direction,frame:number)=>`${a
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c;};
 // Keep world sizes logical; sample source art directly into denser sprite buffers.
 const detailCanvas=(w:number,h:number)=>{const c=canvas(w*ART_DENSITY,h*ART_DENSITY),ctx=c.getContext('2d')!;ctx.scale(ART_DENSITY,ART_DENSITY);ctx.imageSmoothingEnabled=false;return c;};
-const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{
-    const img=new Image(),attempt=getAssetLoading().attempt;
+const load=(src:string)=>new Promise<HTMLImageElement|HTMLCanvasElement>((resolve,reject)=>{
+    const img=new Image(),attempt=getAssetLoading().attempt,revision=ART_REVISIONS[src.slice(src.lastIndexOf('/')+1)];
     const cleanup=()=>{clearTimeout(timeout);img.onload=null;img.onerror=null;};
     const timeout=setTimeout(()=>{cleanup();reject(new Error('素材加载超时'));},20000);
     (timeout as unknown as {unref?:()=>void}).unref?.();
-    img.onload=()=>{cleanup();try{loadedAsset(attempt,src);resolve(img);}catch(error){reject(error);}};
-    img.onerror=()=>{cleanup();reject(new Error('素材加载失败'));};img.src='.'+src;
+    img.onload=()=>{cleanup();try{
+        let source:HTMLImageElement|HTMLCanvasElement=img;
+        // Decode replacement atlases in the reviewed source coordinates, before
+        // applying per-action crops and pivots. Original PNG bytes stay intact.
+        if(revision&&(img.width!==revision.size[0]||img.height!==revision.size[1])){
+            source=canvas(...revision.size);const ctx=source.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(img,0,0,source.width,source.height);
+        }
+        loadedAsset(attempt,src);resolve(source);
+    }catch(error){reject(error);}};
+    img.onerror=()=>{cleanup();reject(new Error('素材加载失败'));};img.src=revision?'./art/'+revision.file:'.'+src;
 });
-function transparentMatte(c:HTMLCanvasElement,landscapeKey=false,snowKey=false){
+function transparentMatte(c:HTMLCanvasElement,landscapeKey=false,snowKey=false,keyVariant:'standard'|'cyan'|'violet'='standard'){
     const ctx=c.getContext('2d',{willReadFrequently:true})!,data=ctx.getImageData(0,0,c.width,c.height),p=data.data,w=c.width,h=c.height;
     let transparent=0;for(let i=3;i<p.length;i+=4)if(p[i]<8)transparent++;
     if(transparent>w*h*.02)return;
-    // New landscape atlases use a saturated pink key; keep lavender flowers,
-    // white birch bark and snowy edges instead of treating them as backdrop.
+    // New atlases use a saturated pink key; keep colored shadows, flowers,
+    // pale clothes, metal and snowy edges instead of treating them as backdrop.
     if(landscapeKey){
-        for(let i=0;i<p.length;i+=4){const r=p[i],g=p[i+1],b=p[i+2];if(r>90&&b>90&&g<Math.min(r,b)*(snowKey?.82:.38)&&Math.abs(r-b)<(snowKey?85:40))p[i+3]=0;}
+        for(let i=0;i<p.length;i+=4){
+            const r=p[i],g=p[i+1],b=p[i+2];
+            // Cyan slime can use a wider key. Violet bats retain their blue
+            // outlines and lavender wings while removing low-green matte fringes.
+            const keyed=keyVariant==='cyan'?r>75&&b>100&&r>g*1.2&&b>g*1.4:
+                r>90&&b>90&&g<Math.min(r,b)*(snowKey?.82:.38)&&(keyVariant==='violet'||Math.abs(r-b)<(snowKey?85:40));
+            if(keyed)p[i+3]=0;
+        }
         ctx.putImageData(data,0,0);return;
     }
     // Decode the actual backdrop color; gray tool highlights are not magenta matte.
@@ -90,11 +106,11 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
         const bands=file==='landscape-props-v3.png'?[0,550/img.height,1]:file==='objects-final.png'?[0,.358,.559,.777,1]:file==='icons-final.png'?[0,.27,.50,.718,1]:Array.from({length:rows+1},(_,i)=>i/rows);
         const startY=Math.round(bands[row]*img.height),endY=Math.round(bands[row+1]*img.height);
-        const columns=file==='landscape-props-v3.png'?[0,480,880,1345,img.width]:Array.from({length:cols+1},(_,i)=>Math.round(i*img.width/cols));
+        const columns=file==='landscape-props-v3.png'?[0,480,880,1345,img.width]:file==='objects-final.png'&&row===0&&ART_REVISIONS[file]?[0,334,Math.round(img.width/2),Math.round(img.width*3/4),img.width]:Array.from({length:cols+1},(_,i)=>Math.round(i*img.width/cols));
         const standard=[columns[col],startY,columns[col+1]-columns[col],endY-startY];
         const [x,y,w,h]=layout?.frames[row*cols+col]??(tool?toolFrames[tool][row*cols+col]:standard),inset=layout?.inset??(kind==='texture'?1:2);
         const c=canvas(w-inset*2,h-inset*2);c.getContext('2d')!.drawImage(img,x+inset,y+inset,c.width,c.height,0,0,c.width,c.height);
-        if(kind!=='texture')transparentMatte(c,file==='landscape-props-v3.png'||file==='landscape-landmarks-v3.png',file==='landscape-landmarks-v3.png'&&row===0&&col===1);
+        if(kind!=='texture')transparentMatte(c,!!ART_REVISIONS[file]||file==='landscape-props-v3.png'||file==='landscape-landmarks-v3.png',file==='landscape-landmarks-v3.png'&&row===0&&col===1,file==='slime.png'&&ART_REVISIONS[file]?'cyan':'standard');
         if(kind==='hero')cleanFragments(c);
         cells.push(kind==='prop'?cropped(c):c);
     }
@@ -147,7 +163,9 @@ function idleFrames(base:HTMLCanvasElement,closed:HTMLCanvasElement,eyes:number[
 async function creatureSheet(kind:string){
     const img=await load('/art/'+kind+'.png'),layout=creatureLayouts[kind];
     return layout.frames.map(([x,y,w,h],i)=>{
-        const source=canvas(w,h);source.getContext('2d')!.drawImage(img,x,y,w,h,0,0,w,h);transparentMatte(source);
+        const source=canvas(w,h);source.getContext('2d')!.drawImage(img,x,y,w,h,0,0,w,h);transparentMatte(source,!!ART_REVISIONS[kind+'.png'],false,kind==='bat'?'violet':'standard');
+        // Remove neighboring wing-tip specks from body frames; death particles stay intact.
+        if(kind==='bat'&&ART_REVISIONS['bat.png']&&i<29)cleanFragments(source);
         const [sw,sh]=layout.scaledSizes?.[i]??[Math.round(w*layout.scale),Math.round(h*layout.scale)];
         const resized=detailCanvas(sw,sh),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(source,0,0,sw,sh);
         const [ax,ay]=layout.scaledAnchors?.[i]??layout.anchors[i].map(v=>Math.round(v*layout.scale));
@@ -160,7 +178,7 @@ async function creatureDirections(kind:'boar'|'mushroom'){
     const rows=kind==='boar'?[[58,156],[209,309],[365,466],[513,620],[644,769],[787,923],[936,1063],[1091,1212]]:[[46,163],[204,322],[351,482],[530,636],[673,789],[821,943],[963,1087],[1124,1232]];
     const cells=rows.flatMap(([top,bottom])=>Array.from({length:8},(_,col)=>{
         const x=Math.round(col*img.width/8),width=Math.round((col+1)*img.width/8)-x,c=canvas(width,bottom-top+5);
-        c.getContext('2d')!.drawImage(img,x,top-2,c.width,c.height,0,0,c.width,c.height);transparentMatte(c);cleanFragments(c);return c;
+        c.getContext('2d')!.drawImage(img,x,top-2,c.width,c.height,0,0,c.width,c.height);transparentMatte(c,!!ART_REVISIONS[kind+'-directions.png']);cleanFragments(c);return c;
     })),boxes=cells.map(bounds);
     const bodyBoxes=boxes.filter((_,i)=>Math.floor(i/8)%4<3);
     const scale=(kind==='boar'?29:25)/Math.max(...bodyBoxes.map(b=>Math.max(b.x1-b.x0+1,b.y1-b.y0+1)));
@@ -200,7 +218,7 @@ async function loadAll():Promise<Atlas>{
     assign(['tree','pine','stone','copper','berry','stump','daisies','reeds','wall','window','door','door-open','fire0','fire1','fire2','chest'],objects);
     assign(['wall-face','wall-cap','roof','roof-ridge','soil-dry','soil-wet'],textures);
     assign(['hammer','hoe','water','seed-bag','stairs','stairs-down','ascend','descend','planter','fence','lantern','sign','carrot-seed','tomato-seed','wheat-seed','water-drop'],home);
-    const farmCells=farmLayout.frames.map(([x,y,w,h])=>{const c=canvas(w,h);c.getContext('2d')!.drawImage(farm,x,y,w,h,0,0,w,h);transparentMatte(c);return c;});
+    const farmCells=farmLayout.frames.map(([x,y,w,h])=>{const c=canvas(w,h);c.getContext('2d')!.drawImage(farm,x,y,w,h,0,0,w,h);transparentMatte(c,!!ART_REVISIONS['farm-growth.png']);return c;});
     assign(['carrot','tomato','wheat'],farmCells.slice(12,15).map(cropped));
     for(const [row,crop]of(['carrot','tomato','wheat'] as const).entries()){
         const scale=farmLayout.rowScales[row];
@@ -245,8 +263,8 @@ async function loadAll():Promise<Atlas>{
     for(const dir of ['down','up','right'] as const)idle[dir].forEach((frame,i)=>art[frameKey('idle',dir,i)]=frame);
     for(let row=0;row<3;row++)for(let f=0;f<8;f++)art[`slime-${(['idle','move','attack'] as const)[row]}-${f}`]=slime[row*8+f];
     for(let f=0;f<4;f++){art[`slime-hurt-${f}`]=slime[24+f];art[`slime-death-${f}`]=slime[28+f];}
-    const c=canvas(entrance.width,entrance.height);c.getContext('2d')!.drawImage(entrance,0,0);transparentMatte(c);art['cave-entrance']=cropped(c);
-    const exit=canvas(mineExit.width,mineExit.height);exit.getContext('2d')!.drawImage(mineExit,0,0);transparentMatte(exit);art['mine-exit']=cropped(exit);
+    const c=canvas(entrance.width,entrance.height);c.getContext('2d')!.drawImage(entrance,0,0);transparentMatte(c,!!ART_REVISIONS['cave-entrance.png']);art['cave-entrance']=cropped(c);
+    const exit=canvas(mineExit.width,mineExit.height);exit.getContext('2d')!.drawImage(mineExit,0,0);transparentMatte(exit,!!ART_REVISIONS['mine-exit.png']);art['mine-exit']=cropped(exit);
     art.down=art['idle-down-0'];art.up=art['idle-up-0'];art.right=art['idle-right-0'];art.slime=art['slime-idle-0'];art.wildflowers=art.daisies;
     return art;
 }

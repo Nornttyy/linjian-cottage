@@ -1,9 +1,10 @@
 "use client";
+import {artFilename} from '@/lib/art-sources';
 import {useState} from 'react';
 export type StartMode='resume'|'create'|'join';
 export default function MainMenu({savedRoom,onStart}:{savedRoom:string|null;onStart:(mode:StartMode,room?:string,tutorial?:boolean)=>void}){
     const [joining,setJoining]=useState(false),[room,setRoom]=useState('');
-    return <main className="main-menu"><div className="menu-landscape" aria-hidden="true" style={{backgroundImage:'url(./art/main-menu-v1.png)'}}/>
+    return <main className="main-menu"><div className="menu-landscape" aria-hidden="true" style={{backgroundImage:'url(./art/'+artFilename('main-menu-v1.png')+')'}}/>
         <section className="main-menu-panel" aria-labelledby="menu-title">
             <h1 id="menu-title">林间小筑</h1><p className="menu-intro">采集 · 建造 · 和朋友一起生活</p>
             <div className="main-menu-actions">
