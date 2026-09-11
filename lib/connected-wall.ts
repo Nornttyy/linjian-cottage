@@ -40,11 +40,58 @@ function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls
     }
 }
 
-const wallStamps=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
-export function drawConnectedWall(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
+export type WallLayer={image:HTMLCanvasElement;sx:number;sy:number;width:number;height:number;x:number;y:number;depth:number};
+type WallStamp={image:HTMLCanvasElement;layers?:WallLayer[]};
+const wallStamps=new WeakMap<Atlas,Map<string,WallStamp>>();
+function wallStamp(art:Atlas,buildings:Walls,b:Building){
     let cache=wallStamps.get(art);if(!cache){cache=new Map();wallStamps.set(art,cache);}
-    const links=wallLinks(buildings,b.x,b.y,floorLevel(b));
-    const key=[b.kind,!!b.open,...Object.values(links),b.x%2,b.y%2].join(':');let stamp=cache.get(key);
-    if(!stamp){stamp=document.createElement('canvas');stamp.width=40;stamp.height=64;const context=stamp.getContext('2d')!;context.imageSmoothingEnabled=false;drawWallUncached(context,art,buildings,b,-b.x*24+8,-b.y*24+32);if(cache.size>=512)cache.delete(cache.keys().next().value!);cache.set(key,stamp);}
-    ctx.drawImage(stamp,b.x*24+ox-8,b.y*24+oy-32);
+    const level=floorLevel(b),neighbors=[[0,-1],[1,0],[0,1],[-1,0]].map(([dx,dy])=>{
+        const n=atLevel(buildings,b.x+dx,b.y+dy,'wall',level)??atLevel(buildings,b.x+dx,b.y+dy,'fence',level);
+        return n&&(['wall','door','window','fence'] as string[]).includes(n.kind)?n.kind+':'+!!n.open:'';
+    });
+    const key=[b.kind,!!b.open,...neighbors,b.x%2,b.y%2].join(':');let stamp=cache.get(key);
+    if(!stamp){
+        const image=document.createElement('canvas');image.width=40;image.height=64;
+        const context=image.getContext('2d',{willReadFrequently:true})!;context.imageSmoothingEnabled=false;
+        drawWallUncached(context,art,buildings,b,-b.x*24+8,-b.y*24+32);stamp={image};
+        if(cache.size>=512)cache.delete(cache.keys().next().value!);cache.set(key,stamp);
+    }
+    return stamp;
+}
+// Partition the final visible pixels, so a pixel belongs to exactly one depth.
+// Fading multiple wall layers therefore never darkens overlapping faces twice.
+export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building):readonly WallLayer[]{
+    const stamp=wallStamp(art,buildings,b);if(stamp.layers)return stamp.layers;
+    const context=stamp.image.getContext('2d')!,pixels=context.getImageData(0,0,40,64).data;
+    const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level),shape=wallLayout(buildings,b.x,b.y,level),height=b.kind==='fence'?10:19;
+    let facade:Uint8ClampedArray|undefined;
+    if(!shape.vertical&&(b.kind==='door'||b.kind==='window')){
+        const mask=document.createElement('canvas');mask.width=40;mask.height=64;const ctx=mask.getContext('2d',{willReadFrequently:true})!;ctx.imageSmoothingEnabled=false;
+        ctx.drawImage(art[b.kind==='door'?(b.open?'door-open':'door'):'window'],10,19,20,29);facade=ctx.getImageData(0,0,40,64).data;
+    }
+    const groups=new Map<number,{indices:number[];left:number;top:number;right:number;bottom:number}>();
+    for(let sy=0;sy<64;sy++)for(let sx=0;sx<40;sx++){
+        const index=(sy*40+sx)*4;if(!pixels[index+3])continue;
+        const x=sx-8,y=sy-32;let depth=-Infinity;
+        for(const [rx,ry,w,h]of rects)if(x>=rx&&x<rx+w&&y>=ry-height&&y<ry+h)depth=Math.max(depth,Math.min(y+height+1,ry+h));
+        if(facade?.[index+3])depth=15;
+        if(!Number.isFinite(depth))depth=shape.vertical?Math.max(1,Math.min(24,y+height+1)):15;
+        let group=groups.get(depth);if(!group){group={indices:[],left:sx,top:sy,right:sx,bottom:sy};groups.set(depth,group);}
+        group.indices.push(index);group.left=Math.min(group.left,sx);group.top=Math.min(group.top,sy);group.right=Math.max(group.right,sx);group.bottom=Math.max(group.bottom,sy);
+    }
+    const rows=[...groups.entries()].sort((a,b)=>a[0]-b[0]),packed=document.createElement('canvas');
+    packed.width=Math.max(1,...rows.map(([,g])=>g.right-g.left+1));packed.height=Math.max(1,rows.reduce((sum,[,g])=>sum+g.bottom-g.top+1,0));
+    const ctx=packed.getContext('2d')!,output=ctx.createImageData(packed.width,packed.height),layers:WallLayer[]=[];let cursor=0;
+    for(const [depth,g]of rows){
+        const width=g.right-g.left+1,height=g.bottom-g.top+1;
+        for(const i of g.indices){const pixel=i/4,x=pixel%40-g.left,y=Math.floor(pixel/40)-g.top+cursor;output.data.set(pixels.subarray(i,i+4),(y*packed.width+x)*4);}
+        layers.push({image:packed,sx:0,sy:cursor,width,height,x:g.left-8,y:g.top-32,depth:depth/24});cursor+=height;
+    }
+    ctx.putImageData(output,0,0);stamp.layers=layers;return layers;
+}
+export function drawWallLayer(ctx:CanvasRenderingContext2D,part:WallLayer,b:Building,ox:number,oy:number){
+    ctx.drawImage(part.image,part.sx,part.sy,part.width,part.height,b.x*24+ox+part.x,b.y*24+oy+part.y,part.width,part.height);
+}
+export function drawConnectedWall(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
+    ctx.drawImage(wallStamp(art,buildings,b).image,b.x*24+ox-8,b.y*24+oy-32);
 }

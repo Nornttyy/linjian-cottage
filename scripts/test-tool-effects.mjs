@@ -19,7 +19,7 @@ try {
   const ctx=new Proxy(target,{get:(obj,key)=>key in obj?obj[key]:()=>{}});
   return{width:400,height:300,clientWidth:800,clientHeight:600,getContext:()=>ctx,draws,addEventListener(){},removeEventListener(){},getBoundingClientRect(){return{left:0,top:0,width:800,height:600};}};
  }
- function fixture(){now+=10000;const s=sim.createWorld(now),p=sim.createPlayer('p','secret','Test',0,now);s.mobs=[];s.players.p=p;const canvas=recordingCanvas(),c=new GameClient(canvas,()=>{},()=>{},()=>{});
+ function fixture(){now+=10000;const s=sim.createWorld(now),p=sim.createPlayer('p','secret','Test',0,now);s.mobs=[];p.x=270.5;p.y=330.5;s.players.p=p;const canvas=recordingCanvas(),c=new GameClient(canvas,()=>{},()=>{},()=>{});
   c.connected=true;c.session={playerId:'p',room:'ROOM',token:'secret-token'};c.world=clone(s);c.pos={x:p.x,y:p.y,face:'down',moving:false};c.flushActions=()=>{};
   const f={s,p,c,canvas,start:now,defer:false,release:null};
   c.request=async body=>{sim.tickWorld(s,now);const message=body.input?sim.applyInput(s,'p',body.input,now):null,reply={room:'ROOM',playerId:'p',state:clone(sim.publicWorld(s)),message};if(f.defer){f.defer=false;return new Promise(resolve=>{f.release=()=>resolve(reply);});}return reply;};

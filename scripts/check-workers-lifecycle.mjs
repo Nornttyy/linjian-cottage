@@ -34,7 +34,7 @@ export default {async fetch(request){
 `;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 try{
-    const paths=['simulation','world','farming','creatures','structures','world-delta','room-sync','store'];
+    const paths=['simulation','world','farming','activities','creatures','structures','world-delta','room-sync','store'];
     const modules=[{type:'ESModule',path:join(project.temp,'worker.mjs'),contents:script},...paths.map(name=>({type:'ESModule',path:join(project.temp,'lib',name+'.mjs'),contents:readFileSync(join(project.temp,'lib',name+'.mjs'),'utf8')}))];
     mf=new Miniflare({modules,modulesRoot:project.temp,compatibilityDate:'2026-05-15',host:'127.0.0.1',port:0,cf:false,d1Databases:['DB'],log:new RuntimeLog(LogLevel.ERROR),outboundService:()=>new Response('External networking disabled',{status:503})});
     await mf.ready;

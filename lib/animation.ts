@@ -49,18 +49,30 @@ export type WorkSwing={action:WorkAction;face:Player['face'];start:number;until:
 export function workFrame(work:WorkSwing,time:number):Sprite|null{
     if(time<work.start||time>=work.until)return null;
     const timing=WORK_TIMING[work.action],elapsed=time-work.start,contact=4;
+    if(work.action==='sleep'){
+        const frame=elapsed<600?Math.floor(elapsed/150):time>=work.until-400?3-Math.min(3,Math.floor((time-work.until+400)/100)):4+Math.floor((elapsed-600)/400)%4;
+        return `sleep-${work.face==='left'?'right':work.face}-${frame}` as Sprite;
+    }
     const frame=elapsed<timing.contact?Math.floor(elapsed/timing.contact*contact):contact+Math.floor((elapsed-timing.contact)/(timing.duration-timing.contact)*4);
     const dir=work.face==='left'?'right':work.face;
     return `${work.action}-${dir}-${Math.max(0,Math.min(7,frame))}` as Sprite;
 }
 
+export function creatureFacing(m:Mob,time:number):Player['face']{
+    if(m.kind==='boar'&&(m.chargeUntil??0)>time&&Math.hypot(m.chargeX??0,m.chargeY??0)>.01){
+        const x=m.chargeX??0,y=m.chargeY??0;return Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'down':'up';
+    }
+    return m.face??'down';
+}
 export function creatureFrame(m:Mob,time:number,moving:boolean,motionElapsed=time):Sprite|null{
     const kind=m.kind??'slime';if(kind==='slime')return slimeFrame(m,time,moving,motionElapsed);
-    const stats=CREATURES[kind];
-    if(m.hp<=0){const age=time-(m.deadUntil-90000);return age>=0&&age<480?`${kind}-death-${Math.min(3,Math.floor(age/120))}`:null;}
-    if(time<m.hitUntil)return `${kind}-hurt-${Math.max(0,Math.min(3,Math.floor((time-m.hitUntil+350)/350*4)))}`;
-    if(m.windup>time)return `${kind}-attack-${Math.max(0,Math.min(3,Math.floor((time-m.windup+stats.windup)/stats.windup*4)))}`;
-    if((m.chargeUntil??0)>time)return `${kind}-attack-${4+Math.floor(motionElapsed/70)%3}`;
-    if(m.attackAt&&time-m.attackAt<350)return `${kind}-attack-${4+Math.max(0,Math.min(3,Math.floor((time-m.attackAt)/350*4)))}`;
-    return `${kind}-${moving?'move':'idle'}-${Math.floor(Math.max(0,motionElapsed)/(moving?(kind==='bat'?65:100):150))%8}`;
+    const stats=CREATURES[kind],face=creatureFacing(m,time),direction=face==='left'?'right':face;
+    const prefix=(kind==='boar'||kind==='mushroom')&&direction!=='down'?`${kind}-${direction}`:kind;
+    const frame=(action:string,index:number)=>`${prefix}-${action}-${index}` as Sprite;
+    if(m.hp<=0){const age=time-(m.deadUntil-90000);return age>=0&&age<480?frame('death',Math.min(3,Math.floor(age/120))):null;}
+    if(time<m.hitUntil)return frame('hurt',Math.max(0,Math.min(3,Math.floor((time-m.hitUntil+350)/350*4))));
+    if(m.windup>time)return frame('attack',Math.max(0,Math.min(3,Math.floor((time-m.windup+stats.windup)/stats.windup*4))));
+    if((m.chargeUntil??0)>time)return frame('attack',4+Math.floor(Math.max(0,motionElapsed)/70)%3);
+    if(m.attackAt&&time-m.attackAt>=0&&time-m.attackAt<350)return frame('attack',4+Math.min(3,Math.floor((time-m.attackAt)/350*4)));
+    return frame(moving?'move':'idle',Math.floor(Math.max(0,motionElapsed)/(moving?(kind==='bat'?65:100):150))%8);
 }

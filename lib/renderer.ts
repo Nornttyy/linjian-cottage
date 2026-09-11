@@ -1,12 +1,12 @@
 import { COLORS, resourcesInRect, resourceAt, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { distance, type WorldState, type Player, type Part, type Tool } from './simulation';
-import { HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, type Atlas, type Sprite } from './art';
+import { HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, CROP_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
-import {drawConnectedWall,floorWallInsets} from './connected-wall';
+import {drawConnectedWall,connectedWallLayers,drawWallLayer,floorWallInsets} from './connected-wall';
 import {atmosphere,treeShadows} from './atmosphere';
-import {heroFrame,heroFacing,toolTrailFrame,creatureFrame,workFrame,type HeroSwing,type WorkSwing} from './animation';
+import {heroFrame,heroFacing,toolTrailFrame,creatureFrame,creatureFacing,workFrame,type HeroSwing,type WorkSwing} from './animation';
 import {atLevel,floorLevel,floorGroup,layer,MAX_LEVEL,type Building} from './structures';
-import {cropStage} from './farming';
+import {cropStage,soilOpacity,type Plot} from './farming';
 import {CREATURES} from './creatures';
 import type {GameEvent} from './simulation';
 import {roofVisibility} from './roof-visibility';
@@ -120,53 +120,73 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     }
     else
         ctx.drawImage(art[name], Math.round(px - width / 2), py - height, width, height); ctx.restore(); };
-    // Draw the lower world once beneath the active floor; keep terrain and lighting single-pass.
+    const drawFloor=(b:Building,shift=0)=>{
+        const inset=floorWallInsets(s.buildings,b.x,b.y,floorLevel(b));
+        const x=b.x*TILE+ox,y=b.y*TILE+oy+shift;
+        if(inset.left||inset.right||inset.top||inset.bottom){
+            ctx.save();ctx.beginPath();ctx.rect(x+inset.left,y+inset.top,TILE-inset.left-inset.right,TILE-inset.top-inset.bottom);ctx.clip();
+            material(ctx,art.floor,b.x,b.y,x,y);ctx.restore();
+        }else material(ctx,art.floor,b.x,b.y,x,y);
+    };
+    const queueWall=(queue:{y:number;draw:()=>void}[],b:Building,shift=0,fade=true)=>{
+        for(const part of connectedWallLayers(art,s.buildings,b)){
+            const depth=b.y+part.depth+shift/TILE;
+            queue.push({y:depth,draw:()=>{
+                const left=b.x*TILE+part.x,right=left+part.width,top=b.y*TILE+shift+part.y,bottom=top+part.height;
+                const occludes=fade&&depth>pos.y&&left<pos.x*TILE+7&&right>pos.x*TILE-7&&top<pos.y*TILE&&bottom>pos.y*TILE-32;
+                ctx.save();ctx.globalAlpha=occludes?.42:1;drawWallLayer(ctx,part,b,ox,oy+shift);ctx.restore();
+            }});
+        }
+    };
+    const queueCrop=(queue:{y:number;draw:()=>void}[],plot:Plot,shift=0,highlight=false)=>{
+        if(!plot.crop)return;
+        const x=plot.x+CROP_SIZE.groundX,y=plot.y+CROP_SIZE.groundY;
+        queue.push({y:y+shift/TILE,draw:()=>{
+            const stage=cropStage(plot,t);
+            ctx.drawImage(art[`crop-${plot.crop!}-${stage}`],Math.round(x*TILE+ox-CROP_SIZE.anchorX),Math.round(y*TILE+oy+shift-CROP_SIZE.anchorY),CROP_SIZE.width,CROP_SIZE.height);
+            if(highlight&&stage===3&&Math.sin(t/600+plot.x)>.75){ctx.save();ctx.globalAlpha=.65;ctx.drawImage(art.spark,(plot.x+.75)*TILE+ox,(plot.y-.3)*TILE+oy+shift,5,5);ctx.restore();}
+        }});
+    };
+    // Composite each lower storey before the next floor can cover it.
+    // Terrain and lighting stay single-pass; ground props enter only storey zero.
     if(level>0){
-        const below:{y:number;draw:()=>void}[]=[];
         for(let lower=0;lower<level;lower++){
-            const shift=(level-lower)*TILE;
+            const below:{y:number;draw:()=>void}[]=[],shift=(level-lower)*TILE;
             for(const b of buildings.filter(b=>floorLevel(b)===lower&&visible(b.x,b.y))){
                 const px=b.x*TILE+ox,py=b.y*TILE+oy+shift;
-                if(b.kind==='floor')material(ctx,art.floor,b.x,b.y,px,py);
+                if(b.kind==='floor')drawFloor(b,shift);
                 else if(b.kind==='roof'){
                     if(!atLevel(s.buildings,b.x,b.y,'floor',lower+1))below.push({y:b.y+.95+shift/TILE,draw:()=>material(ctx,art.roof,b.x,b.y,...roofRect(b.x,b.y,ox,oy+shift))});
-                }else below.push({y:b.y+.9+shift/TILE,draw:()=>{
-                    if(layer(b.kind)==='wall'||b.kind==='fence')drawConnectedWall(ctx,art,s.buildings,b,ox,oy+shift);
-                    else {const size=b.kind==='stairs'?30:24;ctx.drawImage(art[b.kind as Sprite],px+(24-size)/2,py+24-size,size,size);}
-                }});
+                }else if(layer(b.kind)==='wall'||b.kind==='fence')queueWall(below,b,shift,false);
+                else below.push({y:b.y+.9+shift/TILE,draw:()=>{const bed=b.kind==='bed',size=bed?40:b.kind==='stairs'?30:24,height=bed?24:size;ctx.drawImage(art[b.kind as Sprite],px+(24-size)/2,py+24-height,size,height);}});
             }
+            if(lower===0){
+                for(const r of resourcesInRect(minX-4,minY-level-4,maxX+4,maxY+3)){
+                    if(!visible(r.x,r.y))continue;
+                    if(s.depleted[r.id]){if(r.kind==='tree'||r.kind==='pine')sprite('stump',r.x+.5,r.y+1+level,14,12);continue;}
+                    const tree=r.kind==='tree'||r.kind==='pine';
+                    below.push({y:r.y+.8+level,draw:()=>sprite(r.kind,r.x+.5,r.y+1+level,tree?43:r.kind==='berry'?24:25,tree?58:r.kind==='berry'?21:24)});
+                }
+                for(const plot of Object.values(s.plots??{}))if(visible(plot.x,plot.y)){
+                    ctx.save();ctx.globalAlpha*=soilOpacity(plot,t);material(ctx,art[plot.wetUntil>t?'soil-wet':'soil-dry'],plot.x,plot.y,plot.x*TILE+ox,plot.y*TILE+groundOy);ctx.restore();
+                    queueCrop(below,plot,shift);
+                }
+                if(visible(SPAWN.x,SPAWN.y))below.push({y:SPAWN.y-1.4+level,draw:()=>ctx.drawImage(art[`fire${Math.floor(t/FIRE_FRAME_MS)%FIRE_FRAME_COUNT}`],Math.round(SPAWN.x*TILE+ox-FIRE_SIZE.anchorX),Math.round((SPAWN.y-1.4)*TILE+groundOy-FIRE_SIZE.anchorY),FIRE_SIZE.width,FIRE_SIZE.height)});
+                if(visible(CAVE_ENTRANCE.x,CAVE_ENTRANCE.y))below.push({y:CAVE_ENTRANCE.y-1.6+level,draw:()=>{const img=art['cave-entrance'],width=168,height=Math.round(width*img.height/img.width);ctx.drawImage(img,CAVE_ENTRANCE.x*TILE+ox-width/2,CAVE_ENTRANCE.y*TILE+groundOy-height+12,width,height);}});
+            }
+            for(const p of Object.values(s.players))if(floorLevel(p)===lower&&t-p.seen<15000&&visible(p.x,p.y)){
+                const work=p.workAction&&p.workStart!==undefined&&p.workUntil?{action:p.workAction,start:p.workStart,until:p.workUntil,face:p.swingFace??p.face}:null;
+                const face=work&&t<work.until?work.face:heroFacing(p,p.face,t),frame=(work?workFrame(work,t):null)??heroFrame(p,face,(p.movingUntil??0)>s.tick,t,p.equipped??'axe');
+                below.push({y:p.y+shift/TILE+(work?.action==='sleep'&&t<work.until ? .2 : 0),draw:()=>sprite(frame,p.x,p.y+shift/TILE+(HERO_SIZE.height-HERO_SIZE.anchorY)/TILE,HERO_SIZE.width,HERO_SIZE.height,1,face==='left')});
+            }
+            for(const m of s.mobs)if(floorLevel(m)===lower&&visible(m.x,m.y)){
+                const frame=creatureFrame(m,t,(m.movingUntil??0)>s.tick);if(frame)below.push({y:m.y+shift/TILE,draw:()=>sprite(frame,m.x,m.y+shift/TILE+(SLIME_SIZE.height-SLIME_SIZE.anchorY)/TILE,SLIME_SIZE.width,SLIME_SIZE.height,1,(m.kind==='boar'||m.kind==='mushroom')&&creatureFacing(m,t)==='left')});
+            }
+            below.sort((a,b)=>a.y-b.y).forEach(d=>d.draw());
         }
-        for(const r of resourcesInRect(minX-4,minY-level-4,maxX+4,maxY+3)){
-            if(!visible(r.x,r.y))continue;
-            if(s.depleted[r.id]){if(r.kind==='tree'||r.kind==='pine')sprite('stump',r.x+.5,r.y+1+level,14,12);continue;}
-            const tree=r.kind==='tree'||r.kind==='pine';
-            below.push({y:r.y+.8+level,draw:()=>sprite(r.kind,r.x+.5,r.y+1+level,tree?43:r.kind==='berry'?24:25,tree?58:r.kind==='berry'?21:24)});
-        }
-        for(const plot of Object.values(s.plots??{}))if(visible(plot.x,plot.y)){
-            material(ctx,art[plot.wetUntil>t?'soil-wet':'soil-dry'],plot.x,plot.y,plot.x*TILE+ox,plot.y*TILE+groundOy);
-            if(plot.crop)below.push({y:plot.y+.8+level,draw:()=>ctx.drawImage(art[`crop-${plot.crop!}-${cropStage(plot,t)}`],Math.round((plot.x+.5)*TILE+ox-20),Math.round((plot.y+.85)*TILE+groundOy-35),40,40)});
-        }
-        if(visible(SPAWN.x,SPAWN.y))below.push({y:SPAWN.y-1.4+level,draw:()=>ctx.drawImage(art[`fire${Math.floor(t/FIRE_FRAME_MS)%FIRE_FRAME_COUNT}`],Math.round(SPAWN.x*TILE+ox-FIRE_SIZE.anchorX),Math.round((SPAWN.y-1.4)*TILE+groundOy-FIRE_SIZE.anchorY),FIRE_SIZE.width,FIRE_SIZE.height)});
-        for(const p of Object.values(s.players))if(floorLevel(p)<level&&t-p.seen<15000&&visible(p.x,p.y)){
-            const shift=level-floorLevel(p),face=heroFacing(p,p.face,t),frame=heroFrame(p,face,(p.movingUntil??0)>s.tick,t,p.equipped??'axe');
-            below.push({y:p.y+shift,draw:()=>sprite(frame,p.x,p.y+shift+(HERO_SIZE.height-HERO_SIZE.anchorY)/TILE,HERO_SIZE.width,HERO_SIZE.height,1,face==='left')});
-        }
-        for(const m of s.mobs)if(floorLevel(m)<level&&visible(m.x,m.y)){
-            const shift=level-floorLevel(m),frame=creatureFrame(m,t,(m.movingUntil??0)>s.tick);if(frame)below.push({y:m.y+shift,draw:()=>sprite(frame,m.x,m.y+shift+(SLIME_SIZE.height-SLIME_SIZE.anchorY)/TILE,SLIME_SIZE.width,SLIME_SIZE.height)});
-        }
-        if(visible(CAVE_ENTRANCE.x,CAVE_ENTRANCE.y))below.push({y:CAVE_ENTRANCE.y-1.6+level,draw:()=>{const img=art['cave-entrance'],width=168,height=Math.round(width*img.height/img.width);ctx.drawImage(img,CAVE_ENTRANCE.x*TILE+ox-width/2,CAVE_ENTRANCE.y*TILE+groundOy-height+12,width,height);}});
-        below.sort((a,b)=>a.y-b.y).forEach(d=>d.draw());
         ctx.fillStyle='#fff0d01c';ctx.fillRect(0,0,w,h);
     }
-    for (const b of Object.values(s.buildings)) {
-        if (b.kind === 'floor' && floorLevel(b)===level && visible(b.x, b.y)) {
-            const inset = floorWallInsets(s.buildings,b.x,b.y,level);
-            if(inset.left||inset.right||inset.top||inset.bottom){
-                ctx.save();ctx.beginPath();ctx.rect(b.x*TILE+ox+inset.left,b.y*TILE+oy+inset.top,TILE-inset.left-inset.right,TILE-inset.top-inset.bottom);ctx.clip();
-                material(ctx,art.floor,b.x,b.y,b.x*TILE+ox,b.y*TILE+oy);ctx.restore();
-            }else material(ctx,art.floor,b.x,b.y,b.x*TILE+ox,b.y*TILE+oy);
-        }
-    }
+    for(const b of buildings)if(b.kind==='floor'&&floorLevel(b)===level&&visible(b.x,b.y))drawFloor(b);
     const fireX = (SPAWN.x) * TILE + ox, fireY = (SPAWN.y - 1.4) * TILE + oy;
     const drawables: {
         y: number;
@@ -188,15 +208,16 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     for (const b of Object.values(s.buildings)) {
         if (!visible(b.x, b.y) || floorLevel(b)!==level || b.kind === 'floor' || b.kind === 'roof')
             continue;
+        if(layer(b.kind)==='wall'||b.kind==='fence'){queueWall(drawables,b);continue;}
         drawables.push({ y: b.y + .9, draw: () => {
                 const fade = b.y > pos.y - .3 && b.y < pos.y + 1.2 && Math.abs(b.x + .5 - pos.x) < 1.05;
                 ctx.save();ctx.globalAlpha=fade?.42:1;
-                if(layer(b.kind)==='wall'||b.kind==='fence')drawConnectedWall(ctx,art,s.buildings,b,ox,oy);else{const img=art[b.kind as Sprite],size=b.kind==='stairs'?30:24;ctx.drawImage(img,b.x*TILE+ox+(24-size)/2,b.y*TILE+oy+24-size,size,size);}ctx.restore();
+                const img=art[b.kind as Sprite],bed=b.kind==='bed',size=bed?40:b.kind==='stairs'?30:24,height=bed?24:size;ctx.drawImage(img,b.x*TILE+ox+(24-size)/2,b.y*TILE+oy+24-height,size,height);ctx.restore();
             } });
     }
     if(level===0)for(const plot of Object.values(s.plots??{})){if(!visible(plot.x,plot.y))continue;
-        material(ctx,art[plot.wetUntil>t?'soil-wet':'soil-dry'],plot.x,plot.y,plot.x*TILE+ox,plot.y*TILE+oy);
-        if(plot.crop)drawables.push({y:plot.y+.8,draw:()=>{const stage=cropStage(plot,t);ctx.drawImage(art[`crop-${plot.crop!}-${stage}`],Math.round((plot.x+.5)*TILE+ox-20),Math.round((plot.y+.85)*TILE+oy-35),40,40);if(stage===3&&Math.sin(t/600+plot.x)>.75){ctx.globalAlpha=.65;ctx.drawImage(art.spark,(plot.x+.75)*TILE+ox,(plot.y-.3)*TILE+oy,5,5);ctx.globalAlpha=1;}}});
+        ctx.save();ctx.globalAlpha*=soilOpacity(plot,t);material(ctx,art[plot.wetUntil>t?'soil-wet':'soil-dry'],plot.x,plot.y,plot.x*TILE+ox,plot.y*TILE+oy);ctx.restore();
+        queueCrop(drawables,plot,0,true);
     }
     if(level>0)for(const stair of buildings.filter(b=>b.kind==='stairs'&&floorLevel(b)===level-1)){if(visible(stair.x,stair.y))ctx.drawImage(art['stairs-down'],stair.x*TILE+ox,stair.y*TILE+oy,24,24);}
     if(level===0&&!underground&&visible(CAVE_ENTRANCE.x,CAVE_ENTRANCE.y))drawables.push({y:CAVE_ENTRANCE.y-1.6,draw:()=>{
@@ -228,7 +249,9 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         drawables.push({y:point.y,draw:()=>{
             ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-8,point.y*TILE+oy-2,16,3);
             if(m.hp<=0)ctx.globalAlpha=Math.max(0,Math.min(1,(480-(t-m.deadUntil+90000))/120));
-            ctx.drawImage(art[frame],Math.round(point.x*TILE+ox-SLIME_SIZE.anchorX),Math.round(point.y*TILE+oy-SLIME_SIZE.anchorY),SLIME_SIZE.width,SLIME_SIZE.height);ctx.globalAlpha=1;
+            ctx.save();ctx.translate(Math.round(point.x*TILE+ox),Math.round(point.y*TILE+oy));
+            if((m.kind==='boar'||m.kind==='mushroom')&&creatureFacing(m,t)==='left')ctx.scale(-1,1);
+            ctx.drawImage(art[frame],-SLIME_SIZE.anchorX,-SLIME_SIZE.anchorY,SLIME_SIZE.width,SLIME_SIZE.height);ctx.restore();ctx.globalAlpha=1;
             if(m.windup>t){ctx.globalAlpha=.45;ctx.drawImage(art.spark,point.x*TILE+ox-7,point.y*TILE+oy-29,14,14);ctx.globalAlpha=1;}
             if(m.hp>0&&(m.hp<stats.hp||distance(pos,m)<4)){ctx.fillStyle='#58724b';ctx.fillRect(point.x*TILE+ox-11,point.y*TILE+oy-34,22,3);ctx.fillStyle='#bbe685';ctx.fillRect(point.x*TILE+ox-10,point.y*TILE+oy-33,20*m.hp/stats.hp,1);}
         }});
@@ -242,9 +265,9 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         const local=p.id===id,point=local?pos:slimeDrawPosition(playersView.positions,{...p,homeX:p.x,homeY:p.y,windup:0,cooldown:0,deadUntil:0},t,s.tick,'move',12);
         if (!visible(point.x, point.y))
             continue;
-        drawables.push({ y: point.y, draw: () => {
+        const work=local?view.localWork:p.workAction&&p.workStart!==undefined&&p.workUntil?{action:p.workAction,start:p.workStart,until:p.workUntil,face:p.swingFace??p.face}:null;
+        drawables.push({ y: point.y+(work?.action==='sleep'&&t<work.until ? .2 : 0), draw: () => {
                 const moving=local?pos.moving:(p.movingUntil??0)>s.tick,swing=local?view.localSwing:undefined;
-                const work=local?view.localWork:p.workAction&&p.workStart!==undefined&&p.workUntil?{action:p.workAction,start:p.workStart,until:p.workUntil,face:p.swingFace??p.face}:null;
                 const face=work&&t<work.until?work.face:heroFacing(p,local?pos.face:p.face,t,swing);
                 const frame=(work?workFrame(work,t):null)??heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
                 const trail=work&&t<work.until?null:toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
@@ -265,7 +288,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     const opacity=(b:Building)=>roofOpacity.get(`${b.x}:${b.y}${floorLevel(b)?':'+floorLevel(b):''}`)??1;
     for(let upper=level+1;upper<=MAX_LEVEL;upper++){
         const offset=(upper-level)*24;
-        for(const floor of covers.filter(b=>floorLevel(b)===upper&&visible(b.x,b.y))){ctx.globalAlpha=Math.max(0,(opacity(floor)-.14)/.86);material(ctx,art.floor,floor.x,floor.y,floor.x*TILE+ox,floor.y*TILE+oy-offset);}
+        for(const floor of covers.filter(b=>floorLevel(b)===upper&&visible(b.x,b.y))){ctx.globalAlpha=Math.max(0,(opacity(floor)-.14)/.86);drawFloor(floor,-offset);}
         ctx.globalAlpha=1;
         for(const wall of buildings.filter(b=>floorLevel(b)===upper&&layer(b.kind)==='wall'&&visible(b.x,b.y)).sort((a,b)=>a.y-b.y)){
             const cover=atLevel(s.buildings,wall.x,wall.y,'floor',upper);ctx.globalAlpha=cover?Math.max(0,(opacity(cover)-.14)/.86):1;drawConnectedWall(ctx,art,s.buildings,wall,ox,oy-offset);
@@ -316,7 +339,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         else if(e.kind==='spore'){ctx.globalAlpha=(1-f)*.65;for(let i=0;i<8;i++){const a=i*Math.PI/4,r=8+f*34;ctx.drawImage(art.mushrooms,x+Math.cos(a)*r-3,y+20+Math.sin(a)*r*.65-3,7,7);}}
         else if(e.kind==='water'){ctx.globalAlpha=(1-f)*.7;for(let i=0;i<5;i++)ctx.drawImage(art['water-drop'],x-8+i*4,y+12+f*8-(i%2)*5,3,5);}
         else if (e.amount) {
-            const type = e.kind==='harvest'?e.crop:e.kind === 'wood' ? 'wood' : e.kind === 'essence' ? 'essence' : e.kind;
+            const type = e.kind==='harvest'?e.crop:e.kind==='eat'||e.kind==='sleep'?'heart':e.kind;
             const icon = art[type as Sprite];
             if (icon)
                 ctx.drawImage(icon, x - 11, y - 8, 9, 9);

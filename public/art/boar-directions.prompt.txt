@@ -1,0 +1,13 @@
+Use case: identity-preserve. Asset type: production pixel game directional sprite sheet. The attached existing sheet is a CHARACTER IDENTITY AND COLOR REFERENCE, not an output layout to preserve. Generate a NEW companion sheet with the SAME character, same pixel-art visual design and bright warm palette, adding side and rear views missing from the existing front-view art. True transparent RGBA background. Orthogonal top-down farming RPG camera with slightly visible top surfaces, not isometric. Crisp readable clusters, no antialiasing, no painted soft brushwork, no text, gridlines, cell outlines, shadows or scenery.
+EXACT layout: square image, 8 equally spaced columns and 8 equally spaced rows, all 64 cells the same size. ONE independent sprite per cell, plenty of transparent padding, no pixels crossing cells. Keep character dimensions, anatomy and identity constant across each direction, same ground contact baseline at 85% of every cell and centered at 50% cell width. At final game scale each character should occupy roughly 25-30 pixels in a 40 pixel cell.
+Rows 1-4 show RIGHT-facing 3/4 SIDE view, head clearly points screen right, rear to left. Rows 5-8 show UP-facing REAR view, clearly back of head and back of body, no front face.
+Row1 RIGHT idle 8 frames, subtle breathing and single blink, stable face.
+Row2 RIGHT walking 8 frames, full continuous natural gait, stationary ground anchor.
+Row3 RIGHT attacking 8 frames, anticipation frames1-4, contact frame5, settle frames6-8.
+Row4 RIGHT hurt recoil frames1-4; RIGHT collapse and fade away frames5-8.
+Row5 UP idle 8 frames.
+Row6 UP walking 8 frames, walking away with back visible.
+Row7 UP attack 8 frames, anticipation1-4, contact5, settle6-8.
+Row8 UP hurt1-4; UP collapse and fade5-8.
+Different actions must be clearly distinct, motion comes from limbs and posture, not changing facial expressions. Never rotate a front image flat like a compass: redraw actual side anatomy and rear anatomy. Keep all 64 frames within their grid cell and aligned.
+Character: the same warm chestnut-brown QUADRUPED wild boar from reference, dark brown mane stripe, small cream tusks, four short dark-hoofed legs, small ears and tail. On side view show its long horizontal body, a clear snout on RIGHT, tail on LEFT, recognizable legs, no humanoid upright body. Rear view shows hindquarters at screen bottom, tail and dorsal stripe, head toward screen top, no face at the bottom. Attack crouches to lower tusks then charges. Preserve compact proportions and original non-chibi rural pixel aesthetic.

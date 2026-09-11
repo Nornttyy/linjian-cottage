@@ -1,14 +1,15 @@
+import {CAMPFIRE,cookingRecipe,nearCampfire,canCast} from './activities';
 import {applyWorldDelta,type WorldDelta} from './world-delta';
 import { loadArt, type Atlas } from './art';
-import { createWorld, move, canBuild, distance, clearLine, WORK_TIMING, TOOL_TIMING, type WorkAction, type GameEvent, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
+import { createWorld, move, canBuild, distance, clearLine, isBlocked, WORK_TIMING, TOOL_TIMING, type WorkAction, type GameEvent, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
 import { render, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
-import { SPAWN, sceneAt } from './world';
+import { SPAWN, sceneAt, CAVE_ENTRANCE, MINE } from './world';
 import type {HeroSwing,WorkSwing} from './animation';
 import {CROPS,cropProgress,plotKey,type CropKind} from './farming';
-import {atLevel,floorLevel} from './structures';
+import {atLevel,floorLevel,SIGN_TEXT_LIMIT,normalizeSignText} from './structures';
 import {GameAudio,type Sound} from './audio';
 import {resourceAt,RESOURCE_MAP} from './world';
-import {HOTBAR_SIZE,ITEMS,defaultSlots,restoreSlots,swapSlots,quickTransfer,type ItemKey,type ItemSlot} from './inventory';
+import {HOTBAR_SIZE,ITEMS,defaultSlots,restoreSlots,reconcileSlots,swapSlots,quickTransfer,type ItemKey,type ItemSlot} from './inventory';
 type ApiReply = {
     room: string;
     playerId: string;
@@ -53,6 +54,7 @@ export class GameClient {
     private audio=new GameAudio();
     private localWork:WorkSwing|null=null;
     private workCommand:Command|null=null;
+    private sleepDispatchId:string|undefined;
     private predictedEvents:(GameEvent&{predicted?:boolean})[]=[];
     private feedbackQueue:{command:Command;at:number}[]=[];
     private feedbackSeen=new Map<string,number>();
@@ -99,7 +101,9 @@ export class GameClient {
     private clockSampleAt=0;
     private commandSequence=0;
     private lastInputAt=0;
-    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{}) {
+    private activeSignId:string|null=null;
+    private signSave:{command:Command;resolve:(error:string|null)=>void}|null=null;
+    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{},private signToggle:(id:string|null)=>void=()=>{}) {
         canvas.addEventListener('pointermove', this.pointerMove);
         canvas.addEventListener('pointerdown', this.pointerDown);
         canvas.addEventListener('contextmenu', this.contextMenu);
@@ -133,6 +137,7 @@ export class GameClient {
         return result;
     }
     async connect(mode: 'resume' | 'create' | 'join' = 'resume', room = '') {
+        this.signSave?.resolve('已切换世界');this.signSave=null;if(this.activeSignId){this.activeSignId=null;this.signToggle(null);}
         const generation = ++this.generation;
         if (this.timer)
             clearTimeout(this.timer);
@@ -162,6 +167,7 @@ export class GameClient {
             localStorage.setItem('linjian-session', JSON.stringify(this.session));
             this.world = result.state;
             this.worldVersion=result.version;
+
             const p = this.world.players[this.session.playerId];
             this.pos = { x: p.x, y: p.y,level:floorLevel(p), face: p.face, moving: false };
             this.seq = p.seq;
@@ -196,23 +202,41 @@ export class GameClient {
         }
         try {
             const submitted = this.pending;
+            const sleep=submitted?.commands.find(command=>command.type==='sleep');
+            if(sleep&&sleep.id!==this.sleepDispatchId){
+                this.sleepDispatchId=sleep.id;sleep.issuedAt=this.serverNow(sentAt);
+                const bed=sleep.target?this.world.buildings[sleep.target]:undefined;
+                if(bed?.kind==='bed')this.pos={...this.pos,x:bed.x+.5,y:bed.y+.75,face:'up'};
+                this.localWork={action:'sleep',face:'up',start:sentAt,until:sentAt+WORK_TIMING.sleep.duration};
+                this.feedbackQueue.push({command:sleep,at:sentAt+WORK_TIMING.sleep.contact});
+            }
             const result = await this.request({ action: 'sync', ...session, input: submitted, protocol:2, poll:true, sinceVersion:this.worldVersion });
             if (this.disposed || generation !== this.generation || session !== this.session)
                 return;
             if(result.delta && result.delta.base!==this.worldVersion){this.worldVersion=undefined;throw new Error('正在重新同步');}
             this.world = result.state ?? applyWorldDelta(this.world,result.delta!);
             this.worldVersion=result.version;
+            if(this.signSave&&submitted?.commands.includes(this.signSave.command)){
+                const save=this.signSave;this.signSave=null;
+                const sign=this.world.buildings[save.command.target!];
+                save.resolve(sign?.kind==='sign'&&sign.text===save.command.text?null:result.message||'保存失败，请重试');
+            }
             if(this.unconfirmedSwing && submitted?.commands.includes(this.unconfirmedSwing))this.unconfirmedSwing=null;
             if(this.workCommand&&submitted?.commands.includes(this.workCommand))this.workCommand=null;
             this.pending = null;
             this.connected = true;
             this.error = '';
             const p = this.world.players[session.playerId];
+            const sleepKnown=this.sleepDispatchId&&(sleep?.id===this.sleepDispatchId||p.lastCommandId===this.sleepDispatchId);
+            if(this.localWork?.action==='sleep'&&((sleepKnown&&(p.lastCommandId!==this.sleepDispatchId||p.workAction!=='sleep'||(p.workUntil??0)<=this.serverNow()))||(p.hurtAt??-Infinity)>=this.serverNow(this.localWork.start))){
+                this.localWork=null;this.feedbackQueue=this.feedbackQueue.filter(entry=>entry.command.id!==this.sleepDispatchId);
+            }
             if(sceneAt(p.x)!==sceneAt(this.pos.x)||floorLevel(p)!==floorLevel(this.pos)){
                 this.movements=[];this.keys.clear();this.held=false;this.localSwing=null;this.localWork=null;this.workCommand=null;this.feedbackQueue=[];this.unconfirmedSwing=null;this.fadeUntil=Date.now()+500;
             }
             this.pos.x=p.x;this.pos.y=p.y;this.pos.level=floorLevel(p);
             for(const segment of this.movements)move(this.world,this.pos,segment.dx*(segment.speed??4.2)*segment.seconds,segment.dy*(segment.speed??4.2)*segment.seconds);
+            this.syncSlots();
             if (result.message)
                 this.message(result.message);
             this.notify();
@@ -234,26 +258,75 @@ export class GameClient {
             else this.timer = setTimeout(() => this.sync(), this.connected ? Math.max(0,150-(Date.now()-sentAt)) : 1600);
         }
     }
+    private signAt(target:string){
+        const sign=Object.hasOwn(this.world.buildings,target)?this.world.buildings[target]:undefined;
+        return sign?.kind==='sign'&&floorLevel(sign)===floorLevel(this.pos)&&distance(this.pos,{x:sign.x+.5,y:sign.y+.5})<=2.7?sign:undefined;
+    }
+    readSign(target?:string){
+        if(this.paused||!this.connected||!this.session||this.toolLocked()||this.workCommand||this.unconfirmedSwing)return false;
+        const sign=target?this.signAt(target):Object.values(this.world.buildings).filter(b=>this.signAt(b.id)).sort((a,b)=>distance(this.pos,{x:a.x+.5,y:a.y+.5})-distance(this.pos,{x:b.x+.5,y:b.y+.5}))[0];
+        if(!sign)return false;
+        this.wakeSleep();this.pauseControls();this.paused=true;this.activeSignId=sign.id;this.signToggle(sign.id);return true;
+    }
+    closeSign(){this.activeSignId=null;}
+    saveSign(target:string,value:string):Promise<string|null>{
+        if(this.disposed||!this.connected||!this.session)return Promise.resolve('连接中断，请重试');
+        if(this.signSave)return Promise.resolve('正在保存');
+        if(this.activeSignId!==target||!this.signAt(target))return Promise.resolve('请靠近同层告示牌');
+        const text=normalizeSignText(value);if(Array.from(text).length>SIGN_TEXT_LIMIT)return Promise.resolve('最多240字');
+        return new Promise(resolve=>{
+            const command:Command={type:'writeSign',target,text};this.signSave={command,resolve};
+            if(!this.command(command)){this.signSave=null;resolve('暂时无法保存，请重试');}
+        });
+    }
+    interact(){
+        if(this.paused||!this.connected||!this.session)return false;
+        const now=Date.now(),p=this.world.players[this.session.playerId];if(!p)return false;
+        const level=floorLevel(this.pos),near=(b:{x:number;y:number},range:number)=>distance(this.pos,{x:b.x+.5,y:b.y+.5})<range;
+        if(level===0&&distance(this.pos,sceneAt(this.pos.x)==='mine'?MINE.exit:CAVE_ENTRANCE)<=2)return this.command({type:'interact'});
+        const stairs=Object.values(this.world.buildings).filter(b=>b.kind==='stairs'&&(floorLevel(b)===level||floorLevel(b)===level-1)&&near(b,2.3)).sort((a,b)=>Math.abs(floorLevel(a)-level)-Math.abs(floorLevel(b)-level)||distance(this.pos,a)-distance(this.pos,b))[0];
+        if(stairs)return this.command({type:'interact',target:stairs.id});
+        const plot=level===0&&sceneAt(this.pos.x)!=='mine'?Object.values(this.world.plots??{}).filter(plot=>plot.crop&&cropProgress(plot,this.serverNow(now))>=CROPS[plot.crop].seconds&&distance(this.pos,plot)<2).sort((a,b)=>distance(this.pos,a)-distance(this.pos,b))[0]:undefined;
+        if(plot){
+            this.wakeSleep();
+            if(this.workCommand||this.unconfirmedSwing||this.toolLocked(now)||this.dodgePending()||this.serverNow(now)<Math.max(p.actionAt,p.dodgeUntil))return false;
+            const dx=plot.x+.5-this.pos.x,dy=plot.y+.5-this.pos.y;if(Math.hypot(dx,dy)>.1)this.pos.face=Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up';
+            return this.startWork('harvest',{type:'harvest',x:plot.x,y:plot.y},now);
+        }
+        const door=Object.values(this.world.buildings).filter(b=>b.kind==='door'&&floorLevel(b)===level&&near(b,2)).sort((a,b)=>distance(this.pos,a)-distance(this.pos,b))[0];
+        if(door)return this.command({type:'interact',target:door.id});
+        if(this.tryActivity())return true;
+        if(this.readSign())return true;
+        return this.command({type:'interact'});
+    }
     private layoutKey(){return this.session?`linjian-layout:${this.session.room}:${this.session.playerId}`:null;}
     private loadLayout(){
-        this.slots=defaultSlots();this.selectedSlot=0;
+        const inventory=this.session?this.world.players[this.session.playerId]?.inventory:undefined;
+        this.slots=defaultSlots(inventory);this.selectedSlot=0;
         try{const key=this.layoutKey(),saved=key?JSON.parse(localStorage.getItem(key)||'null'):null;
-            if(saved){this.slots=restoreSlots(saved.slots);if(Number.isInteger(saved.selected)&&saved.selected>=0&&saved.selected<HOTBAR_SIZE)this.selectedSlot=saved.selected;}
+            if(saved){this.slots=restoreSlots(saved.slots,inventory);if(Number.isInteger(saved.selected)&&saved.selected>=0&&saved.selected<HOTBAR_SIZE)this.selectedSlot=saved.selected;}
         }catch{}
         this.applySlot();
+    }
+    private syncSlots(){
+        const inventory=this.session?this.world.players[this.session.playerId]?.inventory:undefined;if(!inventory)return;
+        const next=reconcileSlots(this.slots,inventory);if(next===this.slots)return;
+        const selected=this.slots[this.selectedSlot];this.slots=next;
+        if(selected!==this.slots[this.selectedSlot])this.applySlot();
+        this.saveLayout();
     }
     private saveLayout(){try{const key=this.layoutKey();if(key)localStorage.setItem(key,JSON.stringify({slots:this.slots,selected:this.selectedSlot}));}catch{}}
     private applySlot(){
         const item=this.slots[this.selectedSlot];this.remove=false;this.buildStamp='';
         if(item==='hammer')this.tool='build';
-        else if(item==='hoe'||item==='water'||item==='pick'||item==='sword')this.tool=item;
+        else if(item==='hoe'||item==='water'||item==='pick'||item==='sword'||item==='rod')this.tool=item;
         else if(item==='carrotSeed'||item==='tomatoSeed'||item==='wheatSeed'){this.tool='seed';this.crop=item==='carrotSeed'?'carrot':item==='tomatoSeed'?'tomato':'wheat';}
         else this.tool='axe';
     }
     selectSlot(index:number){if(!Number.isInteger(index)||index<0||index>=HOTBAR_SIZE)return;this.selectedSlot=index;this.applySlot();this.saveLayout();this.notify();}
     moveSlot(from:number,to:number){this.slots=swapSlots(this.slots,from,to);this.applySlot();this.saveLayout();this.notify();}
-    quickMoveSlot(from:number){const p=this.session?this.world.players[this.session.playerId]:undefined;this.slots=quickTransfer(this.slots,from,p?.inventory);this.applySlot();this.saveLayout();this.notify();}
-    private equipItem(item:ItemKey){const index=this.slots.indexOf(item);if(index>=0&&index<HOTBAR_SIZE)this.selectSlot(index);else if(index>=0){this.moveSlot(index,this.selectedSlot);} }
+    quickMoveSlot(from:number){this.slots=quickTransfer(this.slots,from);this.applySlot();this.saveLayout();this.notify();}
+    private equipItem(item:ItemKey){this.syncSlots();const index=this.slots.indexOf(item);if(index>=0&&index<HOTBAR_SIZE)this.selectSlot(index);else if(index>=0){this.moveSlot(index,this.selectedSlot);} }
     setTool(tool:Tool){this.equipItem(tool==='build'?'hammer':tool==='seed'?CROPS[this.crop].seed:tool);}
     setPart(part:Part){this.part=part;this.equipItem('hammer');this.notify();}
     toggleRemove() {const next=!this.remove;this.setPart(this.part);this.remove=next;this.notify();}
@@ -265,7 +338,7 @@ export class GameClient {
         this.keys.delete(key); }
     private toolLockUntil() {
         const p=this.session?this.world.players[this.session.playerId]:undefined;
-        return Math.max(this.localSwing?.until??0,this.localWork?.until??0,(p?.swingUntil??0)-this.serverOffset);
+        return Math.max(this.localSwing?.until??0,(this.localWork?.action==='sleep'?0:this.localWork?.until??0),(p?.swingUntil??0)-this.serverOffset);
     }
     private toolLocked(now=Date.now()) {
         // Before dispatch, movement must stay out of the attack's pre-action movement batch.
@@ -278,42 +351,101 @@ export class GameClient {
     }
     command(command: Command) {
         if(command.type==='dodge' && this.toolLocked())return false;
-        if(this.paused || !this.connected || this.commands.length>=5)return false;
+        if(this.paused&&command!==this.signSave?.command || !this.connected || this.commands.length>=5)return false;
+        if(command.type!=='wake'&&command.type!=='sleep')this.wakeSleep();
+        if(this.commands.length>=5)return false;
         command.id??=`${this.session?.playerId}:${++this.commandSequence}:${Date.now()}`;command.issuedAt??=this.serverNow();command.face??=this.pos.face;
         this.commands.push(command);this.flushActions();
         return true;
     }
-    private movement() { if (this.paused || !this.connected || this.toolLocked())
-        return { x: 0, y: 0 }; const x = Number(this.keys.has('d') || this.keys.has('arrowright')) - Number(this.keys.has('a') || this.keys.has('arrowleft')), y = Number(this.keys.has('s') || this.keys.has('arrowdown')) - Number(this.keys.has('w') || this.keys.has('arrowup')); const n = Math.max(1, Math.hypot(x, y)); return { x: x / n, y: y / n }; }
+    private movement(){
+        if(this.paused||!this.connected)return{x:0,y:0};
+        const x=Number(this.keys.has('d')||this.keys.has('arrowright'))-Number(this.keys.has('a')||this.keys.has('arrowleft')),y=Number(this.keys.has('s')||this.keys.has('arrowdown'))-Number(this.keys.has('w')||this.keys.has('arrowup'));
+        if(x||y)this.wakeSleep();
+        if(this.toolLocked())return{x:0,y:0};
+        const n=Math.max(1,Math.hypot(x,y));return{x:x/n,y:y/n};
+    }
+    private wakeSleep(){
+        const now=Date.now(),p=this.session?this.world.players[this.session.playerId]:undefined;
+        const queued=this.commands.some(command=>command.type==='sleep'),inFlight=!!this.pending?.commands.some(command=>command.type==='sleep');
+        const authoritative=p?.workAction==='sleep'&&this.serverNow(now)<(p.workUntil??0);
+        const sleeping=queued||this.localWork?.action==='sleep'&&now<this.localWork.until||authoritative;
+        if(!sleeping)return;
+        this.localWork=null;if(this.workCommand?.type==='sleep')this.workCommand=null;
+        this.commands=this.commands.filter(command=>command.type!=='sleep');
+        this.feedbackQueue=this.feedbackQueue.filter(entry=>entry.command.type!=='sleep');
+        if(queued&&!inFlight&&!authoritative)return;
+        if(!this.commands.some(c=>c.type==='wake')&&!this.pending?.commands.some(c=>c.type==='wake'))this.command({type:'wake'});
+    }
+    tryActivity(point?:{x:number;y:number}){
+        if(this.paused||!this.connected||!this.session)return false;
+        const now=Date.now(),p=this.world.players[this.session.playerId];if(!p)return false;
+        if(this.workCommand?.type==='sleep'&&this.commands.includes(this.workCommand)||this.localWork?.action==='sleep'&&now<this.localWork.until){this.wakeSleep();this.held=false;return true;}
+        if(this.workCommand||this.unconfirmedSwing||this.toolLocked(now)||this.dodgePending()||this.serverNow(now)<p.dodgeUntil)return false;
+        const clicked=point?atLevel(this.world.buildings,Math.floor(point.x),Math.floor(point.y),'bed',floorLevel(this.pos)):undefined;
+        const bed=point?clicked?.kind==='bed'?clicked:undefined:Object.values(this.world.buildings).filter(b=>b.kind==='bed'&&floorLevel(b)===floorLevel(this.pos)&&distance(this.pos,{x:b.x+.5,y:b.y+.5})<=1.8).sort((a,b)=>distance(this.pos,a)-distance(this.pos,b))[0];
+        if(bed&&distance(this.pos,{x:bed.x+.5,y:bed.y+.5})<=1.8){
+            this.held=false;const position={x:bed.x+.5,y:bed.y+.75,level:floorLevel(this.pos)};
+            if(!clearLine(this.world,this.pos,position)||[-.2,.2].some(dx=>[-.2,.2].some(dy=>isBlocked(this.world,position.x+dx,position.y+dy,position.level)))){this.message('床边需要留出空间');return true;}
+            return this.startWork('sleep',{type:'sleep',target:bed.id,face:'up'},now);
+        }
+        if(nearCampfire(this.pos)&&(!point||distance(point,CAMPFIRE)<1.2)){
+            this.held=false;if(!cookingRecipe(p.inventory)){this.message('需要1条鱼、2根胡萝卜、2个番茄或3份小麦');return true;}
+            return this.startWork('cook',{type:'cook'},now);
+        }
+        return false;
+    }
     private startWork(action:WorkAction,command:Command,now:number){
         if(!this.command(command))return false;
-        this.workCommand=command;this.localWork={action,face:this.pos.face,start:now,until:now+WORK_TIMING[action].duration};
+        this.workCommand=command;
+        if(action==='sleep')return true;
+        this.localWork={action,face:this.pos.face,start:now,until:now+WORK_TIMING[action].duration};
         this.feedbackQueue.push({command,at:now+WORK_TIMING[action].contact});return true;
     }
     private act(){
         if(this.paused||!this.connected||!this.session)return;
         const now=Date.now(),p=this.world.players[this.session.playerId],item=this.slots[this.selectedSlot];
-        if(!item||!p)return;
-        const farm=this.tool==='hoe'||this.tool==='water'||this.tool==='seed';
-        if(ITEMS[item].kind==='resource'&&!farm){
-            if(now-this.lastClick>=400){if(item==='essence')this.command({type:'heal'});else if(item==='carrot'||item==='tomato')this.command({type:'eat',crop:item});this.lastClick=now;}return;
-        }
+        if(!p)return;
         if(this.workCommand||this.unconfirmedSwing||this.toolLocked(now)||this.dodgePending()||this.serverNow(now)<p.dodgeUntil)return;
         const point=this.pointer??{x:this.pos.x+(this.pos.face==='right'?1:this.pos.face==='left'?-1:0),y:this.pos.y+(this.pos.face==='down'?1:this.pos.face==='up'?-1:0)};
         const dx=point.x-this.pos.x,dy=point.y-this.pos.y;if(Math.hypot(dx,dy)>.1)this.pos.face=Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up';
+        const x=Math.floor(point.x),y=Math.floor(point.y);
+        const sign=atLevel(this.world.buildings,x,y,'sign',floorLevel(this.pos));
+        if(item!=='hammer'&&sign?.kind==='sign'&&this.readSign(sign.id))return;
+        const plot=this.world.plots?.[plotKey(x,y)];
+        if(item!=='hammer'&&this.tryActivity(point))return;
+        const ripe=plot?.crop&&cropProgress(plot,this.serverNow(now))>=CROPS[plot.crop].seconds;
+        if(item!=='hammer'&&ripe){
+            if(floorLevel(this.pos)>0||sceneAt(this.pos.x)==='mine'||distance(this.pos,{x:x+.5,y:y+.5})>2.7)return;
+            if(this.serverNow(now)<p.actionAt)return;
+            const stamp=`${x}:${y}:harvest`;
+            if(this.held&&stamp===this.buildStamp)return;
+            if(!this.startWork('harvest',{type:'harvest',x,y},now))return;
+            this.buildStamp=stamp;this.lastClick=now;return;
+        }
+        if(!item)return;
+        const berry=this.tool!=='build'&&this.tool!=='rod'?pickResource(point,this.world,this.pos):undefined;
+        if(berry?.kind==='berry'&&distance(this.pos,{x:berry.x+.5,y:berry.y+.5})<=2.5){
+            this.held=false;this.startWork('pickup',{type:'collect',target:berry.id},now);this.lastClick=now;return;
+        }
+        const farm=this.tool==='hoe'||this.tool==='water'||this.tool==='seed';
+        if(ITEMS[item].kind==='resource'&&!farm){
+            if(now-this.lastClick>=400){if(item==='essence')this.command({type:'heal'});else if((item==='carrot'||item==='tomato'||item==='meal')&&p.hp<100)this.startWork('eat',{type:'eat',food:item},now);this.lastClick=now;}return;
+        }
         if(this.tool==='build'){
             if(now-this.lastClick<300)return;
             const removing=this.remove||this.heldButton===2,cell=buildTarget(point,this.world,removing,floorLevel(this.pos)),stamp=`${cell.x}:${cell.y}:${this.part}:${removing}:${floorLevel(this.pos)}`;
             if(this.held&&stamp===this.buildStamp)return;this.buildStamp=stamp;
             if(!removing){const error=canBuild(this.world,{...p,...this.pos},cell.x,cell.y,this.part);if(error){this.message(error);return;}}
             if(!this.startWork('hammer',removing?{type:'remove',...cell}:{type:'build',...cell,part:this.part},now))return;
+        }else if(this.tool==='rod'){
+            if(!canCast(this.pos,x,y)){this.message('站在岸边，点击附近的水面');this.held=false;return;}
+            if(!this.startWork('fish',{type:'fish',x,y},now))return;
         }else if(farm){
             if(this.serverNow(now)<p.actionAt)return;
-            const x=Math.floor(point.x),y=Math.floor(point.y),plot=this.world.plots?.[plotKey(x,y)],ripe=plot?.crop&&cropProgress(plot,this.serverNow(now))>=CROPS[plot.crop].seconds;
-            const type=ripe?'harvest':this.tool==='hoe'?'till':this.tool==='water'?'water':'plant',stamp=`${x}:${y}:${type}:${this.crop}`;
+            const type=this.tool==='hoe'?'till':this.tool==='water'?'water':'plant',stamp=`${x}:${y}:${type}:${this.crop}`;
             if(this.held&&stamp===this.buildStamp)return;this.buildStamp=stamp;
-            if(type==='harvest'){if(!this.startWork('plant',{type,x,y},now))return;}
-            else if(!this.startWork(type==='till'?'hoe':type==='water'?'water':'plant',{type,x,y,crop:this.crop},now))return;
+            if(!this.startWork(type==='till'?'hoe':type==='water'?'water':'plant',{type,x,y,crop:this.crop},now))return;
         }else{
             if(this.unconfirmedSwing||this.serverNow(now)<p.actionAt)return;
             const tool=this.tool as 'axe'|'pick'|'sword';if(now-this.lastClick<TOOL_TIMING[tool].cooldown)return;
@@ -333,20 +465,20 @@ export class GameClient {
                 if(c.tool==='sword')target=this.world.mobs.find(m=>m.id===c.target&&m.hp>0&&floorLevel(m)===floorLevel(this.pos)&&distance(this.pos,m)<2.3&&clearLine(this.world,this.pos,m))??this.world.mobs.filter(m=>m.hp>0&&floorLevel(m)===floorLevel(this.pos)&&distance(this.pos,m)<1.9&&clearLine(this.world,this.pos,m)).sort((a,b)=>distance(this.pos,a)-distance(this.pos,b))[0];
                 else{const r=c.target?RESOURCE_MAP.get(c.target):undefined;if(r&&floorLevel(this.pos)===0&&!this.world.depleted[r.id]&&distance(this.pos,{x:r.x+.5,y:r.y+.5})<2.5&&c.tool===(r.kind==='tree'||r.kind==='pine'||r.kind==='berry'?'axe':'pick')){target={id:r.id,x:r.x+.5,y:r.y+.5};sound=r.kind==='tree'||r.kind==='pine'||r.kind==='berry'?'wood':'stone';amount=1;}}
                 if(target){this.predictedEvents.push({id:'predicted:'+c.id,time,x:target.x,y:target.y,kind:'hit',amount,actorId:this.session?.playerId,commandId:c.id,targetId:target.id,level:floorLevel(this.pos),predicted:true});this.audio.play(sound,.8);if(c.id)this.feedbackSeen.set(c.id,time);}
-            }else{this.audio.play(c.type==='build'||c.type==='remove'?'build':c.type==='harvest'?'harvest':c.type==='till'?'till':c.type==='water'?'water':'plant',.7);if(c.id)this.feedbackSeen.set(c.id,time);}
+            }else{if(c.type!=='sleep')this.audio.play(c.type==='build'||c.type==='remove'||c.type==='cook'?'build':c.type==='harvest'||c.type==='collect'?'harvest':c.type==='till'?'till':c.type==='water'||c.type==='fish'?'water':'plant',.7);if(c.id)this.feedbackSeen.set(c.id,time);}
         }
         this.feedbackQueue=this.feedbackQueue.filter(v=>v.at>now);
         for(const event of this.world.events){
             if(event.actorId===this.session?.playerId&&event.commandId&&this.feedbackQueue.some(entry=>entry.command.id===event.commandId&&entry.at>now))continue;
             if(this.playedEvents.has(event.id)||time-event.time>1400)continue;this.playedEvents.set(event.id,time);
-            const anticipated=['hit','harvest','build','till','plant','water'].includes(event.kind)&&!!event.commandId&&this.feedbackSeen.has(event.commandId);
+            const anticipated=['hit','harvest','build','till','plant','water','fish','meal','eat','sleep','essence'].includes(event.kind)&&!!event.commandId&&this.feedbackSeen.has(event.commandId);
             if(anticipated&&event.targetId){const mob=this.world.mobs.find(m=>m.id===event.targetId);if(mob)this.suppressedHits[mob.id]=mob.hitUntil;}
             if(anticipated||floorLevel(event)!==floorLevel(this.pos)||sceneAt(event.x)!==sceneAt(this.pos.x))continue;
             const d=distance(this.pos,event);if(d>14)continue;
             let sound:Sound|undefined;
             if(event.kind==='hit'){const r=event.amount===1?resourceAt(event.x,event.y):undefined;sound=r?(r.kind==='tree'||r.kind==='pine'||r.kind==='berry'?'wood':'stone'):'hit';}
             else if(['door','hurt','spore','harvest'].includes(event.kind))sound=event.kind as Sound;
-            else if(['wood','stone','copper','essence'].includes(event.kind))sound='harvest';
+            else if(['wood','stone','copper','essence','fish','meal'].includes(event.kind))sound='harvest';
             else if(event.actorId!==this.session?.playerId&&['build','till','plant','water'].includes(event.kind))sound=event.kind as Sound;
             if(sound)this.audio.play(sound,Math.max(.1,1-d/14),Math.max(-1,Math.min(1,(event.x-this.pos.x)/8)));
         }
@@ -423,13 +555,14 @@ export class GameClient {
             this.toggleRemove();
         if (key === 'r')
             this.command({ type: 'heal' });
-        if (key === 'f')
-            this.command({ type: e.shiftKey?'descend':'interact' });
+        if (key === 'f') {
+            if(e.shiftKey)this.command({type:'descend'});else this.interact();
+        }
         if (key === ' ')
             this.command({ type: 'dodge' });
     };
     private keyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
     private blur = () => { this.keys.clear(); this.held = false; this.heldButton=0; };
-    destroy() { this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
+    destroy() { this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
         clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu);this.canvas.removeEventListener('wheel',this.wheel); window.removeEventListener('pointerup', this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur); }
 }
