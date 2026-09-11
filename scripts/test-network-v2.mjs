@@ -26,7 +26,7 @@ for(const dbLatency of [20,80])for(const mode of ['legacy-four','v2-one-worker',
  await Promise.all(tokens.map(async(_,i)=>{const route=mode==='legacy-four'?legacy:mode==='v2-one-worker'?updated:isolates[i];const res=await request(route,i,idle(1),mode==='legacy-four'?{}:{protocol:2,poll:true});assert.equal(res.status,200);bodies.push(await res.json());times.push(Math.round(performance.now()-started));}));
  const state=JSON.parse(db.row.state);for(let i=0;i<4;i++)assert.equal(state.players['p'+i].seq,1);
  const m={mode,dbLatency,replyMs:times.sort((a,b)=>a-b),reads:db.reads,writes:db.writes,conflicts:db.conflicts,version:db.row.version};report.measurements.push(m);console.log(' ',JSON.stringify(m));
- if(mode==='v2-one-worker'){assert.equal(db.writes,1);assert.equal(db.conflicts,0);assert.ok(Math.max(...times)<dbLatency*3+60);}
+ if(mode==='v2-one-worker'){assert.equal(db.row.version,4,'each request owns its completed commit');assert.equal(db.writes-db.conflicts,4,'exactly four successful CAS commits');assert.ok(db.writes>=4&&db.writes<=24,'at most six CAS attempts per request');assert.deepEqual(bodies.map(body=>body.playerId).sort(),['p0','p1','p2','p3']);for(const body of bodies){assert.equal(body.state.players[body.playerId].seq,1);assert.equal(body.state.players[body.playerId].secret,undefined);}}
 });
 await test('v2 deltas reconstruct exact public state, removal and future schema; no secrets',async()=>{
  const {db}=fixture(1,'DELTATES');let res=await request(updated,0,idle(1),{protocol:2,poll:true});const first=await res.json();
@@ -36,11 +36,11 @@ await test('v2 deltas reconstruct exact public state, removal and future schema;
  const third=clone(rebuilt);delete third.buildings['1:1:wall'];assert.deepEqual(delta.applyWorldDelta(rebuilt,delta.worldDelta(rebuilt,third,1)),third);
  console.log('  full',JSON.stringify(first).length,'bytes; delta',JSON.stringify(second).length,'bytes');
 });
-await test('mixed valid/invalid microbatch never authenticates another player',async()=>{
+await test('concurrent valid/invalid requests never authenticates another player',async()=>{
  const {db}=fixture(1,'AUTHTEST');const good=request(updated,0,idle(1),{protocol:2,poll:true});const bad=updated.POST(new Request('https://game.test/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sync',room:db.room,token:'invalid',input:idle(1),protocol:2,poll:true})}));
  const results=await Promise.all([good,bad]);assert.deepEqual(results.map(r=>r.status),[200,403]);assert.equal(db.writes,1);assert.equal(JSON.parse(db.row.state).players.p1.seq,0);
 });
-await test('malformed null commands/movement cannot poison another player microbatch',async()=>{
+await test('malformed null commands/movement cannot poison another concurrent player',async()=>{
  const {db}=fixture(1,'BADINPUT');const outcomes=await Promise.all([
   request(updated,0,idle(1),{protocol:2,poll:true}),
   request(updated,1,{...idle(1),commands:[null]},{protocol:2,poll:true}),
