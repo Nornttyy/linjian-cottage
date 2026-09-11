@@ -1,0 +1,8 @@
+Built-in image_gen. Identity-preserving simplification and bright, rich colored shading. Original PNG bytes retained. Source reference: landscape-props-v3.png.
+
+Use case: precise-object-edit
+Input is the EXACT existing game asset. Change the palette ONLY. Preserve every existing coarse pixel cluster, silhouette, pose, shape, position, spacing, outline thickness and all atlas frames. Do not add surface detail.
+USER COLOR REQUIREMENT: bright, vivid, RICH harmonious colors throughout. Use many distinct cheerful color families with luminous midtones and softly colored shadows. Avoid black, nearblack, darknavy, deepbrown and deepforestgreen masses. Existing dark outlines must become medium colored edges related to the material (warmochre, lavendergray, mediumteal), with NO change to contour geometry. Small pupils may remain dark for readability. Do not wash out into pale monochrome; retain saturated aqua/lime/coral/gold/skyblue/lavender contrasts. No hard dark shadow blocks. No harsh contrast. Same8sprites in4columnswithtallupperband andshortlowerband. Preserve allsnow/whitebirch/pinkpurpleflowers and originalsilhouettes. Bright freshlime/mintleaves, goldenambermaple, turquoise tealpinewithwhitesnow, honeybark andlightgraystones.
+Keep EXACT original canvas dimensions and allframecells/boundingpositions; do not recenter/rearrange/resize/crop. Same user-recognizable design, plain crisp pixel surfaces, no blur, no painterly gradients, no new details or expressions.
+KeepALLoutsideemptyareasand spriteholes a flat technical magenta #FF00FF backdrop with no gradients/checkerboard/shadows/spill; preserve white/steel/flowercolors inside sprites.
+No labels, words, borders or watermarks.

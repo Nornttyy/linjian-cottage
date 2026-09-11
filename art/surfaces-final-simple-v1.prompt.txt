@@ -1,0 +1,17 @@
+Built-in image_gen. Identity-preserving simplification and bright, rich colored shading. Original PNG bytes retained. Source reference: surfaces-final.png.
+
+Use case: precise-object-edit
+Input image is the exact edit target. Simplify the SAME current game's texture atlas; no redesign.
+Composition invariants: the same entire 4x4 atlas of 16 complete square textures, in identical positions: grass, forest, path, sand / rock, snow, marsh, water / wooden plank floor, red roof, cream plaster, cave ground / cave wall, wooden beam, bridge planks, stone foundation. Keep all seams, plank directions, roof rows, major rock cracks, pebble positions and colors. All squares must remain fully opaque textures to every edge, with no margins or gutters.
+Texture change only: Remove 75% of tiny speckles and grain; use broad calm solid pixel clusters as if each tile were authored at about32x32logicalpixels and enlarged. Wood retains only major seams, knots and 2–3 broad grain lines. Do not change tile identities or overall forms.
+Retain exact canvas 1254 by 1254 pixels and original framing, positions, outlines and proportions. Crisp deliberate angular pixel blocks, no antialiasing, no smooth paint, no blur, no added outlines or darker mood.
+Full original opaque canvas; no transparency or backdrop beyond the existing scene/atlas.
+No labels, words, watermarks or framing borders. Preserve everything except finer interior texture.
+
+Next edit:
+Use case: precise-object-edit
+Input is the EXACT existing game asset. Change the palette ONLY. Preserve every existing coarse pixel cluster, silhouette, pose, shape, position, spacing, outline thickness and all atlas frames. Do not add surface detail.
+USER COLOR REQUIREMENT: bright, vivid, RICH harmonious colors throughout. Use many distinct cheerful color families with luminous midtones and softly colored shadows. Avoid black, nearblack, darknavy, deepbrown and deepforestgreen masses. Existing dark outlines must become medium colored edges related to the material (warmochre, lavendergray, mediumteal), with NO change to contour geometry. Small pupils may remain dark for readability. Do not wash out into pale monochrome; retain saturated aqua/lime/coral/gold/skyblue/lavender contrasts. No hard dark shadow blocks. No harsh contrast. Same4x4 opaque16tileatlas. Keep all tile identities, squarebounds, wood directions, roofrow structure, rockcracks. Bright honeyplanks, coral terracottaroof, creamplaster, lavendergrayrocks, mintmarsh, mediumgreenforest.
+Keep EXACT original canvas dimensions and allframecells/boundingpositions; do not recenter/rearrange/resize/crop. Same user-recognizable design, plain crisp pixel surfaces, no blur, no painterly gradients, no new details or expressions.
+Output fully opaque complete originalscene/atlas to every edge, no newbackground.
+No labels, words, borders or watermarks.

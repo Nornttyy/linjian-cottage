@@ -1,0 +1,11 @@
+Built-in image_gen. Identity-preserving simplification and bright, rich colored shading. Original PNG bytes retained. Source reference: mushroom.png.
+
+Use case: precise-object-edit.
+Asset type: production pixel-game sprite atlas; texture simplification ONLY.
+Input image 1 is the EDIT TARGET mushroom.png, not loose inspiration.
+Output full canvas: EXACTLY 1774 × 887 pixels, with 8 columns × 4 rows, exactly 32 frames.
+Preserve the original full atlas arrangement, every cell's contents and center, all frame counts and row/column order, every silhouette and outline, body proportions and size, all ground/feet/fire-root registration, every action and directional pose. No crop, no resizing sprites, no moving frames, no missing or duplicated frames.
+Orange-red spotted mushroom creature with cream stem and olive feet. Preserve cap spots as a few clean cream clusters in their existing places, cap silhouette, feet, neutral eye registration and each action pose, spore/death particle. Remove grain within red cap and stem and tiny foot highlights.
+Change ONLY interior material texture and shading: remove about 70% of tiny specks, grain, scattered highlights and gradient bands. Use broad flat angular PIXEL clusters with sharp square-edged steps, about three main shades per material, five to seven colors total per monster. Keep the current recognizable identity and current bright palette/hues. Preserve important white highlights. Eyes remain the same small neutral shape throughout corresponding actions; do not invent expressive mouths or new faces. Maintain the present sampling density and source silhouette detail; do not shrink or downsample the image to simplify it.
+Background: replace ALL empty/transparent/checkerboard background with a uniform solid RGB magenta #FF00FF technical key matte. Absolutely no checkerboard, gray/black background, gradients, magenta spill into sprites, colored rim halos, shadows outside existing sprite silhouettes, text, grid lines or labels.
+Avoid: blur, antialiasing, soft paint, 3D volume, detailed rendering, fewer animation frames, redesigning poses or body parts. Precisely edit this atlas in place.
