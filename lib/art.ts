@@ -7,8 +7,9 @@ Object.assign(heroLayouts,workHeroLayouts);
 export type Direction='down'|'up'|'right';
 export type HeroAction='harvest'|'pickup'|'eat'|'fish'|'cook'|'sleep'|'idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
 type BaseSprite='hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
-export type Sprite=BaseSprite|'rod'|'fish'|'meal'|'bed'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
+export type Sprite=BaseSprite|'rod'|'fish'|'meal'|'bed'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
+export const ART_DENSITY=2;
 export const HERO_FRAME_COUNT=8;
 export const HERO_IDLE_FRAME_COUNT=32;
 export const HERO_SIZE={width:64,height:64,anchorX:32,anchorY:48};
@@ -26,6 +27,8 @@ const slimeAnchors=[
 ];
 export const frameKey=(action:HeroAction,direction:Direction,frame:number)=>`${action}-${direction}-${frame}` as Sprite;
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c;};
+// Keep world sizes logical; sample source art directly into denser sprite buffers.
+const detailCanvas=(w:number,h:number)=>{const c=canvas(w*ART_DENSITY,h*ART_DENSITY),ctx=c.getContext('2d')!;ctx.scale(ART_DENSITY,ART_DENSITY);ctx.imageSmoothingEnabled=false;return c;};
 const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('素材加载失败'));img.src='.'+src;});
 function transparentMatte(c:HTMLCanvasElement){
     const ctx=c.getContext('2d',{willReadFrequently:true})!,data=ctx.getImageData(0,0,c.width,c.height),p=data.data,w=c.width,h=c.height;
@@ -71,7 +74,7 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
     const img=await load('/art/'+file),cells:HTMLCanvasElement[]=[];
     const layout=heroLayouts[file],tool=layout?undefined:file.match(/^hero-(axe|pick|sword)/)?.[1] as keyof typeof toolFrames|undefined;
     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
-        const bands=file==='objects-final.png'?[0,.358,.559,.777,1]:file==='icons-final.png'?[0,.27,.50,.718,1]:Array.from({length:rows+1},(_,i)=>i/rows);
+        const bands=file==='landscape-props-v2.png'?[0,550/img.height,1]:file==='objects-final.png'?[0,.358,.559,.777,1]:file==='icons-final.png'?[0,.27,.50,.718,1]:Array.from({length:rows+1},(_,i)=>i/rows);
         const startY=Math.round(bands[row]*img.height),endY=Math.round(bands[row+1]*img.height);
         const standard=[Math.round(col*img.width/cols),startY,Math.round((col+1)*img.width/cols)-Math.round(col*img.width/cols),endY-startY];
         const [x,y,w,h]=layout?.frames[row*cols+col]??(tool?toolFrames[tool][row*cols+col]:standard),inset=layout?.inset??(kind==='texture'?1:2);
@@ -82,12 +85,12 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
     }
     if(kind==='hero'&&layout){
         cells.forEach((c,i)=>{
-            const row=Math.floor(i/cols),out=canvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;
+            const row=Math.floor(i/cols),out=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;
             ctx.imageSmoothingEnabled=false;
             if(layout.scaledCellSizes&&layout.scaledAnchors){
-                const size=layout.scaledCellSizes[row],scaled=canvas(size,size),scaledContext=scaled.getContext('2d')!;
+                const size=layout.scaledCellSizes[row],scaled=detailCanvas(size,size),scaledContext=scaled.getContext('2d')!;
                 scaledContext.imageSmoothingEnabled=false;scaledContext.drawImage(c,0,0,size,size);
-                const [ax,ay]=layout.scaledAnchors[i];ctx.drawImage(scaled,HERO_SIZE.anchorX-ax,HERO_SIZE.anchorY-ay);
+                const [ax,ay]=layout.scaledAnchors[i];ctx.drawImage(scaled,HERO_SIZE.anchorX-ax,HERO_SIZE.anchorY-ay,size,size);
             }else{
                 const scale=(layout.targetHeight??31)/layout.bodyHeights[row],inset=layout.inset??2,[ax,ay]=layout.anchors[i];
                 ctx.drawImage(c,Math.round(HERO_SIZE.anchorX-(ax-inset)*scale),Math.round(HERO_SIZE.anchorY-(ay-inset)*scale),c.width*scale,c.height*scale);
@@ -99,7 +102,7 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
         for(let row=0;row<rows;row++){
             const group=cells.slice(row*cols,(row+1)*cols),boxes=group.map(bounds);
             const y0=Math.min(...boxes.map(b=>b.y0)),y1=Math.max(...boxes.map(b=>b.y1)),height=y1-y0+1;
-            group.forEach((c,col)=>{const out=canvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;const scale=tool?32/toolBodyHeights[tool][row]:32/height;
+            group.forEach((c,col)=>{const out=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;const scale=tool?32/toolBodyHeights[tool][row]:32/height;
                 const anchor=tool?toolAnchors[tool][row*cols+col][1]-2:file==='hero-motion.png'&&row<3?y1+1:boxes[col].y1+1;
                 const anchorX=tool?toolAnchors[tool][row*cols+col][0]:baseAnchorX[file]?.[row*cols+col];
                 const correction=file==='hero-walk.png'&&row===2?[-1.5,-.5,0,.5,.5,0,0,1.5][col]:file==='hero-motion.png'&&row===0&&col===7?2:file==='hero-motion.png'&&row===2&&col===3?-3.5:0;
@@ -108,21 +111,21 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
         }
     }
     if(kind==='slime')cells.forEach((c,i)=>{
-        const out=canvas(SLIME_SIZE.width,SLIME_SIZE.height),ctx=out.getContext('2d')!,scale=40/218,[x,y]=slimeAnchors[i];
+        const out=detailCanvas(SLIME_SIZE.width,SLIME_SIZE.height),ctx=out.getContext('2d')!,scale=40/218,[x,y]=slimeAnchors[i];
         ctx.imageSmoothingEnabled=false;
         ctx.drawImage(c,SLIME_SIZE.anchorX-(x-2)*scale,SLIME_SIZE.anchorY-(y-2)*scale,c.width*scale,c.height*scale);cells[i]=out;
     });
     return cells;
 }
 function idleFrames(base:HTMLCanvasElement,closed:HTMLCanvasElement,eyes:number[][]){
-    const blink=canvas(HERO_SIZE.width,HERO_SIZE.height),ctx=blink.getContext('2d')!;
-    ctx.drawImage(base,0,0);
+    const blink=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=blink.getContext('2d')!;
+    ctx.drawImage(base,0,0,HERO_SIZE.width,HERO_SIZE.height);
     // Copy only the eyelids from the original full-body sprite, at native scale.
-    for(const [sx,sy,dx,dy] of eyes)ctx.drawImage(closed,sx,sy,2,2,dx,dy,2,2);
+    for(const [sx,sy,dx,dy] of eyes)ctx.drawImage(closed,sx*ART_DENSITY,sy*ART_DENSITY,2*ART_DENSITY,2*ART_DENSITY,dx,dy,2,2);
     return Array.from({length:HERO_IDLE_FRAME_COUNT},(_,frame)=>{
-        const out=canvas(HERO_SIZE.width,HERO_SIZE.height);
+        const out=detailCanvas(HERO_SIZE.width,HERO_SIZE.height);
         const bob=Math.round(Math.sin(frame/HERO_IDLE_FRAME_COUNT*Math.PI*2)*.6);
-        out.getContext('2d')!.drawImage(frame===27||frame===28?blink:base,0,bob);
+        out.getContext('2d')!.drawImage(frame===27||frame===28?blink:base,0,bob,HERO_SIZE.width,HERO_SIZE.height);
         return out;
     });
 }
@@ -131,9 +134,9 @@ async function creatureSheet(kind:string){
     return layout.frames.map(([x,y,w,h],i)=>{
         const source=canvas(w,h);source.getContext('2d')!.drawImage(img,x,y,w,h,0,0,w,h);transparentMatte(source);
         const [sw,sh]=layout.scaledSizes?.[i]??[Math.round(w*layout.scale),Math.round(h*layout.scale)];
-        const resized=canvas(sw,sh),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(source,0,0,sw,sh);
+        const resized=detailCanvas(sw,sh),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(source,0,0,sw,sh);
         const [ax,ay]=layout.scaledAnchors?.[i]??layout.anchors[i].map(v=>Math.round(v*layout.scale));
-        const out=canvas(layout.size[0],layout.size[1]);out.getContext('2d')!.drawImage(resized,layout.anchor[0]-ax,layout.anchor[1]-ay);return out;
+        const out=detailCanvas(layout.size[0],layout.size[1]);out.getContext('2d')!.drawImage(resized,layout.anchor[0]-ax,layout.anchor[1]-ay,sw,sh);return out;
     });
 }
 async function creatureDirections(kind:'boar'|'mushroom'){
@@ -148,7 +151,7 @@ async function creatureDirections(kind:'boar'|'mushroom'){
     const scale=(kind==='boar'?29:25)/Math.max(...bodyBoxes.map(b=>Math.max(b.x1-b.x0+1,b.y1-b.y0+1)));
     // One scale for the entire sheet. Register feet without resizing each pose.
     return cells.map((cell,i)=>{
-        const out=canvas(SLIME_SIZE.width,SLIME_SIZE.height),ctx=out.getContext('2d')!;
+        const out=detailCanvas(SLIME_SIZE.width,SLIME_SIZE.height),ctx=out.getContext('2d')!;
         ctx.imageSmoothingEnabled=false;
         ctx.drawImage(cell,Math.round(SLIME_SIZE.anchorX-cell.width*scale/2),Math.round(SLIME_SIZE.anchorY-(boxes[i].y1+1)*scale),cell.width*scale,cell.height*scale);
         return out;
@@ -165,9 +168,13 @@ async function loadAll():Promise<Atlas>{
     ]);
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
+    const [landTextures,landProps,landmarks]=await Promise.all([sheet('landscape-terrain-v2.png',4,3,'texture'),sheet('landscape-props-v2.png',4,2,'prop'),sheet('landscape-landmarks-v2.png',2,2,'prop')]);
+    assign(['region-oak','region-birch','region-maple','region-snowpine','region-berry','region-stone','flowers-white','flowers-pink'],landProps);
+    assign(['ancient-oak','frost-cairn','sunstone-circle','firefly-meadow'],landmarks);
     assign(['rod','fish','meal','bed'],activityItems);
     art.bed=beds[0];
     assign(['ground-grass','ground-forest','ground-path','ground-sand','ground-rock','ground-snow','ground-marsh','ground-water','floor','roof','plaster','ground-cave-floor','ground-cave-wall','beam','bridge','foundation'],materials);
+    assign(['ground-grass','ground-forest','ground-water','ground-sand','ground-rock','ground-snow','ground-marsh','ground-path','ground-cave-floor','ground-cave-wall','ground-meadow','ground-moss'],landTextures);
     assign(['tree','pine','stone','copper','berry','stump','daisies','reeds','wall','window','door','door-open','fire0','fire1','fire2','chest'],objects);
     assign(['wall-face','wall-cap','roof','roof-ridge','soil-dry','soil-wet'],textures);
     assign(['hammer','hoe','water','seed-bag','stairs','stairs-down','ascend','descend','planter','fence','lantern','sign','carrot-seed','tomato-seed','wheat-seed','water-drop'],home);
@@ -175,7 +182,7 @@ async function loadAll():Promise<Atlas>{
     assign(['carrot','tomato','wheat'],farmCells.slice(12,15).map(cropped));
     for(const [row,crop]of(['carrot','tomato','wheat'] as const).entries()){
         const scale=farmLayout.rowScales[row];
-        for(let f=0;f<4;f++){const i=row*4+f,c=farmCells[i],[ax,ay]=farmLayout.anchors[i],out=canvas(CROP_SIZE.width,CROP_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(c,Math.round(CROP_SIZE.anchorX-ax*scale),Math.round(CROP_SIZE.anchorY-ay*scale),c.width*scale,c.height*scale);art[`crop-${crop}-${f}`]=out;}
+        for(let f=0;f<4;f++){const i=row*4+f,c=farmCells[i],[ax,ay]=farmLayout.anchors[i],out=detailCanvas(CROP_SIZE.width,CROP_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(c,Math.round(CROP_SIZE.anchorX-ax*scale),Math.round(CROP_SIZE.anchorY-ay*scale),c.width*scale,c.height*scale);art[`crop-${crop}-${f}`]=out;}
     }
     for(const [kind,cells]of [['bat',bat],['boar',boar],['mushroom',mushroom]] as const){for(let row=0;row<3;row++)for(let f=0;f<8;f++)art[`${kind}-${(['idle','move','attack'] as const)[row]}-${f}`]=cells[row*8+f];for(let f=0;f<4;f++){art[`${kind}-hurt-${f}`]=cells[24+f];art[`${kind}-death-${f}`]=cells[28+f];}}
     for(const [kind,cells]of [['boar',boarDirections],['mushroom',mushroomDirections]] as const)for(const [direction,dir]of(['right','up'] as const).entries()){
@@ -183,7 +190,7 @@ async function loadAll():Promise<Atlas>{
         for(let row=0;row<3;row++)for(let f=0;f<8;f++)art[`${kind}-${dir}-${(['idle','move','attack'] as const)[row]}-${f}`]=cells[start+row*8+f];
         for(let f=0;f<4;f++){art[`${kind}-${dir}-hurt-${f}`]=cells[start+24+f];art[`${kind}-${dir}-death-${f}`]=cells[start+28+f];}
     }
-    const base=canvas(FIRE_SIZE.width,FIRE_SIZE.height),baseContext=base.getContext('2d')!,baseScale=34/263;
+    const base=detailCanvas(FIRE_SIZE.width,FIRE_SIZE.height),baseContext=base.getContext('2d')!,baseScale=34/263;
     baseContext.imageSmoothingEnabled=false;
     baseContext.drawImage(fire[0],FIRE_SIZE.anchorX-(184-2)*baseScale,FIRE_SIZE.anchorY-(343-2)*baseScale,fire[0].width*baseScale,fire[0].height*baseScale);
     // Register the fire root, not the changing silhouette or detached sparks.
@@ -194,8 +201,8 @@ async function loadAll():Promise<Atlas>{
         [126,213],[126,214],[127,213],[129,213],[130,214],[130,213]
     ];
     flameRoots.forEach(([x,y],i)=>{
-        const out=canvas(FIRE_SIZE.width,FIRE_SIZE.height),ctx=out.getContext('2d')!,flame=flames[i],scale=.116;
-        ctx.imageSmoothingEnabled=false;ctx.drawImage(base,0,0);
+        const out=detailCanvas(FIRE_SIZE.width,FIRE_SIZE.height),ctx=out.getContext('2d')!,flame=flames[i],scale=.116;
+        ctx.imageSmoothingEnabled=false;ctx.drawImage(base,0,0,FIRE_SIZE.width,FIRE_SIZE.height);
         ctx.drawImage(flame,32-(x-2)*scale,45-(y-2)*scale,flame.width*scale,flame.height*scale);
         art[`fire${i}`]=out;
     });

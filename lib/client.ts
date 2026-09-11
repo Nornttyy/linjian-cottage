@@ -93,6 +93,7 @@ export class GameClient {
     private flushRequested = false;
     private buildStamp = '';
     private generation = 0;
+    private connectionIntent:{mode:'resume'|'create'|'join';room:string}={mode:'resume',room:''};
     private fadeUntil = 0;
     private networkVersion=1;
     private worldVersion:number|undefined;
@@ -136,12 +137,15 @@ export class GameClient {
         }
         return result;
     }
+    retryConnection(){return this.connect(this.connectionIntent.mode,this.connectionIntent.room);}
     async connect(mode: 'resume' | 'create' | 'join' = 'resume', room = '') {
+        if(this.disposed)return;
+        this.connectionIntent={mode,room};
         this.signSave?.resolve('已切换世界');this.signSave=null;if(this.activeSignId){this.activeSignId=null;this.signToggle(null);}
         const generation = ++this.generation;
         if (this.timer)
             clearTimeout(this.timer);
-        this.keys.clear();
+        this.pauseControls();
         this.pending = null;
         this.flushRequested = false;
         this.localSwing = null;
@@ -153,9 +157,9 @@ export class GameClient {
         this.error = '';
         this.notify();
         try {
-            let saved: Session | null = null;
+            let saved: Session | null = this.session;
             try {
-                saved = JSON.parse(localStorage.getItem('linjian-session') || 'null');
+                if(!saved)saved = JSON.parse(localStorage.getItem('linjian-session') || 'null');
             }
             catch { }
             const valid = saved && typeof saved.token === 'string' && typeof saved.room === 'string' && typeof saved.playerId === 'string';
@@ -164,7 +168,7 @@ export class GameClient {
             if (this.disposed || generation !== this.generation)
                 return;
             this.session = { room: result.room, playerId: result.playerId, token: result.token || (valid ? saved!.token : '') };
-            localStorage.setItem('linjian-session', JSON.stringify(this.session));
+            try{localStorage.setItem('linjian-session', JSON.stringify(this.session));}catch{}
             this.world = result.state;
             this.worldVersion=result.version;
 
@@ -173,10 +177,12 @@ export class GameClient {
             this.seq = p.seq;
             this.loadLayout();
             this.connected = true;
+            this.connectionIntent={mode:'resume',room:''};
             this.notify();
             this.timer = setTimeout(() => this.sync(), 160);
         }
         catch (e) {
+            if(this.disposed||generation!==this.generation)return;
             this.error = e instanceof Error ? e.message : '连接失败';
             this.notify();
         }

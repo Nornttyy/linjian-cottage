@@ -6,6 +6,11 @@ export const layer=(part:Part)=>part==='floor'?'floor':part==='roof'?'roof':['wa
 // Ground-floor keys stay byte-for-byte compatible with saved homes.
 export const buildingKey=(x:number,y:number,part:Part,level=0)=>`${x}:${y}:${layer(part)}${level?':'+level:''}`;
 export const atLevel=(buildings:Readonly<Record<string,Building>>,x:number,y:number,part:Part,level=0)=>buildings[buildingKey(x,y,part,level)];
+export function stairAt(buildings:Readonly<Record<string,Building>>,x:number,y:number,level=0){
+    for(const base of [level,level-1])if(base>=0)for(const dx of [0,1])for(const dy of [0,1]){
+        const b=atLevel(buildings,x-dx,y-dy,'stairs',base);if(b?.kind==='stairs')return b;
+    }
+}
 export const PART_NAMES:Record<Part,string>={floor:'地板',wall:'木墙',window:'窗墙',door:'木门',roof:'屋顶',stairs:'楼梯',planter:'花盆',fence:'栅栏',lantern:'提灯',sign:'路牌',bed:'床'};
 export const COSTS:Record<Part,Partial<Record<'wood'|'stone'|'copper',number>>>={floor:{wood:2},wall:{wood:3},window:{wood:3,stone:1},door:{wood:4},roof:{wood:2},stairs:{wood:20,stone:4},planter:{wood:3,stone:2},fence:{wood:2},lantern:{wood:2,copper:1},sign:{wood:2},bed:{wood:12}};
 export function wallLinks(buildings:Readonly<Record<string,Building>>,x:number,y:number,level=0){

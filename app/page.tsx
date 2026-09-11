@@ -1,2 +1,2 @@
-import Game from '@/components/Game';
-export default function Home() { return <Game />; }
+import GameShell from '@/components/GameShell';
+export default function Home() { return <GameShell />; }

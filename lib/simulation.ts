@@ -2,7 +2,7 @@ import {ACTIVITY_TIMING,CAMPFIRE,FOOD_HEAL,cookingRecipe,nearCampfire,canCast,ty
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
 import {CROPS,FARM_WATER_MS,cropProgress,growPlot,soilRecovery,plotKey,type CropKind,type Plot} from './farming';
 import {CREATURES,CREATURE_SPAWNS,type CreatureKind} from './creatures';
-import {atLevel,buildingKey,floorLevel,canReachGround,wallRects,wallOccupies,layer,MAX_LEVEL,COSTS,PART_NAMES,SIGN_TEXT_LIMIT,normalizeSignText,type Part,type Building} from './structures';
+import {atLevel,stairAt,buildingKey,floorLevel,canReachGround,wallRects,wallOccupies,layer,MAX_LEVEL,COSTS,PART_NAMES,SIGN_TEXT_LIMIT,normalizeSignText,type Part,type Building} from './structures';
 export {buildingKey,layer,COSTS,PART_NAMES};
 export type {Part,Building};
 export type Tool = 'axe' | 'pick' | 'sword' | 'build' | 'hoe' | 'water' | 'seed' | 'rod';
@@ -329,6 +329,7 @@ export function canBuild(s:WorldState,p:Player,x:number,y:number,part:Part):stri
     if(resource&&!s.depleted[resource.id])return '先清理资源';
     if(s.plots?.[plotKey(x,y)]&&level===0)return '这里是耕地';
     if(atLevel(s.buildings,x,y,part,level))return '已被占用';
+    if(part!=='floor'&&part!=='roof'&&part!=='stairs'&&stairAt(s.buildings,x,y,level))return '保留楼梯出入口';
     const outdoor=level===0&&['fence','planter','lantern','sign'].includes(part);
     if(part!=='floor'&&!outdoor&&!atLevel(s.buildings,x,y,'floor',level))return '需要地板';
     if(part==='floor'&&level>0){
@@ -341,7 +342,13 @@ export function canBuild(s:WorldState,p:Player,x:number,y:number,part:Part):stri
         for(const [dx,dy]of[[0,0],[1,0],[0,1],[1,1]]){
             if(!atLevel(s.buildings,x+dx,y+dy,'floor',level))return '楼梯需要二乘二地板';
             if(atLevel(s.buildings,x+dx,y+dy,'roof',level))return '先拆除楼梯上方屋顶';
-            if(atLevel(s.buildings,x+dx,y+dy,'wall',level+1))return '楼上出口被占用';
+            for(const storey of [level,level+1]){
+                if(atLevel(s.buildings,x+dx,y+dy,'wall',storey))return '楼梯出入口不能有墙';
+                const fixture=atLevel(s.buildings,x+dx,y+dy,'stairs',storey);
+                if(fixture&&!(fixture.kind==='stairs'&&fixture.x===x&&fixture.y===y))return '楼梯出入口被占用';
+                const reserved=stairAt(s.buildings,x+dx,y+dy,storey);
+                if(reserved&&(reserved.x!==x||reserved.y!==y))return '楼梯洞口不能重叠';
+            }
         }
     }
     if(part==='roof'&&atLevel(s.buildings,x,y,'floor',level+1))return '上方已有楼层';
@@ -534,7 +541,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         if(part==='stairs')for(const [dx,dy]of[[0,0],[1,0],[0,1],[1,1]]){const key=buildingKey(x+dx,y+dy,'floor',level+1);s.buildings[key]??={id:key,x:x+dx,y:y+dy,kind:'floor',level:level+1};}
         const start=Number.isFinite(c.issuedAt)?Math.max(now-2000,Math.min(now,c.issuedAt!)):now;
         p.workAction='hammer';p.workStart=start;p.workUntil=start+WORK_TIMING.hammer.duration;p.swingUntil=p.workUntil;p.swingFace=c.face??p.face;p.moveCredit=Math.max(0,(now-p.swingUntil)/1000);
-        emit(s,'build',x+.5,y+.5,0,now,{actorId:p.id,commandId:c.id,level});
+        emit(s,'build',x+.5,y+.5,0,now,{actorId:p.id,commandId:c.id,targetId:id,level});
         return null;
     }
     if (c.type === 'remove') {

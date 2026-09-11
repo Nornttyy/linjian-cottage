@@ -35,7 +35,7 @@ try {
     const player = sim.createPlayer('p', 'test-secret', 'Audit', 0, now);
     state.players.p = player;
     const canvas = {
-      width: 800, height: 400, clientWidth: 1600, clientHeight: 800,
+      width: 1600, height: 800, clientWidth: 1600, clientHeight: 800,
       addEventListener() {}, removeEventListener() {},
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600, height: 800 }),
     };
@@ -227,7 +227,7 @@ try {
         return offscreen;
       } };
       const art = new Proxy({}, { get: (obj, name) => obj[name] ??= { name, width: 24, height: 24 } });
-      const canvas = { width: 800, height: 400, clientWidth: 1600, clientHeight: 800, getContext: () => ctx };
+      const canvas = { width: 1600, height: 800, clientWidth: 1600, clientHeight: 800, getContext: () => ctx };
       f.player.inventory.wood = 100;
       for (const kind of ['floor', 'roof']) {
         const id = sim.buildingKey(259, 322, kind);
@@ -237,9 +237,10 @@ try {
       const roofs = draws.filter(d => d.name === 'roof');
       assert.equal(roofs.length, 1, 'only the authoritative placed roof is rendered');
       const ox=Math.round(400-f.client.pos.x*24),oy=Math.round(200-f.client.pos.y*24);
-      assert.deepEqual(roofs[0].bounds,[259*24+ox,322*24+oy-22,260*24+ox,323*24+oy-22]);
+      assert.equal(canvas.width,1600);assert.equal(canvas.height,800);
+      assert.deepEqual(roofs[0].bounds,[259*24+ox,322*24+oy-22,260*24+ox,323*24+oy-22].map(v=>v*2));
       const hammers=draws.filter(d=>d.name==='hammer');assert.equal(hammers.length,1);
-      const hx=Math.round(259.5*24+ox),hy=Math.round(322.5*24+oy);assert.deepEqual(hammers[0].bounds,[hx-3,hy-17,hx+14,hy+3]);
+      const hx=Math.round(259.5*24+ox),hy=Math.round(322.5*24+oy);assert.deepEqual(hammers[0].bounds,[hx-3,hy-17,hx+14,hy+3].map(v=>v*2));
     } finally { f.client.destroy(); }
   });
 

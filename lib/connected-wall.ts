@@ -1,4 +1,4 @@
-import type {Atlas} from './art';
+import {ART_DENSITY,type Atlas} from './art';
 import {atLevel,floorLevel,wallLinks,wallRects,wallOccupies,type Building} from './structures';
 import {material} from './tiles';
 type Walls=Readonly<Record<string,Building>>;
@@ -51,8 +51,8 @@ function wallStamp(art:Atlas,buildings:Walls,b:Building){
     });
     const key=[b.kind,!!b.open,...neighbors,b.x%2,b.y%2].join(':');let stamp=cache.get(key);
     if(!stamp){
-        const image=document.createElement('canvas');image.width=40;image.height=64;
-        const context=image.getContext('2d',{willReadFrequently:true})!;context.imageSmoothingEnabled=false;
+        const image=document.createElement('canvas');image.width=40*ART_DENSITY;image.height=64*ART_DENSITY;
+        const context=image.getContext('2d',{willReadFrequently:true})!;context.imageSmoothingEnabled=false;context.scale(ART_DENSITY,ART_DENSITY);
         drawWallUncached(context,art,buildings,b,-b.x*24+8,-b.y*24+32);stamp={image};
         if(cache.size>=512)cache.delete(cache.keys().next().value!);cache.set(key,stamp);
     }
@@ -62,17 +62,18 @@ function wallStamp(art:Atlas,buildings:Walls,b:Building){
 // Fading multiple wall layers therefore never darkens overlapping faces twice.
 export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building):readonly WallLayer[]{
     const stamp=wallStamp(art,buildings,b);if(stamp.layers)return stamp.layers;
-    const context=stamp.image.getContext('2d')!,pixels=context.getImageData(0,0,40,64).data;
+    const sourceWidth=40*ART_DENSITY,sourceHeight=64*ART_DENSITY;
+    const context=stamp.image.getContext('2d')!,pixels=context.getImageData(0,0,sourceWidth,sourceHeight).data;
     const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level),shape=wallLayout(buildings,b.x,b.y,level),height=b.kind==='fence'?10:19;
     let facade:Uint8ClampedArray|undefined;
     if(!shape.vertical&&(b.kind==='door'||b.kind==='window')){
-        const mask=document.createElement('canvas');mask.width=40;mask.height=64;const ctx=mask.getContext('2d',{willReadFrequently:true})!;ctx.imageSmoothingEnabled=false;
-        ctx.drawImage(art[b.kind==='door'?(b.open?'door-open':'door'):'window'],10,19,20,29);facade=ctx.getImageData(0,0,40,64).data;
+        const mask=document.createElement('canvas');mask.width=sourceWidth;mask.height=sourceHeight;const ctx=mask.getContext('2d',{willReadFrequently:true})!;ctx.imageSmoothingEnabled=false;ctx.scale(ART_DENSITY,ART_DENSITY);
+        ctx.drawImage(art[b.kind==='door'?(b.open?'door-open':'door'):'window'],10,19,20,29);facade=ctx.getImageData(0,0,sourceWidth,sourceHeight).data;
     }
     const groups=new Map<number,{indices:number[];left:number;top:number;right:number;bottom:number}>();
-    for(let sy=0;sy<64;sy++)for(let sx=0;sx<40;sx++){
-        const index=(sy*40+sx)*4;if(!pixels[index+3])continue;
-        const x=sx-8,y=sy-32;let depth=-Infinity;
+    for(let sy=0;sy<sourceHeight;sy++)for(let sx=0;sx<sourceWidth;sx++){
+        const index=(sy*sourceWidth+sx)*4;if(!pixels[index+3])continue;
+        const x=Math.floor(sx/ART_DENSITY)-8,y=Math.floor(sy/ART_DENSITY)-32;let depth=-Infinity;
         for(const [rx,ry,w,h]of rects)if(x>=rx&&x<rx+w&&y>=ry-height&&y<ry+h)depth=Math.max(depth,Math.min(y+height+1,ry+h));
         if(facade?.[index+3])depth=15;
         if(!Number.isFinite(depth))depth=shape.vertical?Math.max(1,Math.min(24,y+height+1)):15;
@@ -84,14 +85,14 @@ export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building):readon
     const ctx=packed.getContext('2d')!,output=ctx.createImageData(packed.width,packed.height),layers:WallLayer[]=[];let cursor=0;
     for(const [depth,g]of rows){
         const width=g.right-g.left+1,height=g.bottom-g.top+1;
-        for(const i of g.indices){const pixel=i/4,x=pixel%40-g.left,y=Math.floor(pixel/40)-g.top+cursor;output.data.set(pixels.subarray(i,i+4),(y*packed.width+x)*4);}
-        layers.push({image:packed,sx:0,sy:cursor,width,height,x:g.left-8,y:g.top-32,depth:depth/24});cursor+=height;
+        for(const i of g.indices){const pixel=i/4,x=pixel%sourceWidth-g.left,y=Math.floor(pixel/sourceWidth)-g.top+cursor;output.data.set(pixels.subarray(i,i+4),(y*packed.width+x)*4);}
+        layers.push({image:packed,sx:0,sy:cursor,width:width/ART_DENSITY,height:height/ART_DENSITY,x:g.left/ART_DENSITY-8,y:g.top/ART_DENSITY-32,depth:depth/24});cursor+=height;
     }
     ctx.putImageData(output,0,0);stamp.layers=layers;return layers;
 }
 export function drawWallLayer(ctx:CanvasRenderingContext2D,part:WallLayer,b:Building,ox:number,oy:number){
-    ctx.drawImage(part.image,part.sx,part.sy,part.width,part.height,b.x*24+ox+part.x,b.y*24+oy+part.y,part.width,part.height);
+    ctx.drawImage(part.image,part.sx,part.sy,part.width*ART_DENSITY,part.height*ART_DENSITY,b.x*24+ox+part.x,b.y*24+oy+part.y,part.width,part.height);
 }
 export function drawConnectedWall(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
-    ctx.drawImage(wallStamp(art,buildings,b).image,b.x*24+ox-8,b.y*24+oy-32);
+    ctx.drawImage(wallStamp(art,buildings,b).image,b.x*24+ox-8,b.y*24+oy-32,40,64);
 }

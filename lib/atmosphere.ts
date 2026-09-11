@@ -1,5 +1,6 @@
 import {CAVE_ENTRANCE,MINE_TORCHES,resourcesInRect,SPAWN,sceneAt,terrainAt} from './world';
 import type {Atlas} from './art';
+import {resourceSprite} from './landscape';
 import type {WorldState} from './simulation';
 import {floorLevel} from './structures';
 type Camera={x:number;y:number;level?:number};
@@ -80,6 +81,6 @@ export function treeShadows(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera
     ctx.save();ctx.globalAlpha=.08;ctx.globalCompositeOperation='multiply';
     for(const r of resourcesInRect(pos.x-20,pos.y-15,pos.x+20,pos.y+15)){
         if((r.kind!=='tree'&&r.kind!=='pine')||s.depleted[r.id]||Math.abs(r.x-pos.x)>20||Math.abs(r.y-pos.y)>15)continue;
-        ctx.save();ctx.translate((r.x+.5)*24+ox,(r.y+1)*24+oy);ctx.transform(1,.18,-.55,.36,0,0);ctx.drawImage(art[r.kind],-22,-58,44,58);ctx.restore();
+        ctx.save();ctx.translate((r.x+.5)*24+ox,(r.y+1)*24+oy);ctx.transform(1,.18,-.55,.36,0,0);ctx.drawImage(art[resourceSprite(r)],-22,-58,44,58);ctx.restore();
     }ctx.restore();
 }

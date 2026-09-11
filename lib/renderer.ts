@@ -1,6 +1,6 @@
 import { COLORS, resourcesInRect, resourceAt, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { distance, type WorldState, type Player, type Part, type Tool } from './simulation';
-import { HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, CROP_SIZE, type Atlas, type Sprite } from './art';
+import { ART_DENSITY, HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, CROP_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
 import {drawConnectedWall,connectedWallLayers,drawWallLayer,floorWallInsets} from './connected-wall';
 import {atmosphere,treeShadows} from './atmosphere';
@@ -10,6 +10,9 @@ import {cropStage,soilOpacity,type Plot} from './farming';
 import {CREATURES} from './creatures';
 import type {GameEvent} from './simulation';
 import {roofVisibility} from './roof-visibility';
+import {buildGuide,drawBuildGrid,drawBuildTarget} from './build-guide';
+import {drawLandscape,resourceSprite} from './landscape';
+import {NATURAL_LANDMARKS,landmarkCenter} from './map-features';
 export const TILE = 24;
 export function roofRect(x:number,y:number,ox:number,oy:number){return [x*TILE+ox,y*TILE+oy-22,24,24] as const;}
 export function buildTarget(point:{x:number;y:number},s:WorldState,remove:boolean,level=0){
@@ -48,8 +51,16 @@ export function worldMap() { if (ground)
     for (let x = 0; x < 512; x++) {
         ctx.fillStyle = COLORS[terrainAt(x, y)];
         ctx.fillRect(x, y, 1, 1);
-    } return ground; }
-export function pointerWorld(canvas: HTMLCanvasElement, pos: Position, x: number, y: number) { const box = canvas.getBoundingClientRect(); return { x: (x - box.left) * canvas.width / box.width / TILE + pos.x - canvas.width / 2 / TILE, y: (y - box.top) * canvas.height / box.height / TILE + pos.y - canvas.height / 2 / TILE }; }
+    }
+    // A quiet canopy pattern makes wooded regions legible without hiding paths.
+    ctx.fillStyle='#3d71532e';
+    for(const r of resourcesInRect(0,0,511,511))if((r.kind==='tree'||r.kind==='pine')&&(r.x+r.y)%3===0){ctx.beginPath();ctx.arc(r.x,r.y,1.3,0,Math.PI*2);ctx.fill();}
+    return ground; }
+export function pointerWorld(canvas: HTMLCanvasElement, pos: Position, x: number, y: number) {
+    const box=canvas.getBoundingClientRect(),w=canvas.width/ART_DENSITY,h=canvas.height/ART_DENSITY;
+    const ox=Math.round(w/2-pos.x*TILE),oy=Math.round(h/2-pos.y*TILE);
+    return{x:((x-box.left)*w/box.width-ox)/TILE,y:((y-box.top)*h/box.height-oy)/TILE};
+}
 export function pickResource(point: {
     x: number;
     y: number;
@@ -78,18 +89,19 @@ const slimeViews=new WeakMap<HTMLCanvasElement,{roomKey:string;created:number;po
 
 export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos: Position, view: View, art: Atlas) {
     const w = Math.max(1, Math.floor(canvas.clientWidth / 2)), h = Math.max(1, Math.floor(canvas.clientHeight / 2));
-    if (canvas.width !== w)
-        canvas.width = w;
-    if (canvas.height !== h)
-        canvas.height = h;
+    if (canvas.width !== w*ART_DENSITY)
+        canvas.width = w*ART_DENSITY;
+    if (canvas.height !== h*ART_DENSITY)
+        canvas.height = h*ART_DENSITY;
     const ctx = canvas.getContext('2d')!;
+    ctx.setTransform(ART_DENSITY,0,0,ART_DENSITY,0,0);
     ctx.imageSmoothingEnabled = false;
     const ox = Math.round(w / 2 - pos.x * TILE), oy = Math.round(h / 2 - pos.y * TILE), t = view.time;
     const minX = Math.floor(-ox / TILE) - 1, maxX = Math.ceil((w - ox) / TILE) + 1, minY = Math.floor(-oy / TILE) - 3, maxY = Math.ceil((h - oy) / TILE) + 4;
     const underground=sceneAt(pos.x)==='mine',level=floorLevel(pos),buildings=Object.values(s.buildings),groundOy=oy+floorLevel(pos)*TILE;
     const events=[...s.events.filter(e=>!(e.kind==='hit'&&e.commandId&&view.settledCommands?.has(e.commandId))),...(view.predictedEvents??[])];
     for(let y=minY;y<maxY;y++)for(let x=minX;x<maxX;x++){
-        terrainTile(ctx,art,x,y,ox,groundOy);
+        terrainTile(ctx,art,x,y,ox,groundOy,t);
         const terrain=terrainAt(x,y),px=x*TILE+ox,py=y*TILE+groundOy;
         const detail=((x*73)^(y*137)^(Math.floor(x/5)*37))>>>0;
         if(terrain==='water'){
@@ -105,6 +117,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         }
         if(terrain==='path'&&x>275&&x<291&&y>=317&&y<=320)material(ctx,art.bridge,x,y,px,py);
     }
+    if(!underground)drawLandscape(ctx,s,art,ox,groundOy,{minX,minY:minY-level,maxX,maxY});
     if(underground)for(let y=minY;y<maxY;y++)for(let x=minX;x<maxX;x++){
         if(terrainAt(x,y)==='cave-wall'&&terrainAt(x,y+1)==='cave-floor'){
             material(ctx,art['ground-cave-wall'],x,y,x*TILE+ox,y*TILE+oy+18,24,15);
@@ -165,7 +178,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                     if(!visible(r.x,r.y))continue;
                     if(s.depleted[r.id]){if(r.kind==='tree'||r.kind==='pine')sprite('stump',r.x+.5,r.y+1+level,14,12);continue;}
                     const tree=r.kind==='tree'||r.kind==='pine';
-                    below.push({y:r.y+.8+level,draw:()=>sprite(r.kind,r.x+.5,r.y+1+level,tree?43:r.kind==='berry'?24:25,tree?58:r.kind==='berry'?21:24)});
+                    below.push({y:r.y+.8+level,draw:()=>sprite(resourceSprite(r),r.x+.5,r.y+1+level,tree?43:r.kind==='berry'?24:25,tree?58:r.kind==='berry'?21:24)});
                 }
                 for(const plot of Object.values(s.plots??{}))if(visible(plot.x,plot.y)){
                     ctx.save();ctx.globalAlpha*=soilOpacity(plot,t);material(ctx,art[plot.wetUntil>t?'soil-wet':'soil-dry'],plot.x,plot.y,plot.x*TILE+ox,plot.y*TILE+groundOy);ctx.restore();
@@ -203,7 +216,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                 sprite('stump', r.x + .5, r.y + 1, 14, 12);
             continue;
         }
-        drawables.push({ y: r.y + .8, draw: () => { const tree = r.kind === 'tree' || r.kind === 'pine', near = tree && Math.abs(pos.x - r.x - .5) < 1.1 && pos.y < r.y + .8 && pos.y > r.y - 1.6; const recent = events.some(e => e.kind === 'hit' && t - e.time < 200 && Math.abs(e.x - r.x - .5) < .1 && Math.abs(e.y - r.y - .5) < .1); sprite(r.kind, r.x + .5 + (recent ? Math.sin(t * .06) * .06 : 0), r.y + 1, tree ? 43 : r.kind === 'berry' ? 24 : 25, tree ? 58 : r.kind === 'berry' ? 21 : 24, near ? .5 : 1); } });
+        drawables.push({ y: r.y + .8, draw: () => { const tree = r.kind === 'tree' || r.kind === 'pine', near = tree && Math.abs(pos.x - r.x - .5) < 1.1 && pos.y < r.y + .8 && pos.y > r.y - 1.6; const recent = events.some(e => e.kind === 'hit' && t - e.time < 200 && Math.abs(e.x - r.x - .5) < .1 && Math.abs(e.y - r.y - .5) < .1); sprite(resourceSprite(r), r.x + .5 + (recent ? Math.sin(t * .06) * .06 : 0), r.y + 1, tree ? 43 : r.kind === 'berry' ? 24 : 25, tree ? 58 : r.kind === 'berry' ? 21 : 24, near ? .5 : 1); } });
     }
     for (const b of Object.values(s.buildings)) {
         if (!visible(b.x, b.y) || floorLevel(b)!==level || b.kind === 'floor' || b.kind === 'roof')
@@ -282,6 +295,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                 if(!local){ctx.fillStyle=['#ffe7a1','#f8a77d','#7cc9e2','#c8a0e8'][p.color%4];ctx.fillRect(point.x*TILE+ox-3,point.y*TILE+oy-37,6,2);}
             } });
     }
+    if(view.tool==='build')drawBuildGrid(ctx,ox,oy,w,h);
     drawables.sort((a, b) => a.y - b.y).forEach(d => d.draw());
     const indoors=roofGroup(s,pos),roofs=buildings.filter(b=>b.kind==='roof'&&floorLevel(b)>=level),covers=buildings.filter(b=>b.kind==='floor'&&floorLevel(b)>level);
     const roofOpacity=roofVisibility(canvas,`${view.roomKey??s.created}:${id}:${sceneAt(pos.x)}:${level}`,[...roofs,...covers],indoors,t);
@@ -301,8 +315,10 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         if(!atLevel(s.buildings,b.x,b.y-1,'roof',upper))ctx.drawImage(art['roof-ridge'],0,0,art['roof-ridge'].width,art['roof-ridge'].height/4,rx,ry,24,4);
         ctx.globalAlpha=1;
     }
-    if(view.tool==='build'&&view.pointer){
-        const x=view.pointer.x*TILE+ox,y=view.pointer.y*TILE+oy,working=view.localWork&&t<view.localWork.until;
+    if(view.tool==='build'){
+        const point=view.pointer??{x:pos.x+(pos.face==='right'?1:pos.face==='left'?-1:0),y:pos.y+(pos.face==='down'?1:pos.face==='up'?-1:0)};
+        const player=s.players[id];if(player)drawBuildTarget(ctx,buildGuide(s,{...player,...pos},buildTarget(point,s,view.remove,level),view.part,view.remove),ox,oy);
+        const x=point.x*TILE+ox,y=point.y*TILE+oy,working=view.localWork&&t<view.localWork.until;
         ctx.save();ctx.translate(Math.round(x),Math.round(y));if(working)ctx.rotate(Math.sin((t-view.localWork!.start)/50)*.35);ctx.drawImage(art.hammer,-3,-17,17,20);ctx.restore();
     }
     else if (view.pointer) {
@@ -359,12 +375,26 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
 }
 
 export function paintMap(c:HTMLCanvasElement,s:WorldState,id:string,art?:Atlas){
-    const ctx=c.getContext('2d')!;c.width=c.height=512;ctx.imageSmoothingEnabled=false;
+    const ctx=c.getContext('2d')!;c.width=c.height=512*ART_DENSITY;ctx.setTransform(ART_DENSITY,0,0,ART_DENSITY,0,0);ctx.imageSmoothingEnabled=false;
     const local=s.players[id],mine=local&&sceneAt(local.x)==='mine',scale=mine?512/MINE.size:1,origin=mine?MINE.x:0;
     if(mine){for(let y=0;y<MINE.size;y++)for(let x=0;x<MINE.size;x++){ctx.fillStyle=COLORS[terrainAt(x+MINE.x,y)];ctx.fillRect(x*scale,y*scale,Math.ceil(scale),Math.ceil(scale));}}
     else ctx.drawImage(worldMap(),0,0);
-    for(const l of mine?[{...MINE.exit,name:'出口'}]:LANDMARKS){const x=(l.x-origin)*scale,y=l.y*scale;ctx.fillStyle='#627454';ctx.fillRect(x-2,y-2,5,5);ctx.font='11px sans-serif';ctx.fillStyle='#fff2cc';ctx.fillText(l.name,x+8,y+4);}
-    if(!mine&&art){ctx.drawImage(art['cave-entrance'],CAVE_ENTRANCE.x-17,CAVE_ENTRANCE.y-17,34,22);ctx.strokeStyle='#fff0ae';ctx.lineWidth=2;ctx.strokeRect(CAVE_ENTRANCE.x-19,CAVE_ENTRANCE.y-19,38,26);}
+    if(!mine){
+        for(const b of Object.values(s.buildings)){ctx.fillStyle=b.kind==='floor'?'#d19667':'#946749';ctx.fillRect(b.x,b.y,1.5,1.5);}
+        if(art){
+            for(const landmark of NATURAL_LANDMARKS){const point=landmarkCenter(landmark);ctx.drawImage(art[landmark.id],point.x-13,point.y-15,26,22);}
+            ctx.drawImage(art['cave-entrance'],CAVE_ENTRANCE.x-17,CAVE_ENTRANCE.y-17,34,22);
+        }
+    }
+    const labels:{x:number;y:number;w:number;h:number}[]=[];ctx.font='11px sans-serif';
+    for(const l of mine?[{...MINE.exit,name:'出口'}]:LANDMARKS){
+        const x=(l.x-origin)*scale,y=l.y*scale,width=ctx.measureText(l.name).width+10;
+        const left=Math.max(6,Math.min(506-width,x+8));let top=y-8;
+        for(const shift of [0,17,-17,34,-34]){const candidate=y-8+shift;if(!labels.some(r=>left<r.x+r.w&&left+width>r.x&&candidate<r.y+r.h&&candidate+16>r.y)){top=candidate;break;}}
+        top=Math.max(5,Math.min(491,top));labels.push({x:left,y:top,w:width,h:16});
+        ctx.fillStyle='#486847';ctx.fillRect(x-2,y-2,4,4);ctx.fillStyle='#f7eedccc';ctx.fillRect(left,top,width,16);ctx.fillStyle='#426148';ctx.fillText(l.name,left+5,top+12);
+    }
+    ctx.fillStyle='#f7eedcd9';ctx.fillRect(477,10,25,35);ctx.fillStyle='#567653';ctx.font='10px sans-serif';ctx.fillText('北',484,21);ctx.beginPath();ctx.moveTo(489,26);ctx.lineTo(485,38);ctx.lineTo(493,38);ctx.closePath();ctx.fill();
     for(const p of Object.values(s.players)){if((sceneAt(p.x)==='mine')!==Boolean(mine))continue;ctx.fillStyle=p.id===id?'#fff6c0':'#e8a36b';ctx.beginPath();ctx.arc((p.x-origin)*scale,p.y*scale,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#627454';ctx.stroke();}
 }
 

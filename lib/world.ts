@@ -1,3 +1,4 @@
+import {NATURAL_LANDMARKS,landmarkCenter,authoredLandAt,authoredTrailAt} from './map-features';
 export const WORLD_SIZE = 512;
 export const SPAWN = { x: 256.5, y: 320.5 };
 export const CAVE_ENTRANCE = { x: 350.5, y: 215.5 };
@@ -20,11 +21,12 @@ export type Resource = {
     y: number;
     kind: ResourceKind;
 };
-export const COLORS: Record<Terrain, string> = { grass: '#8ece43', forest: '#338a46', water: '#16b9d7', sand: '#f3cd6d', rock: '#839cb2', snow: '#dcf6ff', marsh: '#489765', path: '#d6a757', 'cave-floor':'#47405d', 'cave-wall':'#252b45' };
+export const COLORS: Record<Terrain, string> = { grass: '#a4c975', forest: '#659a68', water: '#51bfd2', sand: '#e4cc95', rock: '#b3b3a0', snow: '#e8eee2', marsh: '#8eb582', path: '#d9b779', 'cave-floor':'#ada2b6', 'cave-wall':'#77758e' };
 export const LANDMARKS = [
     { x: 256, y: 320, name: '林间营地' }, { x: 217, y: 287, name: '青叶林' },
     { x: 283, y: 328, name: '风息河' }, { ...CAVE_ENTRANCE, name: '铜石矿洞' },
     { x: 160, y: 414, name: '薄雾湿地' }, { x: 326, y: 84, name: '白松雪岭' },
+    ...NATURAL_LANDMARKS.map(landmark=>({...landmarkCenter(landmark),name:landmark.name})),
 ];
 const riverPoints = [{ x: 224, y: 0 }, { x: 210, y: 100 }, { x: 272, y: 228 }, { x: 283, y: 328 }, { x: 310, y: 410 }, { x: 290, y: 512 }];
 function riverX(y: number) { for (let i = 1; i < riverPoints.length; i++) {
@@ -32,7 +34,8 @@ function riverX(y: number) { for (let i = 1; i < riverPoints.length; i++) {
     if (y <= b.y)
         return a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y);
 } return 290; }
-export function terrainAt(x: number, y: number): Terrain {
+// Frozen terrain sampler for the legacy resource layout. Never use the visual plan here.
+function legacyTerrainAt(x: number, y: number): Terrain {
     if(sceneAt(x)==='mine')return caveFloor(x,y)?'cave-floor':'cave-wall';
     if (x < 0 || y < 0 || x >= WORLD_SIZE || y >= WORLD_SIZE)
         return 'water';
@@ -55,6 +58,16 @@ export function terrainAt(x: number, y: number): Terrain {
         return 'forest';
     return 'grass';
 }
+export function terrainAt(x:number,y:number):Terrain {
+    const legacy=legacyTerrainAt(x,y);
+    // Water collision, shoreline, bridge span and the entire mine stay byte-compatible.
+    if(legacy==='water'||legacy==='sand'||legacy==='cave-floor'||legacy==='cave-wall')return legacy;
+    if(y>=318&&y<=320&&x>213&&x<301)return 'path';
+    if(x>=349&&x<=351&&y>=215&&y<=222)return 'path';
+    const ground=authoredLandAt(x,y);
+    // Existing resource cells keep their vegetation/mineral ground, never become fake clear trail.
+    return authoredTrailAt(x,y)&&!RESOURCE_MAP.has(Math.floor(x)+':'+Math.floor(y))?'path':ground;
+}
 export function regionAt(x: number, y: number) { const t = terrainAt(x, y); return ({ grass: '林间草甸', forest: '青叶林', water: '风息河', sand: '风息河岸', rock: '铜石矿区', snow: '白松雪岭', marsh: '薄雾湿地', path: '林间小径', 'cave-floor':'铜石矿洞', 'cave-wall':'铜石矿洞' })[t]; }
 export const RESOURCES: Resource[] = [];
 // Permanent, authored grove patterns; every room uses the same positions.
@@ -62,7 +75,7 @@ const grovePattern = [[0, 0], [3, 1], [1, 4], [5, 5], [7, 2], [9, 6], [4, 9], [1
 for (let gy = 12; gy < 502; gy += 19)
     for (let gx = 12; gx < 502; gx += 23) {
         for (const [ox, oy] of grovePattern) {
-            const x = gx + ox, y = gy + oy, t = terrainAt(x, y);
+            const x = gx + ox, y = gy + oy, t = legacyTerrainAt(x, y);
             if (Math.hypot(x-CAVE_ENTRANCE.x,y-CAVE_ENTRANCE.y)<7 || (Math.abs(x - SPAWN.x) < 22 && Math.abs(y - SPAWN.y) < 23) || t === 'path' || t === 'water' || t === 'sand')
                 continue;
             const kind: ResourceKind = t === 'rock' ? 'copper' : t === 'snow' ? 'pine' : t === 'forest' ? 'tree' : t === 'marsh' ? 'berry' : 'stone';

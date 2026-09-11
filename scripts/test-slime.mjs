@@ -5,22 +5,34 @@ const project=compileProject({name:'slime',overlay});
 let failures=0,checks=0;
 const previousDocument=globalThis.document;
 try {
- const sim=await import(project.module('simulation')),{slimeFrame}=await import(project.module('animation')),{render}=await import(project.module('renderer')),{SLIME_SIZE}=await import(project.module('art'));
+ const sim=await import(project.module('simulation')),{slimeFrame}=await import(project.module('animation')),{render,pointerWorld}=await import(project.module('renderer')),{SLIME_SIZE}=await import(project.module('art'));
  const art=new Proxy({}, {get:(obj,name)=>obj[name]??={name,width:64,height:64}});
  const gradient=()=>({addColorStop(){}});
  globalThis.document={createElement(){const c={width:1,height:1};const context=new Proxy({drawImage(image){c.name=image.name;},createLinearGradient:gradient,createRadialGradient:gradient},{get:(obj,key)=>key in obj?obj[key]:()=>{}});c.getContext=()=>context;return c;}};
  function recordingCanvas(){let transform=[1,0,0,1,0,0];const saves=[],draws=[];const target={globalAlpha:1,
   save(){saves.push({transform:[...transform],alpha:this.globalAlpha});},restore(){const s=saves.pop();if(s){transform=s.transform;this.globalAlpha=s.alpha;}},
   translate(x,y){transform[4]+=transform[0]*x+transform[2]*y;transform[5]+=transform[1]*x+transform[3]*y;},scale(x,y){transform[0]*=x;transform[1]*=x;transform[2]*=y;transform[3]*=y;},setTransform(a,b,c,d,e,f){transform=[a,b,c,d,e,f];},resetTransform(){transform=[1,0,0,1,0,0];},createLinearGradient:gradient,createRadialGradient:gradient,
-  drawImage(image,...args){let[x,y,w,h]=args.length>=8?args.slice(4):args;w??=image.width;h??=image.height;draws.push({name:image.name,x:transform[0]*x+transform[2]*y+transform[4],y:transform[1]*x+transform[3]*y+transform[5],w,h,alpha:this.globalAlpha});}};
-  const ctx=new Proxy(target,{get:(obj,key)=>key in obj?obj[key]:()=>{}});return{width:800,height:400,clientWidth:1600,clientHeight:800,getContext:()=>ctx,draws};
+  drawImage(image,...args){let[x,y,w,h]=args.length>=8?args.slice(4):args;w??=image.width;h??=image.height;draws.push({name:image.name,x:transform[0]*x+transform[2]*y+transform[4],y:transform[1]*x+transform[3]*y+transform[5],w:Math.abs(transform[0])*w,h:Math.abs(transform[3])*h,alpha:this.globalAlpha});}};
+  const ctx=new Proxy(target,{get:(obj,key)=>key in obj?obj[key]:()=>{}});return{width:800,height:400,clientWidth:1600,clientHeight:800,getContext:()=>ctx,getBoundingClientRect:()=>({left:13,top:17,width:1600,height:800}),draws};
  }
  const clone=x=>JSON.parse(JSON.stringify(x));
  function fixture(){const now=100000,s=sim.createWorld(now),p=sim.createPlayer('p','secret','Test',0,now);s.players.p=p;const m={id:'test-slime',x:259.5,y:322.5,homeX:259.5,homeY:322.5,hp:54,windup:0,cooldown:0,deadUntil:0,hitUntil:0,movingUntil:0};s.mobs=[m];const pos={x:p.x,y:p.y,face:'down',moving:false},canvas=recordingCanvas();return{now,s,p,m,pos,canvas};}
  function draw(f,time,canvas=f.canvas,roomKey='ROOM',state=f.s){const before=JSON.stringify(state);canvas.draws.length=0;render(canvas,state,'p',f.pos,{tool:'axe',part:'floor',remove:false,pointer:null,time,roomKey,localSwing:null},art);assert.equal(JSON.stringify(state),before,'rendering must never mutate WorldState');return canvas.draws.filter(d=>typeof d.name==='string'&&d.name.startsWith('slime-'));}
- function single(f,time,canvas,roomKey,state){const images=draw(f,time,canvas,roomKey,state);assert.equal(images.length,1,'one live slime draw');return images[0];}
- const atTarget=(f,m=f.m)=>({x:Math.round(m.x*24+Math.round(400-f.pos.x*24)-SLIME_SIZE.anchorX),y:Math.round(m.y*24+Math.round(200-f.pos.y*24)-SLIME_SIZE.anchorY)});
+ function single(f,time,canvas,roomKey,state){const images=draw(f,time,canvas,roomKey,state);assert.equal(images.length,1,'one live slime draw');assert.equal(images[0].w,80,'slime remains 80 screen pixels wide');assert.equal(images[0].h,80,'slime remains 80 screen pixels tall');return images[0];}
+ const atTarget=(f,m=f.m)=>({x:2*Math.round(m.x*24+Math.round(400-f.pos.x*24)-SLIME_SIZE.anchorX),y:2*Math.round(m.y*24+Math.round(200-f.pos.y*24)-SLIME_SIZE.anchorY)});
  async function test(name,fn){checks++;try{await fn();console.log('PASS',name);}catch(e){failures++;console.log('FAIL',name,'—',e.message);}}
+ await test('dense canvas preserves screen size and pointer inversion',()=>{const f=fixture();single(f,f.now);assert.equal(f.canvas.width,1600);assert.equal(f.canvas.height,800);assert.deepEqual(pointerWorld(f.canvas,f.pos,813,417),{x:f.pos.x,y:f.pos.y});assert.deepEqual(pointerWorld(f.canvas,f.pos,861,465),{x:f.pos.x+1,y:f.pos.y+1});});
+ await test('fractional camera positions keep clicks inside the visibly selected grid cell',()=>{
+  for(const [width,height]of [[1200,800],[801,603]]){
+   const pos={x:244.23,y:334.61,face:'down',moving:false},canvas={width:Math.floor(width/2)*2,height:Math.floor(height/2)*2,getBoundingClientRect:()=>({left:13,top:17,width,height})};
+   const w=canvas.width/2,h=canvas.height/2,ox=Math.round(w/2-pos.x*24),oy=Math.round(h/2-pos.y*24);
+   for(const point of [{x:246.01,y:335.01},{x:246.99,y:335.99},{x:247,y:336}]){
+    const actual=pointerWorld(canvas,pos,13+(point.x*24+ox)*width/w,17+(point.y*24+oy)*height/h);
+    assert(Math.abs(actual.x-point.x)<1e-10);assert(Math.abs(actual.y-point.y)<1e-10);
+    assert.deepEqual({x:Math.floor(actual.x),y:Math.floor(actual.y)},{x:Math.floor(point.x),y:Math.floor(point.y)});
+   }
+  }
+ });
  await test('stale expired windup transitions through recovery and never stays stuck on attack frame 3',()=>{const f=fixture();f.m.windup=f.now+650;assert.equal(slimeFrame(f.m,f.now+649,false,0),'slime-attack-3');assert.equal(slimeFrame(f.m,f.now+650,false,0),'slime-attack-4');assert.equal(slimeFrame(f.m,f.now+999,false,0),'slime-attack-7');assert.equal(slimeFrame(f.m,f.now+1000,false,0),'slime-idle-0');});
  await test('renderer follows an expired received windup through recovery without needing a new snapshot',()=>{const f=fixture();f.m.windup=f.now+650;assert.equal(single(f,f.now+649).name,'slime-attack-3');assert.equal(single(f,f.now+650).name,'slime-attack-4');assert.equal(single(f,f.now+1000).name,'slime-idle-0');});
  await test('authoritative hurt prevents movement and new windup until the entire hurt interval completes',()=>{const f=fixture();f.p.x=267.5;f.p.y=322.5;f.m.x=265;f.m.y=322.5;f.m.hitUntil=f.now+350;const initial={x:f.m.x,y:f.m.y};for(const age of [100,200,349]){sim.tickWorld(f.s,f.now+age);assert.equal(f.m.x,initial.x);assert.equal(f.m.y,initial.y);assert.equal(f.m.windup,0);assert.equal(f.m.movingUntil,0);}sim.tickWorld(f.s,f.now+350);assert.ok(f.m.x>initial.x,'movement may resume after hurt');});
