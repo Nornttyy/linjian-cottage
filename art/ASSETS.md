@@ -12,7 +12,7 @@
 | cave-entrance.png | 完整自然山体洞口 | 独立透明场景物件 |
 | hero-walk-v2.png | 按原待机人物重做的下、上、右行走各8帧 | 8列3行，固定缩放和整数锚点 |
 | hero-walk.png | 当前只读取末行正面受击8帧 | 8列4行 |
-| hero-motion.png | 下、上、右闪避各8帧，待机与闭眼原帧 | 8列4行 |
+| hero-motion.png | 待机与闭眼原帧；旧闪避保留 | 8列4行 |
 | hero-hurt-directions.png | 上、右受击各8帧 | 8列2行 |
 | hero-axe-v3.png | 重做下、上、右砍树各8帧，保留完整长袖 | 8列3行，专用裁切和人体锚点 |
 | hero-pick-v3.png | 重做下、上、右挖矿各8帧，修正握柄和接触方向 | 8列3行，专用裁切和人体锚点 |
@@ -32,7 +32,7 @@
 | hero-hammer.png | 建造、拆除 | 下、上、右各8帧 |
 | hero-hoe.png | 开垦 | 下、上、右各8帧 |
 | hero-water.png | 浇水 | 下、上、右各8帧 |
-| hero-plant.png | 播种、收获 | 下、上、右各8帧 |
+| hero-plant.png | 播种 | 下、上、右各8帧 |
 | bat.png / boar.png / mushroom.png | 蝙蝠、野猪、蘑菇怪 | 每种待机8、移动8、攻击8、受击4、死亡4 |
 | mine-exit.png | 矿洞内向外的明亮出口 | 完整场景物件，洋红背景解码 |
 
@@ -53,3 +53,15 @@
 史莱姆使用统一等比缩放与动作地面锚点，修正横向漂移及受击切换落点；移动和攻击的腾空高度、死亡粒子的散开轨迹保留。
 
 音效由 `scripts/generate-audio.mjs` 原创合成，正式文件位于 `public/audio`：19个22050Hz单声道PCM WAV，包括挥动、材质命中、建造、门、脚步、农作、怪物和三种循环环境声。音效不依赖外部下载或占位文件，清单见 `public/audio/manifest.json`。
+
+新增方向与生活动作：
+
+| 文件 | 内容 | 布局 |
+| --- | --- | --- |
+| boar-directions.png / mushroom-directions.png | 野猪与蘑菇怪侧面、背面待机、移动、攻击、受击和死亡；左向由侧面镜像 | 每张8列8行，实测行界 |
+| hero-harvest.png / hero-pickup.png / hero-eat.png | 收获、采摘浆果、吃东西 | 每张下、右、上各8帧 |
+| hero-roll.png / hero-fish.png / hero-cook.png / hero-sleep.png | 翻滚、钓鱼、烹饪、睡觉 | 每张下、右、上各8帧 |
+| activity-items.png | 鱼竿、鱼、熟食；初版竖向床保留但不用于场景 | 2列2行 |
+| bed-horizontal.png | 与横躺睡眠姿势配套的木床 | 独立物件 |
+
+七张生活动作共168帧，按实际人体高度固定为31像素，不以鱼竿等道具的外框缩小人物；运行时方向重排与锚点位于 `lib/new-hero-layout.ts`。新图全部由内置 imagegen 生成，原PNG字节未修改；完整提示词保存在各图旁的 `.prompt.txt`。新野猪与蘑菇怪沿实际追踪/游走方向切换图帧，冲锋保持蓄力确定的方向，结束后重新追踪。
