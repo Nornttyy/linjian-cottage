@@ -408,10 +408,11 @@ function workStart(p:Player,action:WorkAction,c:Command,now:number,lock=true){
     if(lock){p.actionAt=until;p.swingUntil=until;p.moveCredit=Math.max(0,(now-until)/1000);p.movingUntil=0;}
     return{start,at:start+timing.contact,until};
 }
-function wakePlayer(p:Player,now:number){
+function wakePlayer(p:Player,now:number,issuedAt?:number){
     if(p.workAction!=='sleep'&&p.pendingActivity?.action!=='sleep')return;
     if(p.pendingActivity?.action==='sleep')p.pendingActivity=undefined;
-    p.workAction=undefined;p.workUntil=Math.min(p.workUntil??now,now);
+    const requested=Number.isFinite(issuedAt)?Math.max(now-2000,Math.min(now,issuedAt!)):now;
+    p.workAction=undefined;p.workUntil=Math.min(p.workUntil??now,Math.max(p.workStart??0,requested));
 }
 function resolveActivity(s:WorldState,p:Player,now:number){
     const activity=p.pendingActivity;if(!activity||now<activity.at)return;
@@ -477,8 +478,8 @@ function activityCommand(s:WorldState,p:Player,c:Command,now:number):string|null
 }
 
 function runCommand(s: WorldState, p: Player, c: Command, now: number): string | null {
-    if(c.type==='wake'){wakePlayer(p,now);return null;}
-    if(p.workAction==='sleep')wakePlayer(p,now);
+    if(c.type==='wake'){wakePlayer(p,now,c.issuedAt);return null;}
+    if(p.workAction==='sleep')wakePlayer(p,now,c.issuedAt);
     if(c.type==='writeSign'){
         const sign=typeof c.target==='string'&&Object.hasOwn(s.buildings,c.target)?s.buildings[c.target]:undefined;
         if(sign?.kind!=='sign')return '告示牌不存在';
@@ -642,7 +643,7 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
     let message: string | null = null,movementApplied=false;
     const applyMovement=()=>{
         if(movementApplied)return;movementApplied=true;
-        if(p.workAction==='sleep'&&(input.dx||input.dy||input.movements?.some(segment=>(segment.dx||segment.dy)&&segment.seconds>0)))wakePlayer(p,now);
+        if(p.workAction==='sleep'&&(input.dx||input.dy||input.movements?.some(segment=>(segment.dx||segment.dy)&&segment.seconds>0)))wakePlayer(p,now,(Array.isArray(input.commands)?input.commands:[]).find(command=>command.type==='wake')?.issuedAt);
         // Locked time never becomes movement credit, including inputs arriving after unlock.
         const locked=now<p.swingUntil;
         const elapsed=Math.max(0,Math.min(INPUT_HISTORY_SECONDS,(now-Math.max(previousSeen,p.swingUntil))/1000));
