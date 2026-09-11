@@ -1,3 +1,4 @@
+import {beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading} from './asset-loading';
 import {farmLayout} from './farm-layout';
 import type { Terrain } from './world';
 import {creatureLayouts} from './creature-layout';
@@ -29,11 +30,24 @@ export const frameKey=(action:HeroAction,direction:Direction,frame:number)=>`${a
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);return c;};
 // Keep world sizes logical; sample source art directly into denser sprite buffers.
 const detailCanvas=(w:number,h:number)=>{const c=canvas(w*ART_DENSITY,h*ART_DENSITY),ctx=c.getContext('2d')!;ctx.scale(ART_DENSITY,ART_DENSITY);ctx.imageSmoothingEnabled=false;return c;};
-const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('素材加载失败'));img.src='.'+src;});
-function transparentMatte(c:HTMLCanvasElement){
+const load=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{
+    const img=new Image(),attempt=getAssetLoading().attempt;
+    const cleanup=()=>{clearTimeout(timeout);img.onload=null;img.onerror=null;};
+    const timeout=setTimeout(()=>{cleanup();reject(new Error('素材加载超时'));},20000);
+    (timeout as unknown as {unref?:()=>void}).unref?.();
+    img.onload=()=>{cleanup();try{loadedAsset(attempt,src);resolve(img);}catch(error){reject(error);}};
+    img.onerror=()=>{cleanup();reject(new Error('素材加载失败'));};img.src='.'+src;
+});
+function transparentMatte(c:HTMLCanvasElement,landscapeKey=false,snowKey=false){
     const ctx=c.getContext('2d',{willReadFrequently:true})!,data=ctx.getImageData(0,0,c.width,c.height),p=data.data,w=c.width,h=c.height;
     let transparent=0;for(let i=3;i<p.length;i+=4)if(p[i]<8)transparent++;
     if(transparent>w*h*.02)return;
+    // New landscape atlases use a saturated pink key; keep lavender flowers,
+    // white birch bark and snowy edges instead of treating them as backdrop.
+    if(landscapeKey){
+        for(let i=0;i<p.length;i+=4){const r=p[i],g=p[i+1],b=p[i+2];if(r>90&&b>90&&g<Math.min(r,b)*(snowKey?.82:.38)&&Math.abs(r-b)<(snowKey?85:40))p[i+3]=0;}
+        ctx.putImageData(data,0,0);return;
+    }
     // Decode the actual backdrop color; gray tool highlights are not magenta matte.
     const magenta=(r:number,g:number,b:number)=>r>90&&b>90&&g<Math.min(r,b)*.55&&r<b*1.65&&b<r*1.65;
     const gray=(r:number,g:number,b:number)=>Math.min(r,g,b)>145&&Math.max(r,g,b)-Math.min(r,g,b)<28;
@@ -74,12 +88,13 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
     const img=await load('/art/'+file),cells:HTMLCanvasElement[]=[];
     const layout=heroLayouts[file],tool=layout?undefined:file.match(/^hero-(axe|pick|sword)/)?.[1] as keyof typeof toolFrames|undefined;
     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
-        const bands=file==='landscape-props-v2.png'?[0,550/img.height,1]:file==='objects-final.png'?[0,.358,.559,.777,1]:file==='icons-final.png'?[0,.27,.50,.718,1]:Array.from({length:rows+1},(_,i)=>i/rows);
+        const bands=file==='landscape-props-v3.png'?[0,550/img.height,1]:file==='objects-final.png'?[0,.358,.559,.777,1]:file==='icons-final.png'?[0,.27,.50,.718,1]:Array.from({length:rows+1},(_,i)=>i/rows);
         const startY=Math.round(bands[row]*img.height),endY=Math.round(bands[row+1]*img.height);
-        const standard=[Math.round(col*img.width/cols),startY,Math.round((col+1)*img.width/cols)-Math.round(col*img.width/cols),endY-startY];
+        const columns=file==='landscape-props-v3.png'?[0,480,880,1345,img.width]:Array.from({length:cols+1},(_,i)=>Math.round(i*img.width/cols));
+        const standard=[columns[col],startY,columns[col+1]-columns[col],endY-startY];
         const [x,y,w,h]=layout?.frames[row*cols+col]??(tool?toolFrames[tool][row*cols+col]:standard),inset=layout?.inset??(kind==='texture'?1:2);
         const c=canvas(w-inset*2,h-inset*2);c.getContext('2d')!.drawImage(img,x+inset,y+inset,c.width,c.height,0,0,c.width,c.height);
-        if(kind!=='texture')transparentMatte(c);
+        if(kind!=='texture')transparentMatte(c,file==='landscape-props-v3.png'||file==='landscape-landmarks-v3.png',file==='landscape-landmarks-v3.png'&&row===0&&col===1);
         if(kind==='hero')cleanFragments(c);
         cells.push(kind==='prop'?cropped(c):c);
     }
@@ -158,17 +173,24 @@ async function creatureDirections(kind:'boar'|'mushroom'){
     });
 }
 let cached:Promise<Atlas>|undefined;
-export function loadArt(){return cached??=loadAll();}
+export function loadArt(){
+    if(cached)return cached;
+    const attempt=beginAssets();
+    cached=loadAll().then(art=>{finishAssets(attempt);return art;}).catch(error=>{
+        if(getAssetLoading().attempt===attempt){cached=undefined;failAssets(attempt,error);}throw error;
+    });
+    return cached;
+}
 async function loadAll():Promise<Atlas>{
     const extraActions=['harvest','pickup','eat','fish','cook','sleep','roll'] as const;
     const [materials,objects,icons,walk,oldWalk,motion,axe,pick,sword,slime,entrance,hurt,fire,flames,trails,textures,farm,home,bat,boar,mushroom,hammer,hoe,water,plant,mineExit,boarDirections,mushroomDirections,activityItems,extraSheets,beds]=await Promise.all([
         sheet('surfaces-final.png',4,4,'texture'),sheet('objects-final.png',4,4,'prop'),sheet('icons-final.png',4,4,'prop'),
-        sheet('hero-walk-v2.png',8,3,'hero'),sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v3.png',8,3,'hero'),sheet('hero-pick-v3.png',8,3,'hero'),sheet('hero-sword-v3.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect'),sheet('campfire-flames-24.png',6,4,'effect'),sheet('tool-trails.png',8,3,'effect'),sheet('homestead-textures.png',3,2,'texture'),load('/art/farm-growth.png'),sheet('homestead-items.png',4,4,'prop'),creatureSheet('bat'),creatureSheet('boar'),creatureSheet('mushroom'),sheet('hero-hammer.png',8,3,'hero'),sheet('hero-hoe.png',8,3,'hero'),sheet('hero-water.png',8,3,'hero'),sheet('hero-plant.png',8,3,'hero'),load('/art/mine-exit.png')
+        sheet('hero-walk-v2.png',8,3,'hero'),sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v3.png',8,3,'hero'),sheet('hero-pick-v3.png',8,3,'hero'),sheet('hero-sword-v3.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect'),sheet('campfire-flames-24.png',6,4,'effect'),sheet('tool-trails.png',8,3,'effect'),sheet('homestead-textures-v2.png',3,2,'texture'),load('/art/farm-growth.png'),sheet('homestead-items.png',4,4,'prop'),creatureSheet('bat'),creatureSheet('boar'),creatureSheet('mushroom'),sheet('hero-hammer.png',8,3,'hero'),sheet('hero-hoe.png',8,3,'hero'),sheet('hero-water.png',8,3,'hero'),sheet('hero-plant.png',8,3,'hero'),load('/art/mine-exit.png')
         ,creatureDirections('boar'),creatureDirections('mushroom'),sheet('activity-items.png',2,2,'prop'),Promise.all(extraActions.map(action=>sheet(`hero-${action}.png`,8,3,'hero'))),sheet('bed-horizontal.png',1,1,'prop')
     ]);
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
-    const [landTextures,landProps,landmarks]=await Promise.all([sheet('landscape-terrain-v2.png',4,3,'texture'),sheet('landscape-props-v2.png',4,2,'prop'),sheet('landscape-landmarks-v2.png',2,2,'prop')]);
+    const [landTextures,landProps,landmarks]=await Promise.all([sheet('landscape-terrain-v3.png',4,3,'texture'),sheet('landscape-props-v3.png',4,2,'prop'),sheet('landscape-landmarks-v3.png',2,2,'prop')]);
     assign(['region-oak','region-birch','region-maple','region-snowpine','region-berry','region-stone','flowers-white','flowers-pink'],landProps);
     assign(['ancient-oak','frost-cairn','sunstone-circle','firefly-meadow'],landmarks);
     assign(['rod','fish','meal','bed'],activityItems);

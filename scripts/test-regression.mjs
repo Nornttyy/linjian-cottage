@@ -40,7 +40,7 @@ try {
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600, height: 800 }),
     };
     const client = new GameClient(canvas, () => {}, () => {}, () => {});
-    client.connected = true;
+    client.connected = true;client.ready=true;
     client.session = { playerId: 'p', room: 'TESTROOM', token: 'test-token' };
     client.world = clone(state);
     client.pos = { x: player.x, y: player.y, face: 'down', moving: false };

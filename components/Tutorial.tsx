@@ -9,11 +9,11 @@ const lessons:Record<TutorialStep,{title:string;text:string}>= {
     wall:{title:'建起第一面墙',text:'选木墙，在地板上放置；先离开要放墙的格子。'},
     combat:{title:'试试保护自己',text:'选剑，靠近怪物点击命中一次；空格可闪避。'}
 };
-export default function Tutorial({state,restart=0,hidden=false}:{state:ClientState;restart?:number;hidden?:boolean}){
+export default function Tutorial({state,restart=0,hidden=false,onDismiss}:{state:ClientState;restart?:number;hidden?:boolean;onDismiss?:()=>void}){
     const tracker=useRef<TutorialTracker|null>(null),lastRestart=useRef<number|undefined>(undefined);
     const [progress,setProgress]=useState<TutorialProgress|null>(null);
     useEffect(()=>{
-        if(!state.connected||!state.session||!state.world.players[state.session.playerId])return;
+        if(restart<=0||state.loading.phase!=='ready'||!state.connected||!state.session||!state.world.players[state.session.playerId])return;
         const key=tutorialKey(state.session),reset=lastRestart.current!==restart&&restart>0;
         if(!tracker.current||reset){
             let saved:TutorialProgress=readTutorial(null);if(!reset)try{saved=readTutorial(localStorage.getItem(key));}catch{}
@@ -25,8 +25,8 @@ export default function Tutorial({state,restart=0,hidden=false}:{state:ClientSta
         const before=tracker.current.progress,next=observeTutorial(tracker.current,state);
         if(next!==before){setProgress(next);try{localStorage.setItem(key,JSON.stringify(next));}catch{}}
     },[state,restart]);
-    const dismiss=()=>{if(!tracker.current||!state.session)return;const next={...tracker.current.progress,dismissed:true};tracker.current.progress=next;setProgress(next);try{localStorage.setItem(tutorialKey(state.session),JSON.stringify(next));}catch{}};
-    if(!progress||progress.dismissed||hidden)return null;
+    const dismiss=()=>{if(!tracker.current||!state.session)return;const next={...tracker.current.progress,dismissed:true};tracker.current.progress=next;setProgress(next);try{localStorage.setItem(tutorialKey(state.session),JSON.stringify(next));}catch{}onDismiss?.();};
+    if(restart<=0||!progress||progress.dismissed||hidden)return null;
     const step=TUTORIAL_STEPS.find(item=>!progress.done.includes(item)),lesson=step?lessons[step]:null;
     return <aside className="tutorial-card" aria-label="新手引导">
         <header><span>新手引导 · {progress.done.length} / {TUTORIAL_STEPS.length}</span><button onClick={dismiss}>{step?'跳过':'收起'}</button></header>

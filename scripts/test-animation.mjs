@@ -19,7 +19,7 @@ try {
     const state=sim.createWorld(now),p=sim.createPlayer('p','secret','Audit',0,now);state.players.p=p;
     const canvas={width:800,height:400,clientWidth:1600,clientHeight:800,addEventListener(){},removeEventListener(){},getBoundingClientRect(){return{left:0,top:0,width:1600,height:800};}};
     const c=new GameClient(canvas,()=>{},()=>{},()=>{},'https://example.test/api/game');
-    c.connected=true;c.session={playerId:'p',room:'TESTROOM',token:'test-token'};c.world=clone(state);c.pos={x:p.x,y:p.y,face:'down',moving:false};
+    c.connected=true;c.ready=true;c.session={playerId:'p',room:'TESTROOM',token:'test-token'};c.world=clone(state);c.pos={x:p.x,y:p.y,face:'down',moving:false};
     const f={c,state,p,defer:false,release:null};
     c.request=async body=>{
       sim.tickWorld(state,now);const message=body.input?sim.applyInput(state,'p',body.input,now):null;

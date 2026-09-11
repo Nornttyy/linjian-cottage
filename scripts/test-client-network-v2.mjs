@@ -18,7 +18,7 @@ function fixture({rtt=600,offset=0,pattern,dbWork=0}={}){
   const id='p'+i,p=state.players[id]=sim.createPlayer(id,'secret'+i,'Test',i,now+offset);p.x=260+i*4;p.y=320;
   const canvas={width:800,height:400,clientWidth:1600,clientHeight:800,addEventListener(){},removeEventListener(){},getBoundingClientRect(){return{left:0,top:0,width:1600,height:800}}};
   const c=new GameClient(canvas,()=>{if(beforeReply[i]){corrections[i].push({at:now-base,x:c.pos.x-beforeReply[i].x,y:c.pos.y-beforeReply[i].y});beforeReply[i]=null;}},message=>messages[i].push(message),()=>{});
-  c.connected=true;c.session={room:'CLIENT01',playerId:id,token:String(i)};c.pos={x:p.x,y:p.y,face:'right',moving:false};c.networkVersion=2;c.serverOffset=offset;c.lastInputAt=now-1000;c.audio.play=(sound,...args)=>sounds[i].push({sound,at:now-base,args});clients.push(c);
+  c.connected=true;c.ready=true;c.session={room:'CLIENT01',playerId:id,token:String(i)};c.pos={x:p.x,y:p.y,face:'right',moving:false};c.networkVersion=2;c.serverOffset=offset;c.lastInputAt=now-1000;c.audio.play=(sound,...args)=>sounds[i].push({sound,at:now-base,args});clients.push(c);
  }
  clients.forEach(c=>{c.world=clone(state);c.animate(now);});
  globalThis.fetch=(_,options)=>new Promise(resolve=>{

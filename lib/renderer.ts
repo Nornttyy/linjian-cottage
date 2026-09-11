@@ -46,16 +46,17 @@ export type Position = {
     moving: boolean;
 };
 let ground: HTMLCanvasElement | undefined;
-export function worldMap() { if (ground)
-    return ground; ground = document.createElement('canvas'); ground.width = 512; ground.height = 512; const ctx = ground.getContext('2d')!; for (let y = 0; y < 512; y++)
-    for (let x = 0; x < 512; x++) {
-        ctx.fillStyle = COLORS[terrainAt(x, y)];
-        ctx.fillRect(x, y, 1, 1);
-    }
-    // A quiet canopy pattern makes wooded regions legible without hiding paths.
-    ctx.fillStyle='#3d71532e';
-    for(const r of resourcesInRect(0,0,511,511))if((r.kind==='tree'||r.kind==='pine')&&(r.x+r.y)%3===0){ctx.beginPath();ctx.arc(r.x,r.y,1.3,0,Math.PI*2);ctx.fill();}
-    return ground; }
+function mapCanvas(){const c=document.createElement('canvas');c.width=512;c.height=512;return c;}
+function mapRows(c:HTMLCanvasElement,start:number,end:number){const ctx=c.getContext('2d')!;for(let y=start;y<end;y++)for(let x=0;x<512;x++){ctx.fillStyle=COLORS[terrainAt(x,y)];ctx.fillRect(x,y,1,1);}}
+function mapCanopy(c:HTMLCanvasElement){const ctx=c.getContext('2d')!;ctx.fillStyle='#3d71532e';for(const r of resourcesInRect(0,0,511,511))if((r.kind==='tree'||r.kind==='pine')&&(r.x+r.y)%3===0){ctx.beginPath();ctx.arc(r.x,r.y,1.3,0,Math.PI*2);ctx.fill();}}
+export function worldMap(){if(ground)return ground;const c=mapCanvas();mapRows(c,0,512);mapCanopy(c);return ground=c;}
+// Keep a partial map private: another room can never receive an unfinished cache.
+export async function prepareWorldMap(nextFrame:()=>Promise<void>,active:()=>boolean){
+    if(ground)return;
+    const c=mapCanvas();
+    for(let y=0;y<512;y+=32){await nextFrame();if(!active())return;mapRows(c,y,Math.min(512,y+32));}
+    if(!active())return;mapCanopy(c);ground=c;
+}
 export function pointerWorld(canvas: HTMLCanvasElement, pos: Position, x: number, y: number) {
     const box=canvas.getBoundingClientRect(),w=canvas.width/ART_DENSITY,h=canvas.height/ART_DENSITY;
     const ox=Math.round(w/2-pos.x*TILE),oy=Math.round(h/2-pos.y*TILE);

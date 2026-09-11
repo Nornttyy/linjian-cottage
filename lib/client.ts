@@ -1,8 +1,9 @@
 import {CAMPFIRE,cookingRecipe,nearCampfire,canCast} from './activities';
 import {applyWorldDelta,type WorldDelta} from './world-delta';
 import { loadArt, type Atlas } from './art';
+import {getAssetLoading,subscribeAssets} from './asset-loading';
 import { createWorld, move, canBuild, distance, clearLine, isBlocked, WORK_TIMING, TOOL_TIMING, type WorkAction, type GameEvent, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
-import { render, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
+import { render, prepareWorldMap, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
 import { SPAWN, sceneAt, CAVE_ENTRANCE, MINE } from './world';
 import type {HeroSwing,WorkSwing} from './animation';
 import {CROPS,cropProgress,plotKey,type CropKind} from './farming';
@@ -28,6 +29,7 @@ export type Session = {
     token: string;
     playerId: string;
 };
+export type LoadingState={generation:number;phase:'assets'|'world'|'scene'|'ready'|'error';completed:number;total:number;error:string};
 export type ClientState = {
     world: WorldState;
     session: Session | null;
@@ -40,6 +42,7 @@ export type ClientState = {
     slots:ItemSlot[];
     selectedSlot:number;
     sound:boolean;
+    loading:LoadingState;
 };
 export class GameClient {
     world = createWorld();
@@ -81,6 +84,13 @@ export class GameClient {
     private movements:Movement[]=[];
     connected = false;
     error = '';
+    ready = false;
+    private preparationFrame=0;
+    private preparationResolve:(()=>void)|undefined;
+    private preparingGeneration=-1;
+    private scenePrepared=false;
+    private sceneError='';
+    private stopAssets=()=>{};
     private disposed = false;
     private frame = 0;
     private timer: ReturnType<typeof setTimeout> | undefined;
@@ -113,19 +123,53 @@ export class GameClient {
         window.addEventListener('keydown', this.keyDown);
         window.addEventListener('keyup', this.keyUp);
         window.addEventListener('blur', this.blur);
-        loadArt().then(art => { if (this.disposed)
-            return; this.art = art; this.notify(); }).catch(() => { this.error = '素材加载失败'; this.notify(); });
+        this.stopAssets=subscribeAssets(()=>this.notify());
+        void this.loadAssets();
         this.frame = requestAnimationFrame(this.animate);
     }
     notify() { if (!this.disposed)
-        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot,sound:this.audio.enabled }); }
+        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot,sound:this.audio.enabled,loading:this.loading }); }
+    get playable(){return this.ready&&this.connected&&!this.disposed;}
+    get loading():LoadingState{
+        const assets=getAssetLoading(),total=assets.total+4;
+        const completed=assets.loaded+Number(!!this.art)+Number(this.connected)+Number(this.scenePrepared)+Number(this.ready);
+        const error=this.sceneError||this.error||assets.error;
+        return{generation:this.generation,phase:this.ready?'ready':error?'error':!this.art?'assets':!this.connected?'world':'scene',completed,total,error:this.ready?'':error};
+    }
+    private async loadAssets(){
+        try{const art=await loadArt();if(this.disposed)return;this.art=art;this.notify();void this.prepareScene();}
+        catch{if(!this.disposed)this.notify();}
+    }
+    private nextPreparationFrame=()=>new Promise<void>(resolve=>{
+        this.preparationResolve=resolve;
+        this.preparationFrame=requestAnimationFrame(()=>{this.preparationFrame=0;this.preparationResolve=undefined;resolve();});
+    });
+    private cancelPreparation(){
+        cancelAnimationFrame(this.preparationFrame);this.preparationFrame=0;
+        this.preparationResolve?.();this.preparationResolve=undefined;this.preparingGeneration=-1;
+    }
+    private async prepareScene(){
+        if(this.disposed||!this.art||!this.connected||!this.session||this.ready||this.preparingGeneration===this.generation)return;
+        const generation=this.generation,active=()=>!this.disposed&&generation===this.generation&&this.connected;
+        this.preparingGeneration=generation;this.sceneError='';this.notify();
+        try{
+            // Paint the loader before map generation and its first game frame.
+            await this.nextPreparationFrame();if(!active())return;
+            await prepareWorldMap(this.nextPreparationFrame,active);if(!active())return;
+            this.scenePrepared=true;this.notify();
+            await this.nextPreparationFrame();if(!active())return;
+            this.draw(Date.now());this.pauseControls();this.last=0;this.ready=true;this.notify();
+        }catch(error){if(active()){this.sceneError=error instanceof Error?error.message:'场景准备失败';this.notify();}}
+        finally{if(generation===this.generation)this.preparingGeneration=-1;}
+    }
     serverNow(localNow=Date.now()){return localNow+this.serverOffset;}
     get timeOffset(){return this.serverOffset;}
     private async request(body: unknown) {
-        const sentAt=Date.now();
+        const sentAt=Date.now(),requestGeneration=this.generation;
         const response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});
         const result=await response.json() as ApiReply,receivedAt=Date.now();
         if(!response.ok||(!result.state&&!result.delta))throw new Error(result.error||'连接失败');
+        if(this.disposed||requestGeneration!==this.generation)return result;
         if(result.networkVersion===2&&Number.isFinite(result.serverReceivedAt)&&Number.isFinite(result.serverSentAt)){
             this.networkVersion=2;
             const rtt=Math.max(0,receivedAt-sentAt-(result.serverSentAt!-result.serverReceivedAt!));
@@ -137,12 +181,19 @@ export class GameClient {
         }
         return result;
     }
-    retryConnection(){return this.connect(this.connectionIntent.mode,this.connectionIntent.room);}
+    async retryConnection(){
+        if(this.disposed)return;
+        this.sceneError='';
+        if(!this.art)void this.loadAssets();
+        if(!this.connected)return this.connect(this.connectionIntent.mode,this.connectionIntent.room);
+        void this.prepareScene();this.notify();
+    }
     async connect(mode: 'resume' | 'create' | 'join' = 'resume', room = '') {
         if(this.disposed)return;
         this.connectionIntent={mode,room};
         this.signSave?.resolve('已切换世界');this.signSave=null;if(this.activeSignId){this.activeSignId=null;this.signToggle(null);}
         const generation = ++this.generation;
+        this.cancelPreparation();this.ready=false;this.scenePrepared=false;this.sceneError='';
         if (this.timer)
             clearTimeout(this.timer);
         this.pauseControls();
@@ -178,7 +229,7 @@ export class GameClient {
             this.loadLayout();
             this.connected = true;
             this.connectionIntent={mode:'resume',room:''};
-            this.notify();
+            this.notify();void this.prepareScene();
             this.timer = setTimeout(() => this.sync(), 160);
         }
         catch (e) {
@@ -245,7 +296,7 @@ export class GameClient {
             this.syncSlots();
             if (result.message)
                 this.message(result.message);
-            this.notify();
+            this.notify();if(!this.ready)void this.prepareScene();
         }
         catch (e) {
             if (this.disposed || generation !== this.generation)
@@ -269,14 +320,14 @@ export class GameClient {
         return sign?.kind==='sign'&&floorLevel(sign)===floorLevel(this.pos)&&distance(this.pos,{x:sign.x+.5,y:sign.y+.5})<=2.7?sign:undefined;
     }
     readSign(target?:string){
-        if(this.paused||!this.connected||!this.session||this.toolLocked()||this.workCommand||this.unconfirmedSwing)return false;
+        if(this.paused||!this.playable||!this.session||this.toolLocked()||this.workCommand||this.unconfirmedSwing)return false;
         const sign=target?this.signAt(target):Object.values(this.world.buildings).filter(b=>this.signAt(b.id)).sort((a,b)=>distance(this.pos,{x:a.x+.5,y:a.y+.5})-distance(this.pos,{x:b.x+.5,y:b.y+.5}))[0];
         if(!sign)return false;
         this.wakeSleep();this.pauseControls();this.paused=true;this.activeSignId=sign.id;this.signToggle(sign.id);return true;
     }
     closeSign(){this.activeSignId=null;}
     saveSign(target:string,value:string):Promise<string|null>{
-        if(this.disposed||!this.connected||!this.session)return Promise.resolve('连接中断，请重试');
+        if(this.disposed||!this.playable||!this.session)return Promise.resolve('连接中断，请重试');
         if(this.signSave)return Promise.resolve('正在保存');
         if(this.activeSignId!==target||!this.signAt(target))return Promise.resolve('请靠近同层告示牌');
         const text=normalizeSignText(value);if(Array.from(text).length>SIGN_TEXT_LIMIT)return Promise.resolve('最多240字');
@@ -286,7 +337,7 @@ export class GameClient {
         });
     }
     interact(){
-        if(this.paused||!this.connected||!this.session)return false;
+        if(this.paused||!this.playable||!this.session)return false;
         const now=Date.now(),p=this.world.players[this.session.playerId];if(!p)return false;
         const level=floorLevel(this.pos),near=(b:{x:number;y:number},range:number)=>distance(this.pos,{x:b.x+.5,y:b.y+.5})<range;
         if(level===0&&distance(this.pos,sceneAt(this.pos.x)==='mine'?MINE.exit:CAVE_ENTRANCE)<=2)return this.command({type:'interact'});
@@ -338,7 +389,7 @@ export class GameClient {
     toggleRemove() {const next=!this.remove;this.setPart(this.part);this.remove=next;this.notify();}
     pauseControls(){this.keys.clear();this.held=false;this.heldButton=0;this.buildStamp='';}
     toggleSound(){this.audio.toggle();this.notify();}
-    press(key: string, down: boolean) { this.audio.unlock();if (down)
+    press(key: string, down: boolean) { if(!this.playable){this.keys.delete(key);return;}this.audio.unlock();if (down)
         this.keys.add(key);
     else
         this.keys.delete(key); }
@@ -357,7 +408,7 @@ export class GameClient {
     }
     command(command: Command) {
         if(command.type==='dodge' && this.toolLocked())return false;
-        if(this.paused&&command!==this.signSave?.command || !this.connected || this.commands.length>=5)return false;
+        if(this.paused&&command!==this.signSave?.command || !this.playable || this.commands.length>=5)return false;
         if(command.type!=='wake'&&command.type!=='sleep')this.wakeSleep();
         if(this.commands.length>=5)return false;
         command.id??=`${this.session?.playerId}:${++this.commandSequence}:${Date.now()}`;command.issuedAt??=this.serverNow();command.face??=this.pos.face;
@@ -365,7 +416,7 @@ export class GameClient {
         return true;
     }
     private movement(){
-        if(this.paused||!this.connected)return{x:0,y:0};
+        if(this.paused||!this.playable)return{x:0,y:0};
         const x=Number(this.keys.has('d')||this.keys.has('arrowright'))-Number(this.keys.has('a')||this.keys.has('arrowleft')),y=Number(this.keys.has('s')||this.keys.has('arrowdown'))-Number(this.keys.has('w')||this.keys.has('arrowup'));
         if(x||y)this.wakeSleep();
         if(this.toolLocked())return{x:0,y:0};
@@ -384,7 +435,7 @@ export class GameClient {
         if(!this.commands.some(c=>c.type==='wake')&&!this.pending?.commands.some(c=>c.type==='wake'))this.command({type:'wake'});
     }
     tryActivity(point?:{x:number;y:number}){
-        if(this.paused||!this.connected||!this.session)return false;
+        if(this.paused||!this.playable||!this.session)return false;
         const now=Date.now(),p=this.world.players[this.session.playerId];if(!p)return false;
         if(this.workCommand?.type==='sleep'&&this.commands.includes(this.workCommand)||this.localWork?.action==='sleep'&&now<this.localWork.until){this.wakeSleep();this.held=false;return true;}
         if(this.workCommand||this.unconfirmedSwing||this.toolLocked(now)||this.dodgePending()||this.serverNow(now)<p.dodgeUntil)return false;
@@ -409,7 +460,7 @@ export class GameClient {
         this.feedbackQueue.push({command,at:now+WORK_TIMING[action].contact});return true;
     }
     private act(){
-        if(this.paused||!this.connected||!this.session)return;
+        if(this.paused||!this.playable||!this.session)return;
         const now=Date.now(),p=this.world.players[this.session.playerId],item=this.slots[this.selectedSlot];
         if(!p)return;
         if(this.workCommand||this.unconfirmedSwing||this.toolLocked(now)||this.dodgePending()||this.serverNow(now)<p.dodgeUntil)return;
@@ -498,6 +549,7 @@ export class GameClient {
     private animate = (time: number) => {
         if (this.disposed)
             return;
+        if(!this.ready){this.last=time;this.frame=requestAnimationFrame(this.animate);return;}
         const frameDt = Math.min(.045, (time - this.last) / 1000 || 0);
         const dt = Math.max(0,Math.min(frameDt,(Date.now()-this.toolLockUntil())/1000));
         this.last = time;
@@ -518,14 +570,17 @@ export class GameClient {
             this.act();
         const now=Date.now();this.feedback(now);const pose=now<Math.max(this.localSwing?.until??0,this.localWork?.until??0)?'tool':this.pos.moving?'walk':'idle';
         if(pose!==this.poseState){this.poseState=pose;this.poseStarted=now;}
-        if (this.art)
-            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
+        this.draw(now);
         this.frame = requestAnimationFrame(this.animate);
     };
+    private draw(now:number){
+        if (this.art)
+            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
+    }
     private pointerMove = (e: PointerEvent) => { this.screenPointer = { x: e.clientX, y: e.clientY }; this.pointer = pointerWorld(this.canvas, this.pos, e.clientX, e.clientY); };
     private pointerDown=(e:PointerEvent)=>{
         this.audio.unlock();if(e.button!==0&&e.button!==2)return;
-        if(this.paused)return;
+        if(this.paused||!this.playable)return;
         if(e.button===2&&this.tool!=='build'){
             e.preventDefault();this.pointerMove(e);
             const point=this.pointer,door=point?atLevel(this.world.buildings,Math.floor(point.x),Math.floor(point.y),'wall',floorLevel(this.pos)):undefined;
@@ -537,10 +592,11 @@ export class GameClient {
     };
     private pointerUp = () => { this.held = false; this.heldButton=0; this.buildStamp = ''; };
     private contextMenu = (e: Event) => e.preventDefault();
-    private wheel=(e:WheelEvent)=>{if(this.paused||!e.deltaY||e.ctrlKey)return;e.preventDefault();this.selectSlot((this.selectedSlot+(e.deltaY>0?1:-1)+HOTBAR_SIZE)%HOTBAR_SIZE);};
+    private wheel=(e:WheelEvent)=>{if(!this.playable||this.paused||!e.deltaY||e.ctrlKey)return;e.preventDefault();this.selectSlot((this.selectedSlot+(e.deltaY>0?1:-1)+HOTBAR_SIZE)%HOTBAR_SIZE);};
     private keyDown = (e: KeyboardEvent) => {
         if ((e.target as HTMLElement)?.matches('input,textarea'))
             return;
+        if(!this.playable)return;
         this.audio.unlock();const key = e.key.toLowerCase();
         if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key))
             e.preventDefault();
@@ -569,6 +625,6 @@ export class GameClient {
     };
     private keyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
     private blur = () => { this.keys.clear(); this.held = false; this.heldButton=0; };
-    destroy() { this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
+    destroy() { this.cancelPreparation();this.stopAssets();this.pauseControls();this.ready=false;this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
         clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu);this.canvas.removeEventListener('wheel',this.wheel); window.removeEventListener('pointerup', this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur); }
 }

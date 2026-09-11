@@ -17,7 +17,7 @@ try{
   const keys=['window','Image','requestAnimationFrame','cancelAnimationFrame','localStorage'],descriptors=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
   globalThis.window={addEventListener(){},removeEventListener(){}};globalThis.Image=class{};globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>null,setItem(){}}});
   const f=fixture(),canvas={addEventListener(){},removeEventListener(){}};let c;
-  try{c=new GameClient(canvas,()=>{},()=>{},()=>{});c.connected=true;c.session={room:'REVIEW',playerId:'p',token:'token'};c.world=f.s;c.flushActions=()=>{};c.commands=Array.from({length:4},()=>({type:'heal'}));c.localWork={action:'sleep',start:Date.now(),until:Date.now()+4000,face:'up'};c.command({type:'attack',tool:'axe'});assert(c.commands.length<=5,`queued ${c.commands.length}; server processes only first five`);}
+  try{c=new GameClient(canvas,()=>{},()=>{},()=>{});c.connected=true;c.ready=true;c.session={room:'REVIEW',playerId:'p',token:'token'};c.world=f.s;c.flushActions=()=>{};c.commands=Array.from({length:4},()=>({type:'heal'}));c.localWork={action:'sleep',start:Date.now(),until:Date.now()+4000,face:'up'};c.command({type:'attack',tool:'axe'});assert(c.commands.length<=5,`queued ${c.commands.length}; server processes only first five`);}
   finally{c?.destroy();for(const[k,d]of descriptors)if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];}
  });
  console.log(`${passed} passed, ${failed} failed`);process.exitCode=failed?1:0;
