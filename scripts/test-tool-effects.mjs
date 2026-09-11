@@ -1,21 +1,11 @@
-// Portable: node scripts/test-tool-effects.mjs or LINJIAN_SOURCE=/path/to/game node /private/tmp/test-tool-effects.mjs
-// Optional LINJIAN_TOOL_EFFECTS_OVERLAY=/tmp/dir overrides lib TS files. Uses the real client/simulation/animation/renderer.
 import assert from 'node:assert/strict';
-import {readFile,writeFile,mkdtemp,rm,access} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
-import {pathToFileURL,fileURLToPath} from 'node:url';
-const source=resolve(process.env.LINJIAN_SOURCE||fileURLToPath(new URL('..',import.meta.url))),overlay=process.env.LINJIAN_TOOL_EFFECTS_OVERLAY;
-const temp=await mkdtemp(join(tmpdir(),'linjian-tool-effects-'));
+import {compileProject} from './test-support.mjs';
+const overlay=process.env.LINJIAN_TOOL_EFFECTS_OVERLAY;
+const project=compileProject({name:'tool-effects',overlay});
 const original={now:Date.now,window:globalThis.window,Image:globalThis.Image,document:globalThis.document,raf:globalThis.requestAnimationFrame,caf:globalThis.cancelAnimationFrame,timeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout};
 let now=100000,checks=0,failures=0;
-try{
- const ts=(await import(pathToFileURL(join(source,'node_modules/typescript/lib/typescript.js')))).default;
- const names=['world','simulation','frame-layout','inventory','roof-visibility','connected-wall','tiles','animation','atmosphere','renderer','art','client'];
- for(const name of names){let path=join(source,'lib',name+'.ts');if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
-  const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");await writeFile(join(temp,name+'.mjs'),code);
- }
- const sim=await import(pathToFileURL(join(temp,'simulation.mjs'))),world=await import(pathToFileURL(join(temp,'world.mjs'))),{render}=await import(pathToFileURL(join(temp,'renderer.mjs'))),{GameClient}=await import(pathToFileURL(join(temp,'client.mjs')));
+try {
+ const sim=await import(project.module('simulation')),world=await import(project.module('world')),{render}=await import(project.module('renderer')),{GameClient}=await import(project.module('client'));
  const clone=value=>JSON.parse(JSON.stringify(value));
  const art=new Proxy({}, {get:(obj,name)=>obj[name]??={name,width:64,height:64}});
  const gradient=()=>({addColorStop(){}});
@@ -56,7 +46,7 @@ try{
  });
  await test('action acknowledgement cannot rewind the actual local trail phase',async()=>{const f=fixture();try{f.aim('right');f.c.act();f.advance(180);const before=singleTrail(drawClient(f));await f.c.sync();const after=singleTrail(drawClient(f));assert.equal(after.name,before.name);assert.deepEqual(after.matrix,before.matrix);}finally{f.c.destroy();}});
  await test('a snapshot sent before a new click cannot erase its visible trail',async()=>{const f=fixture();try{f.defer=true;const request=f.c.sync();f.advance(50);f.aim('left');f.c.act();f.advance(180);const before=singleTrail(drawClient(f));f.release();await request;const after=singleTrail(drawClient(f));assert.equal(after.name,before.name);assert.deepEqual(after.matrix,before.matrix);}finally{f.c.destroy();}});
- await test('late acknowledgement after local completion cannot replay the still-active authoritative trail',async()=>{const f=fixture();try{f.aim('right');f.c.act();f.advance(200);f.defer=true;const request=f.c.sync();f.advance(350);f.release();await request;assert.ok(f.c.world.players.p.swingUntil>now,'late reply deliberately still contains an active server swing');assert.equal(trails(drawClient(f)).length,0);}finally{f.c.destroy();}});
+ await test('late acknowledgement after local completion cannot replay the still-active authoritative trail',async()=>{const f=fixture();try{f.aim('right');f.c.act();f.advance(200);delete f.c.commands[0].issuedAt;f.defer=true;const request=f.c.sync();f.advance(350);f.release();await request;assert.ok(f.c.world.players.p.swingUntil>now,'late reply deliberately still contains an active server swing');assert.equal(trails(drawClient(f)).length,0);}finally{f.c.destroy();}});
  await test('pointer, movement and tool changes retain the captured local tool/direction and layering',async()=>{
   for(const face of ['right','left','down','up']){const f=fixture();try{f.c.setTool('sword');f.aim(face);f.c.act();f.advance(120);f.aim({right:'left',left:'right',down:'up',up:'down'}[face]);f.c.press(face==='up'?'s':'w',true);f.c.setTool('pick');f.advance(10);await f.c.sync();
    const draws=drawClient(f),trail=singleTrail(draws),angle={right:0,left:Math.PI,down:Math.PI/2,up:-Math.PI/2}[face];assert.equal(trail.name,'trail-sword-4');near(trail.matrix[0],Math.cos(angle),'rotation cos');near(trail.matrix[1],Math.sin(angle),'rotation sin');near(trail.matrix[4],f.canvas.width/2,'trail x pivot');near(trail.matrix[5],f.canvas.height/2-12,'trail y pivot');
@@ -73,4 +63,4 @@ try{
  await test('resource-fragment drawing requires a current hit event, never hurt/pickup/build/future/expired events',()=>{const f=fixture();try{const r=resourceOf('tree');atResource(f,r);for(const [kind,age,amount]of [['hurt',20,1],['wood',20,6],['build',20,0],['hit',-1,1],['hit',341,1]]){f.s.events=[{id:'contract',kind,time:now-age,x:r.x+.5,y:r.y+.5,amount}];assert.equal(chips(draw(f,now,{state:f.s,view:{localSwing:null}})).length,0,`${kind} age${age} must not emit material chips`);}}finally{f.c.destroy();}});
  await test('authoritative berry harvest does not emit stone mining fragments',()=>{const f=fixture();try{const r=resourceOf('berry');atResource(f,r);sim.applyInput(f.s,'p',{seq:1,dx:0,dy:0,movements:[],commands:[{type:'attack',tool:'axe',target:r.id,face:'right'}]},now);sim.tickWorld(f.s,now+180);assert.ok(f.s.events.some(e=>e.kind==='hit'&&e.amount===1));assert.equal(chips(draw(f,now+200,{state:f.s,view:{localSwing:null}})).length,0);}finally{f.c.destroy();}});
  console.log(`${checks} tool-effects checks; ${failures} failure(s)${overlay?' — overlay '+overlay:''}`);process.exitCode=failures?1:0;
-}finally{Date.now=original.now;globalThis.window=original.window;globalThis.Image=original.Image;globalThis.document=original.document;globalThis.requestAnimationFrame=original.raf;globalThis.cancelAnimationFrame=original.caf;globalThis.setTimeout=original.timeout;globalThis.clearTimeout=original.clearTimeout;await rm(temp,{recursive:true,force:true});}
+}finally{Date.now=original.now;globalThis.window=original.window;globalThis.Image=original.Image;globalThis.document=original.document;globalThis.requestAnimationFrame=original.raf;globalThis.cancelAnimationFrame=original.caf;globalThis.setTimeout=original.timeout;globalThis.clearTimeout=original.clearTimeout;project.cleanup();}

@@ -1,7 +1,8 @@
 import {CAVE_ENTRANCE,MINE_TORCHES,resourcesInRect,SPAWN,sceneAt,terrainAt} from './world';
 import type {Atlas} from './art';
 import type {WorldState} from './simulation';
-type Camera={x:number;y:number};
+import {floorLevel} from './structures';
+type Camera={x:number;y:number;level?:number};
 let lightLayer:HTMLCanvasElement|undefined;
 const lightStamps=new Map<string,HTMLCanvasElement>();
 function softLight(color:string){
@@ -23,14 +24,14 @@ function daylightFor(w:number,h:number){
             const c=document.createElement('canvas');c.width=Math.ceil(width);c.height=Math.ceil(height);
             const ctx=c.getContext('2d')!;ctx.imageSmoothingEnabled=true;ctx.drawImage(softLight(color),0,0,c.width,c.height);return c;
         };
-        daylight={w,h,sun:sized('#fff1c419',w*1.5,h*1.8),haze:sized('#edf4cf16',w*1.2,h*.9)};
+        daylight={w,h,sun:sized('#ffe7af36',w*1.5,h*1.8),haze:sized('#f9edca24',w*1.2,h*.9)};
     }
     return daylight;
 }
 export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,art:Atlas,time:number,w:number,h:number,ox:number,oy:number){
     const underground=sceneAt(pos.x)==='mine';
     const region=terrainAt(Math.floor(pos.x),Math.floor(pos.y));
-    const lights=underground?mineLights:surfaceLights;
+    const lights=[...(underground?mineLights:surfaceLights.map(l=>({...l,y:l.y+floorLevel(pos)}))),...Object.values(s.buildings).filter(b=>b.kind==='lantern'&&floorLevel(b)===floorLevel(pos)).map(b=>({x:b.x+.5,y:b.y+.35,r:72}))];
     if(underground){
         lightLayer??=document.createElement('canvas');
         if(lightLayer.width!==w)lightLayer.width=w;if(lightLayer.height!==h)lightLayer.height=h;
@@ -46,7 +47,10 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
         }
         light.globalCompositeOperation='source-over';ctx.drawImage(lightLayer,0,0);
     } else {
-        // Broad, slow daylight replaces hard diagonal beams. Stamps are cached.
+        // Warm color grade and lifted shadows remain visible across the whole scene.
+        ctx.save();ctx.globalCompositeOperation='soft-light';ctx.globalAlpha=.28;ctx.fillStyle='#efbb72';ctx.fillRect(0,0,w,h);
+        ctx.globalCompositeOperation='screen';ctx.globalAlpha=.055;ctx.fillStyle='#fff0cd';ctx.fillRect(0,0,w,h);ctx.restore();
+        // Broad, slow daylight. Stamps are cached.
         const drift=Math.sin(time/18000+pos.x*.006)*18,day=daylightFor(w,h);
         ctx.save();
         ctx.drawImage(day.sun,Math.round(-w*.4+drift),Math.round(-h*.65));
@@ -60,7 +64,7 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
     for(const l of lights){
         const x=l.x*24+ox,y=l.y*24+oy,r=l.r+Math.sin(time/650+l.x);
         if(x<-r||x>w+r||y<-r||y>h+r)continue;
-        ctx.drawImage(softLight(underground?'#ffd59a48':'#ffdc9e30'),x-r,y-r,r*2,r*2);
+        ctx.drawImage(softLight(underground?'#ffdcac62':'#ffdea04d'),x-r,y-r,r*2,r*2);
     }ctx.restore();
     // Sparse generated pollen and dust drift slowly through the light.
     ctx.save();ctx.globalAlpha=underground?.18:region==='forest'?.24:.16;
@@ -72,7 +76,7 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
     ctx.restore();
 }
 export function treeShadows(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,art:Atlas,ox:number,oy:number){
-    if(sceneAt(pos.x)==='mine')return;
+    if(sceneAt(pos.x)==='mine'||floorLevel(pos)>0)return;
     ctx.save();ctx.globalAlpha=.08;ctx.globalCompositeOperation='multiply';
     for(const r of resourcesInRect(pos.x-20,pos.y-15,pos.x+20,pos.y+15)){
         if((r.kind!=='tree'&&r.kind!=='pine')||s.depleted[r.id]||Math.abs(r.x-pos.x)>20||Math.abs(r.y-pos.y)>15)continue;

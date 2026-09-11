@@ -1,0 +1,139 @@
+{
+  "author": "Original procedural sound design for 林间小筑",
+  "format": "PCM 16-bit mono",
+  "assets": [
+    {
+      "name": "swing",
+      "seconds": 0.22,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.3
+    },
+    {
+      "name": "wood",
+      "seconds": 0.23,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.58
+    },
+    {
+      "name": "stone",
+      "seconds": 0.32,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.45
+    },
+    {
+      "name": "hit",
+      "seconds": 0.2,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.48
+    },
+    {
+      "name": "build",
+      "seconds": 0.38,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.48
+    },
+    {
+      "name": "door",
+      "seconds": 0.43,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.26
+    },
+    {
+      "name": "grass-step",
+      "seconds": 0.15,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.16
+    },
+    {
+      "name": "wood-step",
+      "seconds": 0.14,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.18
+    },
+    {
+      "name": "till",
+      "seconds": 0.28,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.28
+    },
+    {
+      "name": "plant",
+      "seconds": 0.25,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.19
+    },
+    {
+      "name": "water",
+      "seconds": 0.66,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.2
+    },
+    {
+      "name": "harvest",
+      "seconds": 0.75,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.25
+    },
+    {
+      "name": "hurt",
+      "seconds": 0.28,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.25
+    },
+    {
+      "name": "bat",
+      "seconds": 0.35,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.12
+    },
+    {
+      "name": "boar",
+      "seconds": 0.45,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.24
+    },
+    {
+      "name": "spore",
+      "seconds": 0.4,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.22
+    },
+    {
+      "name": "forest",
+      "seconds": 24,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.11
+    },
+    {
+      "name": "cave",
+      "seconds": 16,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.09
+    },
+    {
+      "name": "fire",
+      "seconds": 8,
+      "rate": 22050,
+      "channels": 1,
+      "peak": 0.075
+    }
+  ]
+}

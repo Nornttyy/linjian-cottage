@@ -1,13 +1,7 @@
-// Input, synchronization and drawing regression checks against the real modules.
-// Usage: node scripts/test-regression.mjs
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import {compileProject} from './test-support.mjs';
 
-const source = resolve(process.env.LINJIAN_SOURCE || fileURLToPath(new URL('..', import.meta.url)));
-const temp = await mkdtemp(join(tmpdir(), 'linjian-regression-modules-'));
+const project=compileProject({name:'regression'});
 const real = {
   now: Date.now, timeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout,
   window: globalThis.window, Image: globalThis.Image, document: globalThis.document,
@@ -16,18 +10,10 @@ const real = {
 let now = 100000;
 let failures = 0;
 try {
-  const ts = (await import(pathToFileURL(join(source, 'node_modules/typescript/lib/typescript.js')))).default;
-  for (const name of ['world', 'simulation', 'frame-layout', 'inventory', 'roof-visibility', 'connected-wall', 'tiles', 'animation', 'atmosphere', 'renderer', 'art', 'client']) {
-    const text = await readFile(join(source, 'lib', name + '.ts'), 'utf8');
-    const js = ts.transpileModule(text, { compilerOptions: {
-      target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
-    }}).outputText.replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g, "from './$1.mjs'");
-    await writeFile(join(temp, name + '.mjs'), js);
-  }
-  const sim = await import(pathToFileURL(join(temp, 'simulation.mjs')));
-  const world = await import(pathToFileURL(join(temp, 'world.mjs')));
-  const { GameClient } = await import(pathToFileURL(join(temp, 'client.mjs')));
-  const { render } = await import(pathToFileURL(join(temp, 'renderer.mjs')));
+  const sim = await import(project.module('simulation'));
+  const world = await import(project.module('world'));
+  const { GameClient } = await import(project.module('client'));
+  const { render } = await import(project.module('renderer'));
   Date.now = () => now;
   globalThis.window = { addEventListener() {}, removeEventListener() {} };
   globalThis.Image = class {}; // Keep art loading unresolved; input tests do not render.
@@ -206,7 +192,7 @@ try {
     }
   });
 
-  await test('roof ghost and placed roof use the same screen bounds', () => {
+  await test('roof selection shows one placed roof and a hammer cursor at the selected point', () => {
     const f = fixture();
     try {
       const matrix = () => [1, 0, 0, 1, 0, 0];
@@ -249,8 +235,11 @@ try {
       }
       render(canvas, f.state, 'p', f.client.pos, { tool: 'build', part: 'roof', remove: false, pointer: { x: 259.5, y: 322.5 }, time: now }, art);
       const roofs = draws.filter(d => d.name === 'roof');
-      assert.equal(roofs.length, 2, 'expected one placed roof and one ghost');
-      assert.deepEqual(roofs[1].bounds, roofs[0].bounds, 'ghost bounds must equal final placed bounds');
+      assert.equal(roofs.length, 1, 'only the authoritative placed roof is rendered');
+      const ox=Math.round(400-f.client.pos.x*24),oy=Math.round(200-f.client.pos.y*24);
+      assert.deepEqual(roofs[0].bounds,[259*24+ox,322*24+oy-22,260*24+ox,323*24+oy-22]);
+      const hammers=draws.filter(d=>d.name==='hammer');assert.equal(hammers.length,1);
+      const hx=Math.round(259.5*24+ox),hy=Math.round(322.5*24+oy);assert.deepEqual(hammers[0].bounds,[hx-3,hy-17,hx+14,hy+3]);
     } finally { f.client.destroy(); }
   });
 
@@ -261,5 +250,5 @@ try {
   globalThis.setTimeout = real.timeout; globalThis.clearTimeout = real.clearTimeout;
   globalThis.window = real.window; globalThis.Image = real.Image; globalThis.document = real.document;
   globalThis.requestAnimationFrame = real.raf; globalThis.cancelAnimationFrame = real.caf;
-  await rm(temp, { recursive: true, force: true });
+  project.cleanup();
 }

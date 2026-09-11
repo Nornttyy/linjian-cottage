@@ -1,25 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, rm, access } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
-const source=resolve(fileURLToPath(new URL('..',import.meta.url)));
-const ts=(await import(pathToFileURL(join(source,'node_modules/typescript/lib/typescript.js')))).default;
+import {compileProject} from './test-support.mjs';
 const overlay=process.env.LINJIAN_ANIMATION_OVERLAY;
-const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
+const project=compileProject({name:'animation',overlay});
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
-try{
-  for(const name of ['world','simulation','frame-layout','inventory','roof-visibility','connected-wall','tiles','animation','atmosphere','renderer','art','client']){
-    let path=join(source,'lib',name+'.ts');
-    if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
-    const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
-    await writeFile(join(temp,name+'.mjs'),code);
-  }
-  const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
-  const animation=await import(pathToFileURL(join(temp,'animation.mjs')));
-  const {GameClient}=await import(pathToFileURL(join(temp,'client.mjs')));
+try {
+  const sim=await import(project.module('simulation'));
+  const animation=await import(project.module('animation'));
+  const {GameClient}=await import(project.module('client'));
   Date.now=()=>now;
   globalThis.window={addEventListener(){},removeEventListener(){}};
   globalThis.Image=class{};
@@ -141,4 +129,4 @@ try{
     }finally{f.c.destroy();}
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;
-}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}
+}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;project.cleanup();}

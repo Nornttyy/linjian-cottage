@@ -1,27 +1,14 @@
-// Door interaction and delayed movement regressions against the real client/server.
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, rm, access } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
-const source=resolve(process.env.LINJIAN_SOURCE || fileURLToPath(new URL('..',import.meta.url)));
-const ts=(await import(pathToFileURL(join(source,'node_modules/typescript/lib/typescript.js')))).default;
+import {compileProject} from './test-support.mjs';
 const overlay=process.env.LINJIAN_INPUT_OVERLAY;
-const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
+const project=compileProject({name:'door-latency',overlay});
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
-try{
-  for(const name of ['world','simulation','frame-layout','connected-wall','inventory','roof-visibility','tiles','animation','atmosphere','renderer','art','client']){
-    let path=join(source,'lib',name+'.ts');
-    if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
-    const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|connected-wall|inventory|roof-visibility|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
-    await writeFile(join(temp,name+'.mjs'),code);
-  }
-  const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
-  const world=await import(pathToFileURL(join(temp,'world.mjs')));
-  const animation=await import(pathToFileURL(join(temp,'animation.mjs')));
-  const {GameClient}=await import(pathToFileURL(join(temp,'client.mjs')));
+try {
+  const sim=await import(project.module('simulation'));
+  const world=await import(project.module('world'));
+  const animation=await import(project.module('animation'));
+  const {GameClient}=await import(project.module('client'));
   Date.now=()=>now;
   globalThis.window={addEventListener(){},removeEventListener(){}};
   globalThis.Image=class{};
@@ -118,8 +105,8 @@ try{
     const f=doorFixture();try{
       for(const y of [321.5,323.5]){f.p.y=y;for(let i=0;i<4;i++){now+=100;f.packet([{type:'interact',target:f.door.id}]);assert.equal(f.door.open,i%2===1);assert.equal(sim.isBlocked(f.state,259.5,322.5),i%2===0);}}
       f.p.y=322.5;assert.equal(f.packet([{type:'interact'}]),'门口有人');assert.equal(f.door.open,true);
-      f.p.y=323.1;assert.equal(f.packet([{type:'interact'}]),'门口有人','body overlaps despite center being outside cell');assert.equal(f.door.open,true);
-      f.p.y=323.3;assert.equal(f.packet([{type:'interact'}]),null);assert.equal(f.door.open,false);
+      f.p.y=322.8;assert.equal(f.packet([{type:'interact'}]),'门口有人','body overlaps despite center being outside the 6px strip');assert.equal(f.door.open,true);
+      f.p.y=322.9;assert.equal(f.packet([{type:'interact'}]),null);assert.equal(f.door.open,false);
     }finally{f.c.destroy();}
   });
   await test('another active player blocks closing by body overlap; disconnected room entries do not block forever',()=>{
@@ -179,4 +166,4 @@ try{
     }finally{f.end();}
   });
   console.log(failures+' failure(s)');process.exitCode=failures?1:0;
-}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}
+}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;project.cleanup();}

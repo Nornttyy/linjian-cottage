@@ -1,17 +1,16 @@
-import {COSTS,PART_NAMES,type Inventory,type Part} from './simulation';
-
+import type {Inventory} from './simulation';
 export const HOTBAR_SIZE=9;
 export const BACKPACK_SIZE=27;
-export type ItemKey='axe'|'pick'|'sword'|Part|keyof Inventory;
+export type ItemKey='axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|keyof Inventory;
 export type ItemSlot=ItemKey|null;
-export const ITEMS:Record<ItemKey,{name:string;icon:string;kind:'tool'|'plan'|'resource'}>={
+export const ITEMS:Record<ItemKey,{name:string;icon:string;kind:'tool'|'resource'}>={
     axe:{name:'斧头',icon:'axe',kind:'tool'},pick:{name:'镐',icon:'pick',kind:'tool'},sword:{name:'剑',icon:'sword',kind:'tool'},
-    floor:{name:'地板',icon:'floor',kind:'plan'},wall:{name:'木墙',icon:'wall',kind:'plan'},window:{name:'窗墙',icon:'window',kind:'plan'},
-    door:{name:'木门',icon:'door',kind:'plan'},roof:{name:'屋顶',icon:'roof',kind:'plan'},
-    wood:{name:'木材',icon:'wood',kind:'resource'},stone:{name:'石头',icon:'stone',kind:'resource'},
-    copper:{name:'铜矿',icon:'copper',kind:'resource'},essence:{name:'精华',icon:'essence',kind:'resource'}
+    hammer:{name:'建造锤',icon:'hammer',kind:'tool'},hoe:{name:'锄头',icon:'hoe',kind:'tool'},water:{name:'洒水壶',icon:'water',kind:'tool'},
+    wood:{name:'木材',icon:'wood',kind:'resource'},stone:{name:'石头',icon:'stone',kind:'resource'},copper:{name:'铜矿',icon:'copper',kind:'resource'},essence:{name:'精华',icon:'essence',kind:'resource'},
+    carrotSeed:{name:'胡萝卜种子',icon:'carrot-seed',kind:'resource'},tomatoSeed:{name:'番茄种子',icon:'tomato-seed',kind:'resource'},wheatSeed:{name:'小麦种子',icon:'wheat-seed',kind:'resource'},
+    carrot:{name:'胡萝卜',icon:'carrot',kind:'resource'},tomato:{name:'番茄',icon:'tomato',kind:'resource'},wheat:{name:'小麦',icon:'wheat',kind:'resource'},
 };
-const defaults:ItemKey[]=['axe','pick','sword','floor','wall','window','door','roof','essence','wood','stone','copper'];
+const defaults:ItemKey[]=['axe','pick','sword','hammer','hoe','water','carrotSeed','tomatoSeed','essence','wheatSeed','wood','stone','copper','carrot','tomato','wheat'];
 export function defaultSlots():ItemSlot[]{return Array.from({length:HOTBAR_SIZE+BACKPACK_SIZE},(_,i)=>defaults[i]??null);}
 export function restoreSlots(value:unknown):ItemSlot[]{
     if(!Array.isArray(value)||value.length!==HOTBAR_SIZE+BACKPACK_SIZE)return defaultSlots();
@@ -29,8 +28,7 @@ export function itemCount(item:ItemSlot,inventory?:Inventory){
 export function visibleItem(item:ItemSlot,inventory?:Inventory):ItemSlot{return itemCount(item,inventory)>0?item:null;}
 export function itemDescription(item:ItemSlot){
     if(!item)return '';
-    if(ITEMS[item].kind==='plan')return PART_NAMES[item as Part]+' · '+Object.entries(COSTS[item as Part]).map(([key,count])=>ITEMS[key as ItemKey].name+' × '+count).join('，');
-    return item==='essence'?'精华 · 回复30生命':ITEMS[item].name;
+    return item==='essence'?'精华 · 回复30生命':item==='hammer'?'建造锤':item==='carrot'?'胡萝卜 · 回复12生命':item==='tomato'?'番茄 · 回复10生命':ITEMS[item].name;
 }
 export function swapSlots(slots:ItemSlot[],from:number,to:number):ItemSlot[]{
     if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||from>=slots.length||to>=slots.length||from===to)return slots;

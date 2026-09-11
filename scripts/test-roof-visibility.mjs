@@ -1,16 +1,9 @@
 import assert from 'node:assert/strict';
-import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
-import {pathToFileURL} from 'node:url';
-import ts from 'typescript';
+import {compileProject} from './test-support.mjs';
 
-const source=process.env.LINJIAN_ROOF_MODULE??new URL('../lib/roof-visibility.ts',import.meta.url);
-const temp=await mkdtemp(join(tmpdir(),'linjian-roof-test-'));
+const project=compileProject({name:'roof-visibility',overrides:process.env.LINJIAN_ROOF_MODULE?{'lib/roof-visibility.ts':process.env.LINJIAN_ROOF_MODULE}:{}});
 try {
-    const js=ts.transpileModule(await readFile(source,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
-    await writeFile(join(temp,'roof.mjs'),js);
-    const {roofVisibility,HIDDEN_ROOF_ALPHA}=await import(pathToFileURL(join(temp,'roof.mjs')));
+const {roofVisibility,HIDDEN_ROOF_ALPHA}=await import(project.module('roof-visibility'));
     const roofs=[{x:1,y:1},{x:2,y:1},{x:9,y:9}],inside=new Set(['1:1','2:1']),outside=new Set();
     const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
     const read=(canvas,hidden,time,scope='room-A:player:surface',tiles=roofs)=>roofVisibility(canvas,scope,tiles,hidden,time);
@@ -53,4 +46,4 @@ try {
         const c={};read(c,outside,0);read(c,inside,100);const a=read(c,inside,250).get('1:1');near(read(c,inside,225).get('1:1'),a);near(read(c,inside,400).get('1:1'),.14);
     });
     console.log(`${passed} roof timing checks passed`);
-} finally {await rm(temp,{recursive:true,force:true});}
+} finally {project.cleanup();}

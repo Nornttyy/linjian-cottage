@@ -24,7 +24,7 @@ export default function Inventory({slots,resources,selected,onMove,onQuickMove,o
             onDrop={event=>{event.preventDefault();const value=event.dataTransfer.getData('text/plain');if(/^\d+$/.test(value)){const source=Number(value);if(source<slots.length)onMove(source,index);}setPicked(null);}}
             onDragEnd={()=>setPicked(null)}>
             {index<HOTBAR_SIZE&&<kbd>{index+1}</kbd>}
-            {entry&&<><Icon name={entry.icon} size={32}/>{entry.kind==='resource'?<span className="slot-count">{count}</span>:entry.kind==='plan'?<span className="slot-plan">建</span>:null}</>}
+            {entry&&<><Icon name={entry.icon} size={32}/>{entry.kind==='resource'?<span className="slot-count">{count}</span>:null}</>}
         </button>;
     };
     return <div className="modal-backdrop" onClick={onClose}><section className="inventory-panel" role="dialog" aria-modal="true" aria-label="背包" onClick={event=>event.stopPropagation()}>

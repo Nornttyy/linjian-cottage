@@ -1,60 +1,50 @@
-import type { Atlas } from './art';
-import type { Building } from './simulation';
-
-type Walls = Readonly<Record<string, Building>>;
-export function wallConnections(buildings: Walls, x: number, y: number) {
-    return {
-        north: !!buildings[`${x}:${y - 1}:wall`],
-        east: !!buildings[`${x + 1}:${y}:wall`],
-        south: !!buildings[`${x}:${y + 1}:wall`],
-        west: !!buildings[`${x - 1}:${y}:wall`],
-    };
+import type {Atlas} from './art';
+import {atLevel,floorLevel,wallLinks,wallRects,wallOccupies,type Building} from './structures';
+import {material} from './tiles';
+type Walls=Readonly<Record<string,Building>>;
+export const wallConnections=wallLinks;
+export function wallLayout(buildings:Walls,x:number,y:number,level=0){
+    const links=wallLinks(buildings,x,y,level),vertical=(links.north||links.south)&&!links.east&&!links.west;
+    const rects=wallRects(buildings,x,y,level),left=Math.min(...rects.map(r=>r[0])),right=Math.max(...rects.map(r=>r[0]+r[2]));
+    return{...links,vertical,x:left,width:right-left};
 }
-
-export function wallLayout(buildings: Walls, x: number, y: number) {
-    const links = wallConnections(buildings, x, y);
-    const vertical = (links.north || links.south) && !links.east && !links.west;
-    const isolated = !links.north && !links.east && !links.south && !links.west;
-    const horizontal = !links.north && !links.south;
-    const left = links.west || isolated || horizontal ? 0 : 8;
-    const right = links.east || isolated || horizontal ? 24 : 16;
-    return { ...links, vertical, x: vertical ? 8 : left, width: vertical ? 8 : right - left };
+export function floorWallInsets(buildings:Walls,x:number,y:number,level=0){
+    if(!atLevel(buildings,x,y,'wall',level))return{left:0,right:0,top:0,bottom:0};
+    const has=(dx:number,dy:number)=>!!atLevel(buildings,x+dx,y+dy,'floor',level);
+    return{left:!has(-1,0)&&has(1,0)?9:0,right:has(-1,0)&&!has(1,0)?9:0,top:!has(0,-1)&&has(0,1)?9:0,bottom:has(0,-1)&&!has(0,1)?9:0};
 }
-
-export function floorWallInsets(buildings: Walls, x: number, y: number) {
-    if (!buildings[`${x}:${y}:wall`]) return { left: 0, right: 0 };
-    const links = wallConnections(buildings, x, y);
-    if (!links.north && !links.south) return { left: 0, right: 0 };
-    const west = !!buildings[`${x - 1}:${y}:floor`], east = !!buildings[`${x + 1}:${y}:floor`];
-    return { left: !west && east ? 8 : 0, right: west && !east ? 8 : 0 };
-}
-
-// Use the generated wall/door/window sprites. Only screen-space shape changes;
-// building coordinates and the existing collision layer remain one 24 px cell.
-export function drawConnectedWall(ctx: CanvasRenderingContext2D, art: Atlas, buildings: Walls, b: Building, ox: number, oy: number) {
-    const shape = wallLayout(buildings, b.x, b.y);
-    const img = art[b.kind === 'door' && b.open ? 'door-open' : b.kind];
-    let sx = 0, sy = 0, sw = img.width, sh = img.height;
-    if (b.kind === 'wall') {
-        if (shape.vertical) {
-            // A narrow continuous wooden strip, without a post on every tile.
-            sx = Math.floor(img.width * .35); sw = Math.max(1, Math.floor(img.width * .3));
-            const top = shape.north ? Math.floor(img.height * .18) : 0;
-            const bottom = shape.south ? Math.floor(img.height * .12) : 0;
-            sy = top; sh -= top + bottom;
-        } else {
-            const left = shape.west ? Math.floor(img.width * .12) : 0;
-            const right = shape.east ? Math.floor(img.width * .12) : 0;
-            sx = left; sw -= left + right;
-        }
+// The same narrow footprint drives drawing and collision. Only exterior
+// boundaries receive outlines: adjoining cells share uninterrupted wood.
+function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
+    const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level),shape=wallLayout(buildings,b.x,b.y,level);
+    const x=b.x*24+ox,y=b.y*24+oy,height=b.kind==='fence'?10:19;
+    const occupied=(px:number,py:number)=>wallOccupies(buildings,b.x+(px+.5)/24,b.y+(py+.5)/24,level);
+    for(let py=0;py<24;py++)for(let px=0;px<24;){
+        if(!occupied(px,py)||occupied(px,py+1)){px++;continue;}
+        const start=px;while(px<24&&occupied(px,py)&&!occupied(px,py+1))px++;
+        material(ctx,art['wall-face'],b.x,b.y,x+start,y+py+1-height,px-start,height);
+        ctx.fillStyle='#946237';ctx.fillRect(x+start,y+py,px-start,1);
     }
-    const dx = b.x * 24 + ox + shape.x, dy = b.y * 24 + oy - 7;
-    if (b.kind === 'wall' && shape.vertical) {
-        // Retain the existing generated wooden frame along the thin side wall.
-        // These three strips do not overlap, so foreground fade stays uniform.
-        const post = Math.max(1, Math.floor(img.width * .09)), inset = Math.floor(img.width * .05);
-        ctx.drawImage(img, sx, sy, sw, sh, dx + 1, dy, 6, 31);
-        ctx.drawImage(img, inset, sy, post, sh, dx, dy, 1, 31);
-        ctx.drawImage(img, img.width - inset - post, sy, post, sh, dx + 7, dy, 1, 31);
-    } else ctx.drawImage(img, sx, sy, sw, sh, dx, dy, shape.width, 31);
+    ctx.save();ctx.beginPath();for(const [rx,ry,w,h]of rects)ctx.rect(x+rx,y+ry-height,w,h);ctx.clip();
+    material(ctx,art['wall-cap'],b.x,b.y,x,y-height,24,24);ctx.restore();
+    ctx.fillStyle='#f3c57a';
+    for(let py=0;py<24;py++)for(let px=0;px<24;px++)if(occupied(px,py)&&!occupied(px,py-1))ctx.fillRect(x+px,y+py-height,1,1);
+    ctx.fillStyle='#a47041';
+    for(let py=0;py<24;py++)for(let px=0;px<24;px++)if(occupied(px,py)&&!occupied(px+1,py))ctx.fillRect(x+px,y+py-height,1,1);
+    if(b.kind==='window'||b.kind==='door'){
+        const img=art[b.kind==='door'?(b.open?'door-open':'door'):'window'];
+        if(!shape.vertical)ctx.drawImage(img,x+2,y-13,20,29);
+        else if(b.kind==='window')ctx.drawImage(img,x+10,y-9,4,19);
+        else if(!b.open)ctx.drawImage(img,x+10,y-10,4,24);
+        else{ctx.save();ctx.translate(x+12,y-15);ctx.rotate(Math.PI/2);ctx.drawImage(art['wall-cap'],0,0,14,4);ctx.restore();}
+    }
+}
+
+const wallStamps=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
+export function drawConnectedWall(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
+    let cache=wallStamps.get(art);if(!cache){cache=new Map();wallStamps.set(art,cache);}
+    const links=wallLinks(buildings,b.x,b.y,floorLevel(b));
+    const key=[b.kind,!!b.open,...Object.values(links),b.x%2,b.y%2].join(':');let stamp=cache.get(key);
+    if(!stamp){stamp=document.createElement('canvas');stamp.width=40;stamp.height=64;const context=stamp.getContext('2d')!;context.imageSmoothingEnabled=false;drawWallUncached(context,art,buildings,b,-b.x*24+8,-b.y*24+32);if(cache.size>=512)cache.delete(cache.keys().next().value!);cache.set(key,stamp);}
+    ctx.drawImage(stamp,b.x*24+ox-8,b.y*24+oy-32);
 }

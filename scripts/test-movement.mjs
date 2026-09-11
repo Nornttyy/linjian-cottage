@@ -1,27 +1,14 @@
-// Real client/server movement-lock regressions. Run: node scripts/test-movement.mjs.
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, rm, access } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
-const source=resolve(process.env.LINJIAN_SOURCE || fileURLToPath(new URL('..',import.meta.url)));
-const ts=(await import(pathToFileURL(join(source,'node_modules/typescript/lib/typescript.js')))).default;
+import {compileProject} from './test-support.mjs';
 const overlay=process.env.LINJIAN_LOCK_OVERLAY;
-const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
+const project=compileProject({name:'movement',overlay});
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
-try{
-  for(const name of ['world','simulation','frame-layout','inventory','roof-visibility','connected-wall','tiles','animation','atmosphere','renderer','art','client']){
-    let path=join(source,'lib',name+'.ts');
-    if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
-    const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
-    await writeFile(join(temp,name+'.mjs'),code);
-  }
-  const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
-  const world=await import(pathToFileURL(join(temp,'world.mjs')));
-  const animation=await import(pathToFileURL(join(temp,'animation.mjs')));
-  const {GameClient}=await import(pathToFileURL(join(temp,'client.mjs')));
+try {
+  const sim=await import(project.module('simulation'));
+  const world=await import(project.module('world'));
+  const animation=await import(project.module('animation'));
+  const {GameClient}=await import(project.module('client'));
   Date.now=()=>now;
   globalThis.window={addEventListener(){},removeEventListener(){}};
   globalThis.Image=class{};
@@ -55,11 +42,11 @@ try{
   const near=(a,b,message)=>assert.ok(Math.abs(a-b)<1e-8,`${message}: ${a} vs ${b}`);
   function packet(f,{move=0,commands=[]}={}){return sim.applyInput(f.state,'p',{seq:f.p.seq+1,dx:move?1:0,dy:0,movements:move?[{dx:1,dy:0,seconds:move}]:[],commands},now);}
   for(const [tool,duration] of Object.entries(sim.TOOL_TIMING).map(([tool,timing])=>[tool,timing.duration])){
-    await test(`${tool}: held movement is locked for the complete local + authoritative swing then resumes`,async()=>{
+    await test(`${tool}: held movement is locked until the shared local and backdated authoritative deadline then resumes`,async()=>{
       const f=fixture();try{
         const x=f.c.pos.x;f.c.setTool(tool);f.aim(1,0);f.c.act();f.c.press('d',true);
         f.advance(100);near(f.c.pos.x,x,'before acknowledgement');await f.c.sync();
-        f.advance(duration-1);near(f.c.pos.x,x,'through server recovery');
+        f.advance(duration-101);near(f.c.pos.x,x,'through shared recovery deadline');
         assert.equal(f.c.keys.has('d'),true,'direction input survives lock');
         f.advance(1);near(f.c.pos.x,x,'no retroactive movement at exact unlock');
         f.advance(100);near(f.c.pos.x,x+.42,'held movement resumes');await f.c.sync();
@@ -86,8 +73,8 @@ try{
     const f=fixture();try{
       f.defer=true;const older=f.c.sync();f.advance(20);f.aim(1,0);f.c.act();f.c.press('d',true);const x=f.c.pos.x;
       f.advance(600);f.release();await older;f.advance(10);near(f.c.pos.x,x,'unacknowledged action remains locked after old reply');
-      await f.c.sync();f.advance(sim.TOOL_TIMING.axe.duration-1);near(f.c.pos.x,x,'server action still active');
-      f.advance(11);assert.ok(f.c.pos.x>x,'finite real server deadline releases movement');
+      await f.c.sync();assert.ok(f.p.swingUntil<=now,'late accepted attack retains its original deadline');
+      f.advance(10);near(f.c.pos.x,x+.042,'completed backdated action resumes movement on the next frame');
     }finally{f.c.destroy();}
   });
   await test('late acknowledgement of a completed server action does not add a new movement-lock duration',async()=>{
@@ -164,4 +151,4 @@ try{
     }finally{f.c.destroy();}
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;
-}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}
+}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;project.cleanup();}

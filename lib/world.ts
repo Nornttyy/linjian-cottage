@@ -41,7 +41,7 @@ export function terrainAt(x: number, y: number): Terrain {
         return 'water';
     if (river < 7 && !(y >= 316 && y <= 321))
         return 'sand';
-    if ((y >= 318 && y <= 320 && x > 213 && x < 301) || (x >= 298 && x <= 300 && y > 220 && y < 320))
+    if ((y >= 318 && y <= 320 && x > 213 && x < 301) || (x >= 298 && x <= 300 && y > 220 && y < 320)||(y>=220&&y<=222&&x>=299&&x<=350)||(x>=349&&x<=351&&y>=215&&y<=222))
         return 'path';
     if (y < 120 && x > 270)
         return 'snow';

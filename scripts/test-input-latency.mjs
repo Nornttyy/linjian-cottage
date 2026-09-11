@@ -1,27 +1,14 @@
-// Real client/server movement-lock regressions. Copy to scripts/test-movement.mjs or set LINJIAN_SOURCE.
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, rm, access } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
-const source=resolve(process.env.LINJIAN_SOURCE || fileURLToPath(new URL('..',import.meta.url)));
-const ts=(await import(pathToFileURL(join(source,'node_modules/typescript/lib/typescript.js')))).default;
+import {compileProject} from './test-support.mjs';
 const overlay=process.env.LINJIAN_INPUT_OVERLAY;
-const temp=await mkdtemp(join(tmpdir(),'linjian-animation-test-'));
+const project=compileProject({name:'input-latency',overlay});
 let now=100000,failures=0;
 const actual={now:Date.now,setTimeout,clearTimeout};
-try{
-  for(const name of ['world','simulation','frame-layout','inventory','roof-visibility','connected-wall','tiles','animation','atmosphere','renderer','art','client']){
-    let path=join(source,'lib',name+'.ts');
-    if(overlay){const candidate=join(overlay,name+'.ts');try{await access(candidate);path=candidate;}catch{}}
-    const code=ts.transpileModule(await readFile(path,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-      .replace(/from ['"]\.\/(world|simulation|frame-layout|inventory|roof-visibility|connected-wall|tiles|animation|atmosphere|renderer|art)(?:\.ts)?['"]/g,"from './$1.mjs'");
-    await writeFile(join(temp,name+'.mjs'),code);
-  }
-  const sim=await import(pathToFileURL(join(temp,'simulation.mjs')));
-  const world=await import(pathToFileURL(join(temp,'world.mjs')));
-  const animation=await import(pathToFileURL(join(temp,'animation.mjs')));
-  const {GameClient}=await import(pathToFileURL(join(temp,'client.mjs')));
+try {
+  const sim=await import(project.module('simulation'));
+  const world=await import(project.module('world'));
+  const animation=await import(project.module('animation'));
+  const {GameClient}=await import(project.module('client'));
   Date.now=()=>now;
   globalThis.window={addEventListener(){},removeEventListener(){}};
   globalThis.Image=class{};
@@ -167,4 +154,4 @@ try{
     for(const tool of ['axe','pick','sword']){const timing=sim.TOOL_TIMING[tool];assert.equal(animation.swingFrame(tool,timing.contact),tool==='sword'?4:5);assert.equal(animation.swingFrame(tool,timing.duration-1),7);}
   });
   console.log(overlay?'OVERLAY '+overlay:'CURRENT SITE SOURCE',failures+' failure(s)');process.exitCode=failures?1:0;
-}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;await rm(temp,{recursive:true,force:true});}
+}finally{Date.now=actual.now;globalThis.setTimeout=actual.setTimeout;globalThis.clearTimeout=actual.clearTimeout;project.cleanup();}

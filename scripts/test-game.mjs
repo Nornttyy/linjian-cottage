@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict';
-import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
-import {pathToFileURL} from 'node:url';
-import ts from 'typescript';
-const dir=await mkdtemp(join(tmpdir(),'linjian-tests-'));
-try{
- for(const name of ['world','simulation']){const source=await readFile(new URL('../lib/'+name+'.ts',import.meta.url),'utf8');const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replace("from './world'","from './world.mjs'");await writeFile(join(dir,name+'.mjs'),output);}
- const sim=await import(pathToFileURL(join(dir,'simulation.mjs'))),world=await import(pathToFileURL(join(dir,'world.mjs')));
+import {compileProject} from './test-support.mjs';
+
+const project=compileProject({name:'game'});
+try {
+ const sim=await import(project.module('simulation')),world=await import(project.module('world'));
  let checks=0;const test=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  function fixture(){const now=100000,state=sim.createWorld(now),p=sim.createPlayer('p','private-secret','Tester',0,now);state.players.p=p;return{now,state,p};}
  function command(f,c,time=550){f.now+=time;const result=sim.applyInput(f.state,'p',{seq:f.p.seq+1,dx:0,dy:0,commands:[c]},f.now);if(c.type==='attack'){f.now+=280;sim.tickWorld(f.state,f.now);}return result;}
@@ -46,4 +42,4 @@ try{
   sim.tickWorld(f.state,f.now+450);assert.equal(f.state.resourceHp[r.id],2);
  });
  console.log(`${checks} game rules passed`);
-}finally{await rm(dir,{recursive:true,force:true});}
+}finally{project.cleanup();}

@@ -21,7 +21,7 @@ function sample(fade: Fade, time: number) {
 export function roofVisibility(
     canvas: object,
     scope: string,
-    roofs: Iterable<{ x: number; y: number }>,
+    roofs: Iterable<{ x: number; y: number; level?:number }>,
     hidden: ReadonlySet<string>,
     time: number,
 ): ReadonlyMap<string, number> {
@@ -33,7 +33,7 @@ export function roofVisibility(
     state.time = Math.max(state.time, time);
     const present = new Set<string>();
     for (const roof of roofs) {
-        const key = `${roof.x}:${roof.y}`, target = hidden.has(key) ? HIDDEN_ROOF_ALPHA : 1;
+        const cell=`${roof.x}:${roof.y}`,key=cell+(roof.level?':'+roof.level:''), target = hidden.has(cell) ? HIDDEN_ROOF_ALPHA : 1;
         present.add(key);
         let fade = state.fades.get(key);
         // Joining indoors must not flash a fully opaque roof over the player.

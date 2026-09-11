@@ -1,5 +1,6 @@
+import {syncRoom} from '@/lib/room-sync';
 import { getStore } from '@/lib/store';
-import { applyInput, createPlayer, createWorld, publicWorld, tickWorld, type Input, type WorldState } from '@/lib/simulation';
+import { applyInput, createPlayer, createWorld, publicWorld, tickWorld, normalizeWorld, type Input, type WorldState } from '@/lib/simulation';
 export const dynamic = 'force-dynamic';
 const allowedOrigins = new Set(['https://nornttyy.github.io']);
 const corsHeaders = (req: Request): Record<string, string> => {
@@ -18,7 +19,8 @@ export function OPTIONS(req: Request) {
 }
 async function hash(token: string) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(b), n => n.toString(16).padStart(2, '0')).join(''); }
 export async function POST(req: Request) {
-    const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
+    const serverReceivedAt=Date.now();
+    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
     if (!allowedRequest(req)) return reply({ error: '来源不受支持' }, 403);
     try {
         if (Number(req.headers.get('content-length') ?? 0) > 12000)
@@ -31,6 +33,9 @@ export async function POST(req: Request) {
             room?: unknown;
             token?: unknown;
             input?: unknown;
+            protocol?:number;
+            poll?:boolean;
+            sinceVersion?:number;
         };
         const db = await getStore();
         const now = Date.now();
@@ -47,6 +52,10 @@ export async function POST(req: Request) {
         if (typeof token !== 'string' || token.length > 100)
             return reply({ error: '请重新连接' }, 403);
         const secret = await hash(token), newId = crypto.randomUUID().slice(0, 8);
+        if(body.action==='sync'&&body.protocol===2){
+            const result=await syncRoom(db,body.room,secret,{input:body.input as Input|undefined,poll:body.poll,sinceVersion:body.sinceVersion,normalize:state=>normalizeWorld(state,Date.now())});
+            const {status,...data}=result;return reply(data,status);
+        }
         for (let attempt = 0; attempt < 6; attempt++) {
             const row = await db.prepare('SELECT state,version FROM worlds WHERE id=?').bind(body.room).first<{
                 state: string;
@@ -54,7 +63,7 @@ export async function POST(req: Request) {
             }>();
             if (!row)
                 return reply({ error: '房间不存在' }, 404);
-            const s = JSON.parse(row.state) as WorldState;
+            const s = JSON.parse(row.state) as WorldState;normalizeWorld(s,now);
             let playerId = Object.keys(s.players).find(id => s.players[id].secret === secret), message: string | null = null;
             if (body.action === 'join') {
                 if (Object.keys(s.players).length >= 4)

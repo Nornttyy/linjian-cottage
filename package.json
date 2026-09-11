@@ -14,7 +14,7 @@
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "test": "node scripts/test-game.mjs"
+    "test": "node scripts/test-all.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

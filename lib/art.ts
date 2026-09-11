@@ -1,8 +1,10 @@
+import {farmLayout} from './farm-layout';
 import type { Terrain } from './world';
+import {creatureLayouts} from './creature-layout';
 import {toolFrames,toolAnchors,toolBodyHeights,baseAnchorX,heroLayouts} from './frame-layout';
 export type Direction='down'|'up'|'right';
-export type HeroAction='idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword';
-export type Sprite='tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
+export type HeroAction='idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
+export type Sprite='hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
 export const HERO_FRAME_COUNT=8;
 export const HERO_IDLE_FRAME_COUNT=32;
@@ -120,17 +122,36 @@ function idleFrames(base:HTMLCanvasElement,closed:HTMLCanvasElement,eyes:number[
         return out;
     });
 }
+async function creatureSheet(kind:string){
+    const img=await load('/art/'+kind+'.png'),layout=creatureLayouts[kind];
+    return layout.frames.map(([x,y,w,h],i)=>{
+        const source=canvas(w,h);source.getContext('2d')!.drawImage(img,x,y,w,h,0,0,w,h);transparentMatte(source);
+        const [sw,sh]=layout.scaledSizes?.[i]??[Math.round(w*layout.scale),Math.round(h*layout.scale)];
+        const resized=canvas(sw,sh),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(source,0,0,sw,sh);
+        const [ax,ay]=layout.scaledAnchors?.[i]??layout.anchors[i].map(v=>Math.round(v*layout.scale));
+        const out=canvas(layout.size[0],layout.size[1]);out.getContext('2d')!.drawImage(resized,layout.anchor[0]-ax,layout.anchor[1]-ay);return out;
+    });
+}
 let cached:Promise<Atlas>|undefined;
 export function loadArt(){return cached??=loadAll();}
 async function loadAll():Promise<Atlas>{
-    const [materials,objects,icons,walk,oldWalk,motion,axe,pick,sword,slime,entrance,hurt,fire,flames,trails]=await Promise.all([
+    const [materials,objects,icons,walk,oldWalk,motion,axe,pick,sword,slime,entrance,hurt,fire,flames,trails,textures,farm,home,bat,boar,mushroom,hammer,hoe,water,plant,mineExit]=await Promise.all([
         sheet('surfaces-final.png',4,4,'texture'),sheet('objects-final.png',4,4,'prop'),sheet('icons-final.png',4,4,'prop'),
-        sheet('hero-walk-v2.png',8,3,'hero'),sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v3.png',8,3,'hero'),sheet('hero-pick-v3.png',8,3,'hero'),sheet('hero-sword-v3.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect'),sheet('campfire-flames-24.png',6,4,'effect'),sheet('tool-trails.png',8,3,'effect')
+        sheet('hero-walk-v2.png',8,3,'hero'),sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v3.png',8,3,'hero'),sheet('hero-pick-v3.png',8,3,'hero'),sheet('hero-sword-v3.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect'),sheet('campfire-flames-24.png',6,4,'effect'),sheet('tool-trails.png',8,3,'effect'),sheet('homestead-textures.png',3,2,'texture'),load('/art/farm-growth.png'),sheet('homestead-items.png',4,4,'prop'),creatureSheet('bat'),creatureSheet('boar'),creatureSheet('mushroom'),sheet('hero-hammer.png',8,3,'hero'),sheet('hero-hoe.png',8,3,'hero'),sheet('hero-water.png',8,3,'hero'),sheet('hero-plant.png',8,3,'hero'),load('/art/mine-exit.png')
     ]);
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
     assign(['ground-grass','ground-forest','ground-path','ground-sand','ground-rock','ground-snow','ground-marsh','ground-water','floor','roof','plaster','ground-cave-floor','ground-cave-wall','beam','bridge','foundation'],materials);
     assign(['tree','pine','stone','copper','berry','stump','daisies','reeds','wall','window','door','door-open','fire0','fire1','fire2','chest'],objects);
+    assign(['wall-face','wall-cap','roof','roof-ridge','soil-dry','soil-wet'],textures);
+    assign(['hammer','hoe','water','seed-bag','stairs','stairs-down','ascend','descend','planter','fence','lantern','sign','carrot-seed','tomato-seed','wheat-seed','water-drop'],home);
+    const farmCells=farmLayout.frames.map(([x,y,w,h])=>{const c=canvas(w,h);c.getContext('2d')!.drawImage(farm,x,y,w,h,0,0,w,h);transparentMatte(c);return c;});
+    assign(['carrot','tomato','wheat'],farmCells.slice(12,15).map(cropped));
+    for(const [row,crop]of(['carrot','tomato','wheat'] as const).entries()){
+        const scale=farmLayout.rowScales[row];
+        for(let f=0;f<4;f++){const i=row*4+f,c=farmCells[i],[ax,ay]=farmLayout.anchors[i],out=canvas(40,40),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(c,Math.round(20-ax*scale),Math.round(35-ay*scale),c.width*scale,c.height*scale);art[`crop-${crop}-${f}`]=out;}
+    }
+    for(const [kind,cells]of [['bat',bat],['boar',boar],['mushroom',mushroom]] as const){for(let row=0;row<3;row++)for(let f=0;f<8;f++)art[`${kind}-${(['idle','move','attack'] as const)[row]}-${f}`]=cells[row*8+f];for(let f=0;f<4;f++){art[`${kind}-hurt-${f}`]=cells[24+f];art[`${kind}-death-${f}`]=cells[28+f];}}
     const base=canvas(FIRE_SIZE.width,FIRE_SIZE.height),baseContext=base.getContext('2d')!,baseScale=34/263;
     baseContext.imageSmoothingEnabled=false;
     baseContext.drawImage(fire[0],FIRE_SIZE.anchorX-(184-2)*baseScale,FIRE_SIZE.anchorY-(343-2)*baseScale,fire[0].width*baseScale,fire[0].height*baseScale);
@@ -153,6 +174,7 @@ async function loadAll():Promise<Atlas>{
         art[frameKey('walk',dir,f)]=walk[row*8+f];art[frameKey('hurt',dir,f)]=oldWalk[24+f];art[frameKey('dodge',dir,f)]=motion[row*8+f];
         art[frameKey('axe',dir,f)]=axe[row*8+f];art[frameKey('pick',dir,f)]=pick[row*8+f];art[frameKey('sword',dir,f)]=sword[row*8+(heroLayouts['hero-sword-v3.png'].order?.[row]?.[f]??f)];
     }
+    for(const [action,cells]of [['hammer',hammer],['hoe',hoe],['water',water],['plant',plant]] as const)for(const [row,dir]of(['down','up','right'] as const).entries())for(let f=0;f<8;f++)art[frameKey(action,dir,f)]=cells[row*8+(heroLayouts[`hero-${action}.png`]?.order?.[row]?.[f]??f)];
     for(let f=0;f<8;f++){art[frameKey('hurt','up',f)]=hurt[f];art[frameKey('hurt','right',f)]=hurt[8+f];}
     const idle={
         down:idleFrames(motion[24],motion[26],[[29,27,29,26],[33,27,34,26]]),
@@ -163,6 +185,7 @@ async function loadAll():Promise<Atlas>{
     for(let row=0;row<3;row++)for(let f=0;f<8;f++)art[`slime-${(['idle','move','attack'] as const)[row]}-${f}`]=slime[row*8+f];
     for(let f=0;f<4;f++){art[`slime-hurt-${f}`]=slime[24+f];art[`slime-death-${f}`]=slime[28+f];}
     const c=canvas(entrance.width,entrance.height);c.getContext('2d')!.drawImage(entrance,0,0);transparentMatte(c);art['cave-entrance']=cropped(c);
+    const exit=canvas(mineExit.width,mineExit.height);exit.getContext('2d')!.drawImage(mineExit,0,0);transparentMatte(exit);art['mine-exit']=cropped(exit);
     art.down=art['idle-down-0'];art.up=art['idle-up-0'];art.right=art['idle-right-0'];art.slime=art['slime-idle-0'];art.wildflowers=art.daisies;
     return art;
 }
