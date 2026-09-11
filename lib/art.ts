@@ -256,9 +256,9 @@ async function loadAll():Promise<Atlas>{
     extraActions.forEach((action,i)=>{for(const [row,dir]of(['down','up','right'] as const).entries())for(let f=0;f<8;f++)art[frameKey(action==='roll'?'dodge':action,dir,f)]=extraSheets[i][row*8+f];});
     for(let f=0;f<8;f++){art[frameKey('hurt','up',f)]=hurt[f];art[frameKey('hurt','right',f)]=hurt[8+f];}
     const idle={
-        down:idleFrames(motion[24],motion[26],[[29,27,29,26],[33,27,34,26]]),
+        down:idleFrames(motion[24],motion[26],[[29,27,30.5,26],[33,27,33.5,26]]),
         up:idleFrames(motion[28],motion[28],[]),
-        right:idleFrames(motion[30],motion[31],[[34,25,34,24]])
+        right:idleFrames(motion[30],motion[31],[[34.5,24.5,34.5,23.5]])
     };
     for(const dir of ['down','up','right'] as const)idle[dir].forEach((frame,i)=>art[frameKey('idle',dir,i)]=frame);
     for(let row=0;row<3;row++)for(let f=0;f<8;f++)art[`slime-${(['idle','move','attack'] as const)[row]}-${f}`]=slime[row*8+f];

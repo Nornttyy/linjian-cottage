@@ -64,126 +64,126 @@ export const ART_REVISIONS:Record<string,{file:string;size:readonly[number,numbe
     ]
   },
   "hero-axe-v3.png": {
-    "file": "hero-axe-v3-simple-v1.png",
+    "file": "hero-axe-v3-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-cook.png": {
-    "file": "hero-cook-simple-v1.png",
+    "file": "hero-cook-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-eat.png": {
-    "file": "hero-eat-simple-v1.png",
+    "file": "hero-eat-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-fish.png": {
-    "file": "hero-fish-simple-v1.png",
+    "file": "hero-fish-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-hammer.png": {
-    "file": "hero-hammer-simple-v1.png",
+    "file": "hero-hammer-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-harvest.png": {
-    "file": "hero-harvest-simple-v1.png",
+    "file": "hero-harvest-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-hoe.png": {
-    "file": "hero-hoe-simple-v1.png",
+    "file": "hero-hoe-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-hurt-directions.png": {
-    "file": "hero-hurt-directions-simple-v1.png",
+    "file": "hero-hurt-directions-natural-eyes-v1.png",
     "size": [
       2172,
       724
     ]
   },
   "hero-motion.png": {
-    "file": "hero-motion-simple-v1.png",
+    "file": "hero-motion-natural-eyes-v1.png",
     "size": [
       1536,
       1024
     ]
   },
   "hero-pick-v3.png": {
-    "file": "hero-pick-v3-simple-v1.png",
+    "file": "hero-pick-v3-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-pickup.png": {
-    "file": "hero-pickup-simple-v1.png",
+    "file": "hero-pickup-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-plant.png": {
-    "file": "hero-plant-simple-v1.png",
+    "file": "hero-plant-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-roll.png": {
-    "file": "hero-roll-simple-v1.png",
+    "file": "hero-roll-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-sleep.png": {
-    "file": "hero-sleep-simple-v1.png",
+    "file": "hero-sleep-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-sword-v3.png": {
-    "file": "hero-sword-v3-simple-v1.png",
+    "file": "hero-sword-v3-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-walk-v2.png": {
-    "file": "hero-walk-v2-simple-v1.png",
+    "file": "hero-walk-v2-natural-eyes-v1.png",
     "size": [
       2048,
       768
     ]
   },
   "hero-walk.png": {
-    "file": "hero-walk-simple-v1.png",
+    "file": "hero-walk-natural-eyes-v1.png",
     "size": [
       1536,
       1024
     ]
   },
   "hero-water.png": {
-    "file": "hero-water-simple-v1.png",
+    "file": "hero-water-natural-eyes-v1.png",
     "size": [
       2048,
       768
