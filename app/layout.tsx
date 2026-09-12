@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata,Viewport } from 'next';
 import './globals.css';
 export const metadata: Metadata = {
     metadataBase: new URL("https://linjian-cottage.flowy-fern-2870.chatgpt.site"),
@@ -7,6 +7,7 @@ export const metadata: Metadata = {
     title: '林间小筑 · 采集、建造与冒险',
     description: '从一片林间空地开始，采集木材、亲手搭建小屋，和朋友踏上冒险。',
 };
+export const viewport:Viewport={width:'device-width',initialScale:1,viewportFit:'cover'};
 export default function RootLayout({ children }: Readonly<{
     children: React.ReactNode;
 }>) {

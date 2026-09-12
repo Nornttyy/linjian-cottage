@@ -33,6 +33,6 @@ export default function Inventory({slots,resources,selected,onMove,onQuickMove,o
         <div className="inventory-divider"><span>快捷栏</span><kbd>1 — 9</kbd></div>
         <div className="inventory-grid inventory-hotbar" aria-label="背包内快捷栏">{slots.slice(0,HOTBAR_SIZE).map((_,i)=>slot(i))}</div>
         <div className="inventory-description" aria-live="polite">{description||' '}</div>
-        <footer><span>拖动整理 · Shift 快速移动</span><kbd>E / Esc</kbd></footer>
+        <footer><span>点选后再点目标格，也可拖动</span><kbd>E / Esc</kbd></footer>
     </section></div>;
 }

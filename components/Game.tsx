@@ -7,6 +7,7 @@ import SignPanel from './SignPanel';
 import Tutorial from './Tutorial';
 import Minimap from './Minimap';
 import LoadingScreen from './LoadingScreen';
+import TouchControls from './TouchControls';
 import type {StartMode} from './MainMenu';
 import {HOTBAR_SIZE,ITEMS,itemCount,itemDescription,visibleItem,defaultSlots} from '@/lib/inventory';
 import {sceneAt,CAVE_ENTRANCE} from '@/lib/world';
@@ -55,6 +56,7 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const sign=signId?state?.world.buildings[signId]:undefined;
     const player = state?.session ? state.world.players[state.session.playerId] : undefined, inventory = player?.inventory;
     const slots=state?.slots??defaultSlots(),selected=state?.selectedSlot??0,activeItem=visibleItem(slots[selected],inventory);
+    const touchUseLabel=state?.remove?'拆除':activeItem==='hammer'?'建造':activeItem==='sword'?'攻击':activeItem==='rod'?'抛竿':activeItem?'使用':'空手';
     const openBackpack=()=>{client.current?.pauseControls();setBackpack(true);setMap(false);setRoom(false);};
     const level=player?floorLevel(player):0,stairs=state&&player?Object.values(state.world.buildings).filter(b=>b.kind==='stairs'&&Math.hypot(player.x-b.x-.5,player.y-b.y-.5)<2.3):[];
     const up=stairs.find(b=>floorLevel(b)===level),down=stairs.find(b=>floorLevel(b)===level-1);
@@ -63,8 +65,9 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const costs:Partial<Record<'wood'|'stone'|'copper',number>>=state?buildCost(state.world,buildX,buildY,state.part,buildLevel):{};
     const removing=state?.remove||buildPreview?.removing;
     const count = state ? Object.values(state.world.players).filter(p => state.world.tick - p.seen < 15000).length : 0;
-    return <main className="game-shell"><div className="game-view" inert={!loaded||map||room||backpack||signId!==null||menu} aria-hidden={!loaded}>
-  <canvas ref={canvas} className="world-canvas" aria-label="游戏场景：WASD 移动，鼠标使用物品，1至9或滚轮切换快捷栏，E 背包，F 交互，空格闪避"/>
+    const showConnectionError=Boolean(loaded&&state?.error&&!room&&!backpack&&signId===null&&!menu);
+    return <main className="game-shell"><div className={'game-view'+(state?.tool==='build'?' is-building':'')+(showConnectionError?' has-error':'')} inert={!loaded||map||room||backpack||signId!==null||menu} aria-hidden={!loaded}>
+  <canvas ref={canvas} className="world-canvas" aria-label="游戏场景：使用方向控制移动，选择快捷栏物品后点击场景或按使用键操作"/>
   <header className="hud-top"><div className="identity"><h1>林间小筑</h1><span className={'connection-dot ' + (state?.connected ? 'online' : '')} title={state?.connected ? '已连接并保存' : '连接中'}/></div>
    <div className="region-label">{player ? regionAt(player.x, player.y) : '林间营地'}{level>0&&<span> · {level+1}层</span>}</div>
    <div className="top-actions"><button onClick={openMenu} title="游戏菜单">菜单</button><button onClick={openBackpack} title="背包 · E">背包 <kbd>E</kbd></button><button onClick={() => setMap(true)} title="世界地图 · M">地图 <kbd>M</kbd></button><button onClick={() => setRoom(true)} title="多人房间">联机 <span>{count}/4</span></button></div>
@@ -101,10 +104,10 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
        </button>;
    })}</nav>
   </div>
-  <div className="touch-controls"><div className="dpad">{[['w', 'up'], ['a', 'left'], ['s', 'down'], ['d', 'right']].map(([key, dir]) => <button key={key} className={'direction ' + dir} aria-label={dir} onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); client.current?.press(key, true); }} onPointerUp={() => client.current?.press(key, false)} onPointerCancel={() => client.current?.press(key, false)}><i /></button>)}</div><button className="dodge-button" onPointerDown={() => client.current?.command({ type: 'dodge' })}>闪避</button><button className="door-button" onClick={() => client.current?.interact()}>交互</button></div>
+  {!!loaded&&state?.connected&&!map&&!room&&!backpack&&signId===null&&!menu&&<TouchControls client={client} useLabel={touchUseLabel}/>}
   </div>{backpack&&<InventoryPanel slots={slots} resources={inventory} selected={selected} onMove={(from,to)=>client.current?.moveSlot(from,to)} onQuickMove={from=>client.current?.quickMoveSlot(from)} onClose={()=>setBackpack(false)}/> }
   {signId&&<SignPanel key={signId} text={typeof sign?.text==='string'?sign.text:''} available={sign?.kind==='sign'} connectionError={state?.error} onSave={text=>client.current?.saveSign(signId,text)??Promise.resolve('连接中断，请重试')} onClose={closeSign}/>}
-  {loaded && state?.error && !room && !backpack && !signId && !menu && <div className="connection-error" role="alert"><span>{state.error}</span><button onClick={() => client.current?.retryConnection()}>重试</button></div>}
+  {showConnectionError && <div className="connection-error" role="alert"><span>{state?.error}</span><button onClick={() => client.current?.retryConnection()}>重试</button></div>}
   {menu&&<div className="modal-backdrop" onClick={()=>setMenu(false)}><section className="room-panel pause-panel" role="dialog" aria-modal="true" aria-label="游戏菜单" onClick={event=>event.stopPropagation()} onKeyDown={event=>{
       event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setMenu(false);}
       if(event.key==='Tab'){const fields=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button')),first=fields[0],last=fields[fields.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}

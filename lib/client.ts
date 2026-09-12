@@ -77,6 +77,7 @@ export class GameClient {
     } | null = null;
     held = false;
     private heldButton=0;
+    private heldPointerId:number|null=null;
     private localSwing: HeroSwing | null = null;
     private poseState='';
     private poseStarted=0;
@@ -96,6 +97,7 @@ export class GameClient {
     private timer: ReturnType<typeof setTimeout> | undefined;
     private last = 0;
     private lastClick = 0;
+    private lastInteractAt=0;
     private seq = 0;
     private commands: Command[] = [];
     private pending: Input | null = null;
@@ -120,9 +122,11 @@ export class GameClient {
         canvas.addEventListener('contextmenu', this.contextMenu);
         canvas.addEventListener('wheel',this.wheel,{passive:false});
         window.addEventListener('pointerup', this.pointerUp);
+        window.addEventListener('pointercancel',this.pointerUp);
         window.addEventListener('keydown', this.keyDown);
         window.addEventListener('keyup', this.keyUp);
         window.addEventListener('blur', this.blur);
+        window.addEventListener('resize',this.viewportChanged);
         this.stopAssets=subscribeAssets(()=>this.notify());
         void this.loadAssets();
         this.frame = requestAnimationFrame(this.animate);
@@ -380,14 +384,29 @@ export class GameClient {
         else if(item==='carrotSeed'||item==='tomatoSeed'||item==='wheatSeed'){this.tool='seed';this.crop=item==='carrotSeed'?'carrot':item==='tomatoSeed'?'tomato':'wheat';}
         else this.tool='axe';
     }
-    selectSlot(index:number){if(!Number.isInteger(index)||index<0||index>=HOTBAR_SIZE)return;this.selectedSlot=index;this.applySlot();this.saveLayout();this.notify();}
-    moveSlot(from:number,to:number){this.slots=swapSlots(this.slots,from,to);this.applySlot();this.saveLayout();this.notify();}
-    quickMoveSlot(from:number){this.slots=quickTransfer(this.slots,from);this.applySlot();this.saveLayout();this.notify();}
+    selectSlot(index:number){if(!Number.isInteger(index)||index<0||index>=HOTBAR_SIZE)return;this.releaseHeld();this.selectedSlot=index;this.applySlot();this.saveLayout();this.notify();}
+    moveSlot(from:number,to:number){this.releaseHeld();this.slots=swapSlots(this.slots,from,to);this.applySlot();this.saveLayout();this.notify();}
+    quickMoveSlot(from:number){this.releaseHeld();this.slots=quickTransfer(this.slots,from);this.applySlot();this.saveLayout();this.notify();}
     private equipItem(item:ItemKey){this.syncSlots();const index=this.slots.indexOf(item);if(index>=0&&index<HOTBAR_SIZE)this.selectSlot(index);else if(index>=0){this.moveSlot(index,this.selectedSlot);} }
     setTool(tool:Tool){this.equipItem(tool==='build'?'hammer':tool==='seed'?CROPS[this.crop].seed:tool);}
     setPart(part:Part){this.part=part;this.equipItem('hammer');this.notify();}
     toggleRemove() {const next=!this.remove;this.setPart(this.part);this.remove=next;this.notify();}
-    pauseControls(){this.keys.clear();this.held=false;this.heldButton=0;this.buildStamp='';}
+    private releaseHeld(pointerId?:number){
+        if(this.heldPointerId!==null&&pointerId!==undefined&&pointerId!==this.heldPointerId)return false;
+        this.held=false;this.heldButton=0;this.heldPointerId=null;this.buildStamp='';return true;
+    }
+    pauseControls(){this.keys.clear();this.releaseHeld();}
+    startTouchUse(pointerId?:number){
+        this.audio.unlock();
+        if(this.paused||!this.playable||this.held)return false;
+        this.screenPointer=null;this.pointer=null;this.held=true;this.heldButton=0;
+        this.heldPointerId=Number.isFinite(pointerId)?pointerId!:null;this.buildStamp='';this.act();return true;
+    }
+    stopTouchUse(pointerId?:number){
+        const released=this.releaseHeld(pointerId);
+        if(released){this.screenPointer=null;this.pointer=null;}
+        return released;
+    }
     toggleSound(){this.audio.toggle();this.notify();}
     press(key: string, down: boolean) { if(!this.playable){this.keys.delete(key);return;}this.audio.unlock();if (down)
         this.keys.add(key);
@@ -407,11 +426,14 @@ export class GameClient {
         return this.commands.some(c=>c.type==='dodge') || !!this.pending?.commands.some(c=>c.type==='dodge');
     }
     command(command: Command) {
-        if(command.type==='dodge' && this.toolLocked())return false;
+        const localNow=Date.now(),player=this.session?this.world.players[this.session.playerId]:undefined;
+        if(command.type==='dodge'&&(this.toolLocked()||this.dodgePending()||!!player&&this.serverNow(localNow)<player.dodgeUntil+450))return false;
+        if(command.type==='interact'&&(localNow-this.lastInteractAt<250||this.commands.some(c=>c.type==='interact')||this.pending?.commands.some(c=>c.type==='interact')))return false;
         if(this.paused&&command!==this.signSave?.command || !this.playable || this.commands.length>=5)return false;
         if(command.type!=='wake'&&command.type!=='sleep')this.wakeSleep();
         if(this.commands.length>=5)return false;
-        command.id??=`${this.session?.playerId}:${++this.commandSequence}:${Date.now()}`;command.issuedAt??=this.serverNow();command.face??=this.pos.face;
+        if(command.type==='interact')this.lastInteractAt=localNow;
+        command.id??=`${this.session?.playerId}:${++this.commandSequence}:${localNow}`;command.issuedAt??=this.serverNow(localNow);command.face??=this.pos.face;
         this.commands.push(command);this.flushActions();
         return true;
     }
@@ -577,7 +599,10 @@ export class GameClient {
         if (this.art)
             render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
     }
-    private pointerMove = (e: PointerEvent) => { this.screenPointer = { x: e.clientX, y: e.clientY }; this.pointer = pointerWorld(this.canvas, this.pos, e.clientX, e.clientY); };
+    private pointerMove = (e: PointerEvent) => {
+        if(this.held&&this.heldPointerId!==null&&e.pointerId!==this.heldPointerId)return;
+        this.screenPointer = { x: e.clientX, y: e.clientY }; this.pointer = pointerWorld(this.canvas, this.pos, e.clientX, e.clientY);
+    };
     private pointerDown=(e:PointerEvent)=>{
         this.audio.unlock();if(e.button!==0&&e.button!==2)return;
         if(this.paused||!this.playable)return;
@@ -587,10 +612,14 @@ export class GameClient {
             if(door?.kind==='door')this.command({type:'interact',target:door.id});
             return;
         }
-        e.preventDefault();this.pointerMove(e);this.held=true;this.heldButton=e.button;this.buildStamp='';
+        if(this.held&&this.heldPointerId!==null&&e.pointerId!==this.heldPointerId){e.preventDefault();return;}
+        e.preventDefault();this.canvas.setPointerCapture?.(e.pointerId);this.pointerMove(e);this.held=true;this.heldButton=e.button;this.heldPointerId=Number.isFinite(e.pointerId)?e.pointerId:null;this.buildStamp='';
         if(e.button===0||this.tool==='build')this.act();
     };
-    private pointerUp = () => { this.held = false; this.heldButton=0; this.buildStamp = ''; };
+    private pointerUp = (e?:PointerEvent) => {
+        if(!this.releaseHeld(e?.pointerId))return;
+        if(e?.pointerType==='touch'){this.screenPointer=null;this.pointer=null;}
+    };
     private contextMenu = (e: Event) => e.preventDefault();
     private wheel=(e:WheelEvent)=>{if(!this.playable||this.paused||!e.deltaY||e.ctrlKey)return;e.preventDefault();this.selectSlot((this.selectedSlot+(e.deltaY>0?1:-1)+HOTBAR_SIZE)%HOTBAR_SIZE);};
     private keyDown = (e: KeyboardEvent) => {
@@ -624,7 +653,8 @@ export class GameClient {
             this.command({ type: 'dodge' });
     };
     private keyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
-    private blur = () => { this.keys.clear(); this.held = false; this.heldButton=0; };
+    private viewportChanged=()=>{this.screenPointer=null;this.pointer=null;this.pauseControls();};
+    private blur = () => { this.viewportChanged(); };
     destroy() { this.cancelPreparation();this.stopAssets();this.pauseControls();this.ready=false;this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
-        clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu);this.canvas.removeEventListener('wheel',this.wheel); window.removeEventListener('pointerup', this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur); }
+        clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu);this.canvas.removeEventListener('wheel',this.wheel); window.removeEventListener('pointerup', this.pointerUp);window.removeEventListener('pointercancel',this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur);window.removeEventListener('resize',this.viewportChanged); }
 }

@@ -3,11 +3,11 @@ import {useEffect,useRef,useState} from 'react';
 import type {ClientState} from '@/lib/client';
 import {TUTORIAL_STEPS,tutorialKey,readTutorial,startTutorial,observeTutorial,type TutorialProgress,type TutorialTracker,type TutorialStep} from '@/lib/tutorial';
 const lessons:Record<TutorialStep,{title:string;text:string}>= {
-    move:{title:'去附近走走',text:'WASD 或左下方向键，走动三格以上。'},
-    wood:{title:'收集第一份木材',text:'选斧头，靠近树干按住点击，直到获得木材。'},
+    move:{title:'去附近走走',text:'使用 WASD 或左下摇杆，走动三格以上。'},
+    wood:{title:'收集第一份木材',text:'选斧头靠近树，按住目标或右下使用键。'},
     floor:{title:'铺一块地板',text:'选建造锤 → 地板，在营火外的空地点击放置。'},
     wall:{title:'建起第一面墙',text:'选木墙，在地板上放置；先离开要放墙的格子。'},
-    combat:{title:'试试保护自己',text:'选剑，靠近怪物点击命中一次；空格可闪避。'}
+    combat:{title:'试试保护自己',text:'选剑靠近怪物，点击目标或按使用键；危险时闪避。'}
 };
 export default function Tutorial({state,restart=0,hidden=false,onDismiss}:{state:ClientState;restart?:number;hidden?:boolean;onDismiss?:()=>void}){
     const tracker=useRef<TutorialTracker|null>(null),lastRestart=useRef<number|undefined>(undefined);
@@ -31,7 +31,7 @@ export default function Tutorial({state,restart=0,hidden=false,onDismiss}:{state
     return <aside className="tutorial-card" aria-label="新手引导">
         <header><span>新手引导 · {progress.done.length} / {TUTORIAL_STEPS.length}</span><button onClick={dismiss}>{step?'跳过':'收起'}</button></header>
         <div aria-live="polite"><h2>{lesson?.title??'小筑生活，已经开始'}</h2><p>{lesson?.text??'自由探索、耕种和建造。菜单里可以重看引导。'}</p></div>
-        {step==='floor'&&!progress.hammer&&<small>E 打开背包，可把建造锤拖到任意快捷栏。</small>}
+        {step==='floor'&&!progress.hammer&&<small>打开背包，可把建造锤放到任意快捷栏。</small>}
         <div className="tutorial-progress" aria-hidden="true">{TUTORIAL_STEPS.map(item=><i key={item} className={progress.done.includes(item)?'done':item===step?'current':''}/>)}</div>
     </aside>;
 }

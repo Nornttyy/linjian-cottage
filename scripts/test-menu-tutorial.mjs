@@ -31,7 +31,7 @@ try{
  const {default:Menu}=await import(project.compileFile('components/MainMenu.tsx',react));
  const {default:Shell}=await import(project.compileFile('components/GameShell.tsx',{...react,'./Game':'./menu-host.mjs','./MainMenu':'./menu-host.mjs'}));
  const {default:Tutorial}=await import(project.compileFile('components/Tutorial.tsx',react));
- const {default:Game}=await import(project.compileFile('components/Game.tsx',{...react,'@/lib/client':'./menu-host.mjs','./LoadingScreen':'./menu-host.mjs','./Inventory':'./menu-host.mjs','./SignPanel':'./menu-host.mjs','./Minimap':'./menu-host.mjs','./Tutorial':'./menu-host.mjs','./ItemIcon':'./menu-host.mjs'}));
+ const {default:Game}=await import(project.compileFile('components/Game.tsx',{...react,'@/lib/client':'./menu-host.mjs','./LoadingScreen':'./menu-host.mjs','./Inventory':'./menu-host.mjs','./SignPanel':'./menu-host.mjs','./Minimap':'./menu-host.mjs','./Tutorial':'./menu-host.mjs','./ItemIcon':'./menu-host.mjs','./TouchControls':'./menu-host.mjs'}));
  const storage=new Map();Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)}});const storageEvents=new Set();globalThis.window={addEventListener:(type,listener)=>{if(type==='storage')storageEvents.add(listener);},removeEventListener:(type,listener)=>{if(type==='storage')storageEvents.delete(listener);}};globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
  function nodes(n){if(!n||typeof n!=='object')return[];return[n,...[n.props?.children].flat(5).flatMap(nodes)];}
  function text(n){return typeof n==='string'||typeof n==='number'?String(n):n&&typeof n==='object'?[n.props?.children].flat(5).map(text).join(''):'';}
