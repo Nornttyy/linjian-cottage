@@ -125,7 +125,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             ctx.globalAlpha=.14;ctx.fillStyle='#556584';ctx.fillRect(x*TILE+ox,y*TILE+oy+32,24,2);ctx.globalAlpha=1;
         }
     }
-    treeShadows(ctx,s,{...pos,level:0},art,ox,groundOy);
+    treeShadows(ctx,s,{...pos,level:0},art,ox,groundOy,t);
     const visible = (x: number, y: number) => x > minX - 4 && x < maxX + 4 && y > minY - 4 && y < maxY + 3;
     const sprite = (name: Sprite, x: number, y: number, width: number, height: number, alpha = 1, flip = false) => { ctx.save(); ctx.globalAlpha = alpha; const px = Math.round(x * TILE + ox), py = Math.round(y * TILE + oy); if (flip) {
         ctx.translate(px, 0);
@@ -316,6 +316,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         if(!atLevel(s.buildings,b.x,b.y-1,'roof',upper))ctx.drawImage(art['roof-ridge'],0,0,art['roof-ridge'].width,art['roof-ridge'].height/4,rx,ry,24,4);
         ctx.globalAlpha=1;
     }
+    atmosphere(ctx,s,pos,art,t,w,h,ox,oy);
     if(view.tool==='build'){
         const point=view.pointer??{x:pos.x+(pos.face==='right'?1:pos.face==='left'?-1:0),y:pos.y+(pos.face==='down'?1:pos.face==='up'?-1:0)};
         const player=s.players[id];if(player)drawBuildTarget(ctx,buildGuide(s,{...player,...pos},buildTarget(point,s,view.remove,level),view.part,view.remove),ox,oy);
@@ -371,7 +372,6 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         }
         ctx.globalAlpha = 1;
     }
-    atmosphere(ctx,s,pos,art,t,w,h,ox,oy);
     if(view.fadeUntil&&t<view.fadeUntil){ctx.fillStyle=`rgba(42,52,64,${Math.max(0,(view.fadeUntil-t)/500)})`;ctx.fillRect(0,0,w,h);}
 }
 

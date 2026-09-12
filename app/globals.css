@@ -54,6 +54,7 @@
 .pause-panel{width:300px;overflow:auto}.pause-actions{display:grid;gap:9px}.pause-actions>button{text-align:center}
 .minimap{position:absolute;top:74px;right:25px;width:164px;padding:4px;background:#f2e5c5ed;border:2px solid #a38a59;border-radius:4px;box-shadow:0 2px 0 #71815d77;pointer-events:auto}.minimap canvas{display:block;width:100%;height:auto;image-rendering:pixelated;border:1px solid #d6c5a0}.minimap>span{display:flex;align-items:center;justify-content:space-between;padding:4px 3px 0;color:#687551;font-size:10px}.minimap>.minimap-heading{padding:0 2px 4px}.minimap-heading b{font-size:10px;font-weight:600}.minimap>.minimap-position{justify-content:center;min-height:14px;font:9px monospace}.minimap:hover{border-color:#f9ebc1}.minimap kbd{color:#89836a}@media(max-width:700px){.minimap{top:62px;right:12px;width:122px}.minimap>span{padding-top:3px}}@media(max-height:500px) and (min-width:601px){.minimap{top:69px;right:18px;width:104px}}
 .world-canvas,.map-canvas,.minimap canvas,.item-icon,.menu-landscape{filter:saturate(.84)}
+.world-clock{margin-left:8px;padding-left:8px;border-left:1px solid #fff4d55c;font-variant-numeric:tabular-nums;letter-spacing:1px;white-space:nowrap}
 .tutorial-card{position:absolute;top:119px;left:26px;width:244px;max-width:calc(100vw - 26px);padding:11px 12px;background:#f3ecd4ed;border:1px solid #fdf3d2;border-radius:4px;box-shadow:0 2px 0 #59734b66;pointer-events:auto}
 .tutorial-card header{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:10px;color:#85816a}.tutorial-card header button{padding:0 2px;border:0;background:transparent;color:#6d785b;font-size:10px}.tutorial-card h2{margin:9px 0 5px;font-size:12px;font-weight:600;color:#526549}.tutorial-card p{margin:0;font-size:11px;color:#73795c;line-height:1.65}.tutorial-card small{display:block;margin-top:6px;color:#8b8268;font-size:10px;line-height:1.5}.tutorial-progress{display:flex;gap:4px;margin-top:10px}.tutorial-progress i{height:3px;flex:1;background:#d4d6b6}.tutorial-progress i.done{background:#6e865a}.tutorial-progress i.current{background:#c2a164}
 @media(max-width:600px){.main-menu{padding:18px;justify-items:center}.main-menu-panel{padding:25px}.tutorial-card{top:103px;left:13px;width:min(220px,calc(100vw - 160px));padding:9px 11px}.tutorial-card h2{margin-top:7px}}
@@ -119,11 +120,12 @@ html,body{overscroll-behavior:none}
 
 @media(any-pointer:coarse) and (max-width:700px){
  .hud-top{top:calc(var(--safe-top) + 8px);left:max(10px,var(--safe-left));right:max(10px,var(--safe-right));gap:5px}
- .identity{width:34px;height:44px;justify-content:center;padding:0}
+ .identity{width:18px;height:44px;justify-content:center;padding:0}
  .identity h1{display:none}.connection-dot{width:8px;height:8px}
+ .region-label{display:flex;position:static;flex:0 0 auto;transform:none;padding:4px 6px;font-size:10px;letter-spacing:0;white-space:nowrap}.region-name{display:none}.world-clock{margin:0;padding:0;border:0}
  .top-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;flex:1}
  .top-actions button{min-width:0;justify-content:center;padding:6px 5px;font-size:11px}
- .top-actions span{font-size:9px}
+ .top-actions span{display:none}
  .vitals{top:calc(var(--safe-top) + 61px);left:max(12px,var(--safe-left));width:132px}
  .cave-bearing{top:calc(var(--safe-top) + 188px);left:auto;right:max(12px,var(--safe-right));transform:none}
  .bottom-controls{bottom:calc(var(--safe-bottom) + 145px);width:100%}

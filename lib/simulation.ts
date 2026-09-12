@@ -81,6 +81,7 @@ export type WorldState = {
     mobs: Mob[];
     tick: number;
     created: number;
+    dayStartedAt?:number;
     events: GameEvent[];
     plots?:Record<string,Plot>;
     creatureVersion?:number;
@@ -124,7 +125,7 @@ export const distance = (a: {
 }) => Math.hypot(a.x - b.x, a.y - b.y);
 export function createWorld(now = Date.now()): WorldState {
     const positions = [[274, 307], [277, 341], [233, 344], [232, 297], [219, 284], [221, 288], [304, 283], [310, 270], [345, 209], [349, 204], [358, 213], [360, 222], [330, 180], [167, 406], [160, 415], [180, 422], [319, 108], [329, 100],[688,62],[664,42],[706,37],[685,20]];
-    const state:WorldState={ players: {}, buildings: {}, depleted: {}, resourceHp: {}, tick: now, created: now, events: [], mobs: positions.map(([x, y], i) => {
+    const state:WorldState={ players: {}, buildings: {}, depleted: {}, resourceHp: {}, tick: now, created: now,dayStartedAt:now, events: [], mobs: positions.map(([x, y], i) => {
         const point = [[x,y],[x+1,y],[x,y+1],[x-1,y],[x,y-1]].find(([a,b]) => terrainAt(a,b)!=='water' && !resourceAt(a+.5,b+.5));
         if(!point) throw new Error('Blocked monster spawn: '+i);
         const [a,b]=point;return {id:'slime-'+i,x:a+.5,y:b+.5,homeX:a+.5,homeY:b+.5,hp:54,windup:0,cooldown:0,deadUntil:0,hitUntil:0};
@@ -135,6 +136,9 @@ export function createPlayer(id: string, secret: string, name: string, color: nu
     return { id, secret, name, x: SPAWN.x + color * .8, y: SPAWN.y, face: 'down', hp: 100, stamina: 100, inventory: { wood: 0, stone: 0, copper: 0, essence: 0,carrotSeed:6,tomatoSeed:6,wheatSeed:6,carrot:0,tomato:0,wheat:0,fish:0,meal:0 }, seen: now, actionAt: 0, dodgeUntil: 0, hitUntil: 0, swingUntil: 0, seq: 0, woodGathered: 0, kills: 0, color };
 }
 export function normalizeWorld(s:WorldState,now:number){
+    // Existing saves begin their first day when they are migrated, rather than
+    // inheriting thousands of short game days from their real creation date.
+    if(!Number.isFinite(s.dayStartedAt))s.dayStartedAt=now;
     s.plots??={};
     for(const p of Object.values(s.players)){
         p.level=floorLevel(p);

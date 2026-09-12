@@ -14,6 +14,7 @@ import {sceneAt,CAVE_ENTRANCE} from '@/lib/world';
 import {PART_NAMES,floorLevel,type Part} from '@/lib/structures';
 import {buildCost} from '@/lib/simulation';
 import { paintMap, regionAt, buildTarget } from '@/lib/renderer';
+import {clockDateTime,formatWorldClock,phaseName,worldClock} from '@/lib/day-night';
 
 export default function Game({ apiUrl = '/api/game',startMode='resume',initialRoom='',onExit,onTutorial,tutorialRun=0 }: { apiUrl?: string;startMode?:StartMode;initialRoom?:string;onExit?:()=>void;onTutorial?:()=>void;tutorialRun?:number }) {
     const canvas = useRef<HTMLCanvasElement>(null), mapCanvas = useRef<HTMLCanvasElement>(null), client = useRef<GameClient | null>(null), noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,12 +66,13 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const costs:Partial<Record<'wood'|'stone'|'copper',number>>=state?buildCost(state.world,buildX,buildY,state.part,buildLevel):{};
     const removing=state?.remove||buildPreview?.removing;
     const count = state ? Object.values(state.world.players).filter(p => state.world.tick - p.seen < 15000).length : 0;
+    const clock=state?worldClock(state.world.dayStartedAt??state.world.created,state.world.tick):null;
     const localWorld=state?.session?.local===true;
     const showConnectionError=Boolean(loaded&&state?.error&&!room&&!backpack&&signId===null&&!menu);
     return <main className="game-shell"><div className={'game-view'+(state?.tool==='build'?' is-building':'')+(showConnectionError?' has-error':'')} inert={!loaded||map||room||backpack||signId!==null||menu} aria-hidden={!loaded}>
   <canvas ref={canvas} className="world-canvas" aria-label="游戏场景：使用方向控制移动，选择快捷栏物品后点击场景或按使用键操作"/>
   <header className="hud-top"><div className="identity"><h1>林间小筑</h1><span className={'connection-dot ' + (state?.connected ? 'online' : '')} title={state?.connected ? localWorld?(state.localSaved?'本机保存':'本机游玩，无法保存'):'已连接并保存' : '连接中'}/></div>
-   <div className="region-label">{player ? regionAt(player.x, player.y) : '林间营地'}{level>0&&<span> · {level+1}层</span>}</div>
+   <div className="region-label"><span className="region-name">{player ? regionAt(player.x, player.y) : '林间营地'}{level>0&&<> · {level+1}层</>}</span>{clock&&<time className="world-clock" dateTime={clockDateTime(clock)} title={phaseName(clock.phase)}>{formatWorldClock(clock)}</time>}</div>
    <div className="top-actions"><button onClick={openMenu} title="游戏菜单">菜单</button><button onClick={openBackpack} title="背包 · E">背包 <kbd>E</kbd></button><button onClick={() => setMap(true)} title="世界地图 · M">地图 <kbd>M</kbd></button><button onClick={() => setRoom(true)} title="多人房间">联机 <span>{localWorld?'单机':count+'/4'}</span></button></div>
   </header>
   {trackCave&&player&&sceneAt(player.x)!=='mine'&&<button className="cave-bearing" onClick={()=>setTrackCave(false)} title="取消矿洞标记"><i style={{transform:`rotate(${Math.atan2(CAVE_ENTRANCE.y-player.y,CAVE_ENTRANCE.x-player.x)+Math.PI/2}rad)`}}/>矿洞 · {caveDistance}格</button>}
