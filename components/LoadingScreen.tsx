@@ -10,13 +10,13 @@ export default function LoadingScreen({loading,onRetry,onExit}:{loading?:Loading
     if(ready&&finishedGeneration===loading?.generation)return null;
     const failed=loading?.phase==='error',percent=loading?Math.floor(loading.completed/loading.total*100):0;
     const title=failed?(loading.error||'连接失败'):loading?.phase==='world'?'正在连接世界…':'正在准备小筑…';
-    return <section className={'loading-screen'+(ready?' loading-ready':'')} role="dialog" aria-modal={!ready} aria-label="加载游戏" inert={ready}>
+    return <section className={'loading-screen'+(ready?' loading-ready':'')+(failed?' loading-failed':'')} role="dialog" aria-modal={!ready} aria-label="加载游戏" inert={ready}>
       <div className="loading-panel">
         <div className="loading-pixels" aria-hidden="true"><i/><i/><i/><i/><i/></div>
         <p role={failed?'alert':'status'}>{title}</p>
         <div className="loading-track" role="progressbar" aria-label="游戏加载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><i style={{width:percent+'%'}}/></div>
         <span className="loading-percent">{percent}%</span>
-        <div className="loading-actions">{failed&&<button autoFocus onClick={onRetry}>重试</button>}<button onClick={onExit}>返回主菜单</button></div>
+        <div className="loading-actions">{failed&&<button autoFocus onClick={onRetry}>重试加载</button>}<button onClick={onExit}>返回主菜单</button></div>
       </div>
     </section>;
 }

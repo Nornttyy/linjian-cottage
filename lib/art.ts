@@ -1,4 +1,4 @@
-import {beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading} from './asset-loading';
+import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
 import {ART_REVISIONS} from './art-sources';
 import {farmLayout} from './farm-layout';
 import type { Terrain } from './world';
@@ -33,10 +33,13 @@ const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.wi
 const detailCanvas=(w:number,h:number)=>{const c=canvas(w*ART_DENSITY,h*ART_DENSITY),ctx=c.getContext('2d')!;ctx.scale(ART_DENSITY,ART_DENSITY);ctx.imageSmoothingEnabled=false;return c;};
 const load=(src:string)=>new Promise<HTMLImageElement|HTMLCanvasElement>((resolve,reject)=>{
     const img=new Image(),attempt=getAssetLoading().attempt,revision=ART_REVISIONS[src.slice(src.lastIndexOf('/')+1)];
-    const cleanup=()=>{clearTimeout(timeout);img.onload=null;img.onerror=null;};
-    const timeout=setTimeout(()=>{cleanup();reject(new Error('素材加载超时'));},20000);
+    let settled=false,unregister=()=>{};
+    const cleanup=(stop=false)=>{clearTimeout(timeout);img.onload=null;img.onerror=null;unregister();if(stop)img.src='';};
+    const rejectOnce=(error:Error,stop=false)=>{if(settled)return;settled=true;cleanup(stop);reject(error);};
+    const timeout=setTimeout(()=>rejectOnce(new Error('素材加载超时'),true),ART_IMAGE_TIMEOUT_MS);
     (timeout as unknown as {unref?:()=>void}).unref?.();
-    img.onload=()=>{cleanup();try{
+    unregister=registerAssetCancellation(attempt,()=>rejectOnce(new Error('素材加载已取消'),true));
+    img.onload=()=>{if(settled)return;settled=true;cleanup();try{
         let source:HTMLImageElement|HTMLCanvasElement=img;
         // Decode replacement atlases in the reviewed source coordinates, before
         // applying per-action crops and pivots. Original PNG bytes stay intact.
@@ -45,7 +48,7 @@ const load=(src:string)=>new Promise<HTMLImageElement|HTMLCanvasElement>((resolv
         }
         loadedAsset(attempt,src);resolve(source);
     }catch(error){reject(error);}};
-    img.onerror=()=>{cleanup();reject(new Error('素材加载失败'));};img.src=revision?'./art/'+revision.file:'.'+src;
+    img.onerror=()=>rejectOnce(new Error('素材加载失败'),true);img.src=revision?'./art/'+revision.file:'.'+src;
 });
 function transparentMatte(c:HTMLCanvasElement,landscapeKey=false,snowKey=false,keyVariant:'standard'|'cyan'|'violet'='standard'){
     const ctx=c.getContext('2d',{willReadFrequently:true})!,data=ctx.getImageData(0,0,c.width,c.height),p=data.data,w=c.width,h=c.height;
@@ -201,14 +204,14 @@ export function loadArt(){
 }
 async function loadAll():Promise<Atlas>{
     const extraActions=['harvest','pickup','eat','fish','cook','sleep','roll'] as const;
-    const [materials,objects,icons,walk,oldWalk,motion,axe,pick,sword,slime,entrance,hurt,fire,flames,trails,textures,farm,home,bat,boar,mushroom,hammer,hoe,water,plant,mineExit,boarDirections,mushroomDirections,activityItems,extraSheets,beds]=await Promise.all([
-        sheet('surfaces-final.png',4,4,'texture'),sheet('objects-final.png',4,4,'prop'),sheet('icons-final.png',4,4,'prop'),
-        sheet('hero-walk-v2.png',8,3,'hero'),sheet('hero-walk.png',8,4,'hero'),sheet('hero-motion.png',8,4,'hero'),sheet('hero-axe-v3.png',8,3,'hero'),sheet('hero-pick-v3.png',8,3,'hero'),sheet('hero-sword-v3.png',8,3,'hero'),sheet('slime.png',8,4,'slime'),load('/art/cave-entrance.png'),sheet('hero-hurt-directions.png',8,2,'hero'),sheet('campfire-v2.png',4,3,'effect'),sheet('campfire-flames-24.png',6,4,'effect'),sheet('tool-trails.png',8,3,'effect'),sheet('homestead-textures-v2.png',3,2,'texture'),load('/art/farm-growth.png'),sheet('homestead-items.png',4,4,'prop'),creatureSheet('bat'),creatureSheet('boar'),creatureSheet('mushroom'),sheet('hero-hammer.png',8,3,'hero'),sheet('hero-hoe.png',8,3,'hero'),sheet('hero-water.png',8,3,'hero'),sheet('hero-plant.png',8,3,'hero'),load('/art/mine-exit.png')
-        ,creatureDirections('boar'),creatureDirections('mushroom'),sheet('activity-items.png',2,2,'prop'),Promise.all(extraActions.map(action=>sheet(`hero-${action}.png`,8,3,'hero'))),sheet('bed-horizontal.png',1,1,'prop')
-    ]);
+    const [materials,objects,icons,walk,oldWalk,motion,axe,pick,sword,slime,entrance,hurt,fire,flames,trails,textures,farm,home,bat,boar,mushroom,hammer,hoe,water,plant,mineExit,boarDirections,mushroomDirections,activityItems,harvest,pickup,eat,fish,cook,sleep,roll,beds]=await loadAssetBatches([
+        ()=>sheet('surfaces-final.png',4,4,'texture'),()=>sheet('objects-final.png',4,4,'prop'),()=>sheet('icons-final.png',4,4,'prop'),
+        ()=>sheet('hero-walk-v2.png',8,3,'hero'),()=>sheet('hero-walk.png',8,4,'hero'),()=>sheet('hero-motion.png',8,4,'hero'),()=>sheet('hero-axe-v3.png',8,3,'hero'),()=>sheet('hero-pick-v3.png',8,3,'hero'),()=>sheet('hero-sword-v3.png',8,3,'hero'),()=>sheet('slime.png',8,4,'slime'),()=>load('/art/cave-entrance.png'),()=>sheet('hero-hurt-directions.png',8,2,'hero'),()=>sheet('campfire-v2.png',4,3,'effect'),()=>sheet('campfire-flames-24.png',6,4,'effect'),()=>sheet('tool-trails.png',8,3,'effect'),()=>sheet('homestead-textures-v2.png',3,2,'texture'),()=>load('/art/farm-growth.png'),()=>sheet('homestead-items.png',4,4,'prop'),()=>creatureSheet('bat'),()=>creatureSheet('boar'),()=>creatureSheet('mushroom'),()=>sheet('hero-hammer.png',8,3,'hero'),()=>sheet('hero-hoe.png',8,3,'hero'),()=>sheet('hero-water.png',8,3,'hero'),()=>sheet('hero-plant.png',8,3,'hero'),()=>load('/art/mine-exit.png'),
+        ()=>creatureDirections('boar'),()=>creatureDirections('mushroom'),()=>sheet('activity-items.png',2,2,'prop'),()=>sheet('hero-harvest.png',8,3,'hero'),()=>sheet('hero-pickup.png',8,3,'hero'),()=>sheet('hero-eat.png',8,3,'hero'),()=>sheet('hero-fish.png',8,3,'hero'),()=>sheet('hero-cook.png',8,3,'hero'),()=>sheet('hero-sleep.png',8,3,'hero'),()=>sheet('hero-roll.png',8,3,'hero'),()=>sheet('bed-horizontal.png',1,1,'prop')
+    ] as const),extraSheets=[harvest,pickup,eat,fish,cook,sleep,roll];
     const art={} as Atlas;
     const assign=(names:Sprite[],cells:HTMLCanvasElement[])=>names.forEach((name,i)=>art[name]=cells[i]);
-    const [landTextures,landProps,landmarks]=await Promise.all([sheet('landscape-terrain-v3.png',4,3,'texture'),sheet('landscape-props-v3.png',4,2,'prop'),sheet('landscape-landmarks-v3.png',2,2,'prop')]);
+    const [landTextures,landProps,landmarks]=await loadAssetBatches([()=>sheet('landscape-terrain-v3.png',4,3,'texture'),()=>sheet('landscape-props-v3.png',4,2,'prop'),()=>sheet('landscape-landmarks-v3.png',2,2,'prop')] as const);
     assign(['region-oak','region-birch','region-maple','region-snowpine','region-berry','region-stone','flowers-white','flowers-pink'],landProps);
     assign(['ancient-oak','frost-cairn','sunstone-circle','firefly-meadow'],landmarks);
     assign(['rod','fish','meal','bed'],activityItems);

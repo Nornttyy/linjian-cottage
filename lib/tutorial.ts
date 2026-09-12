@@ -6,7 +6,7 @@ export const TUTORIAL_STEPS=['move','wood','floor','wall','combat'] as const;
 export type TutorialStep=typeof TUTORIAL_STEPS[number];
 export type TutorialProgress={version:1;done:TutorialStep[];hammer:boolean;travel:number;dismissed:boolean};
 export function savedSession(raw:string|null):Session|null{
-    try{const value=JSON.parse(raw||'null');return value&&typeof value==='object'&&typeof value.room==='string'&&/^[A-Z0-9]{8}$/.test(value.room)&&typeof value.token==='string'&&value.token.trim().length>0&&value.token.length<=100&&typeof value.playerId==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(value.playerId)?{room:value.room,token:value.token,playerId:value.playerId}:null;}catch{return null;}
+    try{const value=JSON.parse(raw||'null');return value&&typeof value==='object'&&typeof value.room==='string'&&/^[A-Z0-9]{8}$/.test(value.room)&&typeof value.token==='string'&&value.token.trim().length>0&&value.token.length<=100&&typeof value.playerId==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(value.playerId)?{room:value.room,token:value.token,playerId:value.playerId,...(value.local===true?{local:true as const}:{})}:null;}catch{return null;}
 }
 export const tutorialKey=(session:Pick<Session,'room'|'playerId'>)=>`linjian-tutorial:${session.room}:${session.playerId}`;
 export function readTutorial(raw:string|null):TutorialProgress{

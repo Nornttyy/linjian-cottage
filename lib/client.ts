@@ -2,7 +2,7 @@ import {CAMPFIRE,cookingRecipe,nearCampfire,canCast} from './activities';
 import {applyWorldDelta,type WorldDelta} from './world-delta';
 import { loadArt, type Atlas } from './art';
 import {getAssetLoading,subscribeAssets} from './asset-loading';
-import { createWorld, move, canBuild, distance, clearLine, isBlocked, WORK_TIMING, TOOL_TIMING, type WorkAction, type GameEvent, type WorldState, type Tool, type Part, type Command, type Input, type Movement } from './simulation';
+import { applyInput,createPlayer,createWorld,normalizeWorld,tickWorld,move,canBuild,distance,clearLine,isBlocked,WORK_TIMING,TOOL_TIMING,type WorkAction,type GameEvent,type WorldState,type Tool,type Part,type Command,type Input,type Movement } from './simulation';
 import { render, prepareWorldMap, pointerWorld, pickResource, buildTarget, type Position } from './renderer';
 import { SPAWN, sceneAt, CAVE_ENTRANCE, MINE } from './world';
 import type {HeroSwing,WorkSwing} from './animation';
@@ -24,10 +24,12 @@ type ApiReply = {
     error?: string;
     message?: string;
 };
+class MultiplayerUnavailableError extends Error{}
 export type Session = {
     room: string;
     token: string;
     playerId: string;
+    local?:true;
 };
 export type LoadingState={generation:number;phase:'assets'|'world'|'scene'|'ready'|'error';completed:number;total:number;error:string};
 export type ClientState = {
@@ -42,6 +44,7 @@ export type ClientState = {
     slots:ItemSlot[];
     selectedSlot:number;
     sound:boolean;
+    localSaved:boolean;
     loading:LoadingState;
 };
 export class GameClient {
@@ -105,7 +108,7 @@ export class GameClient {
     private flushRequested = false;
     private buildStamp = '';
     private generation = 0;
-    private connectionIntent:{mode:'resume'|'create'|'join';room:string}={mode:'resume',room:''};
+    private connectionIntent:{mode:'resume'|'create'|'join'|'local';room:string}={mode:'resume',room:''};
     private fadeUntil = 0;
     private networkVersion=1;
     private worldVersion:number|undefined;
@@ -114,6 +117,9 @@ export class GameClient {
     private clockSampleAt=0;
     private commandSequence=0;
     private lastInputAt=0;
+    private localMode=false;
+    private localSaved=false;
+    private lastLocalSaveAt=0;
     private activeSignId:string|null=null;
     private signSave:{command:Command;resolve:(error:string|null)=>void}|null=null;
     constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{},private signToggle:(id:string|null)=>void=()=>{}) {
@@ -132,7 +138,7 @@ export class GameClient {
         this.frame = requestAnimationFrame(this.animate);
     }
     notify() { if (!this.disposed)
-        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot,sound:this.audio.enabled,loading:this.loading }); }
+        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot,sound:this.audio.enabled,localSaved:this.localSaved,loading:this.loading }); }
     get playable(){return this.ready&&this.connected&&!this.disposed;}
     get loading():LoadingState{
         const assets=getAssetLoading(),total=assets.total+4;
@@ -168,11 +174,67 @@ export class GameClient {
     }
     serverNow(localNow=Date.now()){return localNow+this.serverOffset;}
     get timeOffset(){return this.serverOffset;}
+    private localStorageKey(session:Pick<Session,'room'|'playerId'>){return`linjian-local-world:${session.room}:${session.playerId}`;}
+    private localId(){try{return crypto.randomUUID().replaceAll('-','');}catch{return Math.random().toString(36).slice(2)+Date.now().toString(36);}}
+    private newLocalReply(now=Date.now()):ApiReply{
+        const seed=this.localId().toUpperCase(),room=('LOCAL'+seed).slice(0,8),playerId=this.localId().slice(0,8),token='local-'+this.localId();
+        const state=createWorld(now);state.players[playerId]=createPlayer(playerId,'local','旅人',0,now);
+        return{room,playerId,token,state};
+    }
+    private restoredLocalReply(saved:Session,now=Date.now()):ApiReply{
+        let state:WorldState|undefined;
+        try{const value=JSON.parse(localStorage.getItem(this.localStorageKey(saved))||'null') as WorldState|null;if(value&&typeof value==='object'&&value.players&&value.players[saved.playerId]){normalizeWorld(value,now);state=value;}}catch{}
+        if(!state)throw new Error('本机存档无法读取，请返回主菜单新建世界');
+        return{room:saved.room,playerId:saved.playerId,token:saved.token,state};
+    }
+    private saveLocalWorld(force=false){
+        if(!this.localMode||!this.session)return false;
+        const now=Date.now();
+        if(!this.localSaved&&this.lastLocalSaveAt>0&&now-this.lastLocalSaveAt<5000)return false;
+        if(!force&&now-this.lastLocalSaveAt<1000)return this.localSaved;
+        this.lastLocalSaveAt=now;
+        try{
+            const session=JSON.stringify(this.session),world=JSON.stringify(this.world);
+            localStorage.setItem(this.localStorageKey(this.session),world);
+            localStorage.setItem('linjian-session',session);
+            this.localSaved=true;
+        }catch{this.localSaved=false;}
+        return this.localSaved;
+    }
+    private localRequest(body:unknown):ApiReply{
+        if(!this.session)throw new Error('本机世界尚未准备好');
+        const payload=body as{action?:string;input?:Input};const now=Date.now();tickWorld(this.world,now);
+        const player=this.world.players[this.session.playerId];let message:string|null=null;
+        if(payload.action==='sync'&&player){if(payload.input)message=applyInput(this.world,player.id,payload.input,now);else player.seen=now;}
+        this.saveLocalWorld(!!payload.input?.commands.length);
+        return{room:this.session.room,playerId:this.session.playerId,token:this.session.token,state:this.world,message:message??undefined};
+    }
+    private connectionError(error:unknown){
+        const message=error instanceof Error?error.message:'';
+        if(typeof DOMException!=='undefined'&&error instanceof DOMException&&error.name==='TimeoutError')return'多人服务器连接超时';
+        if(error instanceof TypeError||/failed to fetch|load failed|networkerror|unexpected token|json/i.test(message))return'多人服务器暂时无法连接';
+        return message||'连接失败';
+    }
+    private canAutoFallback(error:unknown){
+        try{return error instanceof MultiplayerUnavailableError&&typeof location!=='undefined'&&new URL(this.apiUrl,location.href).origin!==location.origin;}catch{return false;}
+    }
     private async request(body: unknown) {
+        if(this.localMode)return this.localRequest(body);
         const sentAt=Date.now(),requestGeneration=this.generation;
-        const response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});
-        const result=await response.json() as ApiReply,receivedAt=Date.now();
-        if(!response.ok||(!result.state&&!result.delta))throw new Error(result.error||'连接失败');
+        let response:Response;
+        try{response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});}
+        catch(error){
+            const timedOut=typeof DOMException!=='undefined'&&error instanceof DOMException&&error.name==='TimeoutError';
+            if(error instanceof TypeError||timedOut)throw new MultiplayerUnavailableError(timedOut?'多人服务器连接超时':'多人服务器暂时无法连接');
+            throw error;
+        }
+        let result:ApiReply;try{result=await response.json() as ApiReply;}catch{
+            if(response.status===403||response.status===429||response.status>=500)throw new MultiplayerUnavailableError('多人服务器暂时无法连接');
+            throw new Error('服务器响应异常');
+        }
+        const receivedAt=Date.now();
+        if(!response.ok){if(response.status===403||response.status===429||response.status>=500)throw new MultiplayerUnavailableError(result.error||'多人服务器暂时无法连接');throw new Error(result.error||'连接失败');}
+        if(!result.state&&!result.delta)throw new Error(result.error||'连接失败');
         if(this.disposed||requestGeneration!==this.generation)return result;
         if(result.networkVersion===2&&Number.isFinite(result.serverReceivedAt)&&Number.isFinite(result.serverSentAt)){
             this.networkVersion=2;
@@ -192,7 +254,7 @@ export class GameClient {
         if(!this.connected)return this.connect(this.connectionIntent.mode,this.connectionIntent.room);
         void this.prepareScene();this.notify();
     }
-    async connect(mode: 'resume' | 'create' | 'join' = 'resume', room = '') {
+    async connect(mode: 'resume' | 'create' | 'join' | 'local' = 'resume', room = '') {
         if(this.disposed)return;
         this.connectionIntent={mode,room};
         this.signSave?.resolve('已切换世界');this.signSave=null;if(this.activeSignId){this.activeSignId=null;this.signToggle(null);}
@@ -209,6 +271,8 @@ export class GameClient {
         this.commands = [];
         this.worldVersion=undefined;
         this.connected = false;
+        this.localSaved=false;
+        this.lastLocalSaveAt=0;
         this.error = '';
         this.notify();
         try {
@@ -217,13 +281,23 @@ export class GameClient {
                 if(!saved)saved = JSON.parse(localStorage.getItem('linjian-session') || 'null');
             }
             catch { }
-            const valid = saved && typeof saved.token === 'string' && typeof saved.room === 'string' && typeof saved.playerId === 'string';
-            const body = mode === 'resume' && valid ? { action: 'sync', ...saved } : mode === 'join' ? { action: 'join', room: room.trim().toUpperCase() } : { action: 'create' };
-            const result = await this.request(body);
+            const valid = !!(saved && typeof saved.token === 'string' && typeof saved.room === 'string' && typeof saved.playerId === 'string');
+            let result:ApiReply;
+            if(mode==='local'){
+                this.localMode=true;result=this.newLocalReply();
+            }else if(mode==='resume'&&valid&&saved!.local){
+                this.localMode=true;result=this.restoredLocalReply(saved!);
+            }else{
+                this.localMode=false;
+                const body = mode === 'resume' && valid ? { action: 'sync', ...saved } : mode === 'join' ? { action: 'join', room: room.trim().toUpperCase() } : { action: 'create' };
+                try{result=await this.request(body);}catch(error){
+                    if(mode!=='create'||!this.canAutoFallback(error))throw error;
+                    this.localMode=true;result=this.newLocalReply();
+                }
+            }
             if (this.disposed || generation !== this.generation)
                 return;
-            this.session = { room: result.room, playerId: result.playerId, token: result.token || (valid ? saved!.token : '') };
-            try{localStorage.setItem('linjian-session', JSON.stringify(this.session));}catch{}
+            this.session = { room: result.room, playerId: result.playerId, token: result.token || (valid ? saved!.token : ''),...(this.localMode?{local:true as const}:{}) };
             this.world = result.state;
             this.worldVersion=result.version;
 
@@ -232,13 +306,17 @@ export class GameClient {
             this.seq = p.seq;
             this.loadLayout();
             this.connected = true;
+            if(this.localMode){
+                this.networkVersion=2;this.serverOffset=0;this.bestNetworkRtt=Infinity;this.clockSampleAt=0;
+                const saved=this.saveLocalWorld(true);this.message(saved?(mode==='local'?'已进入本机世界':'多人服务器不可用，已进入本机世界'):'已进入本机世界，但此设备无法保存');
+            }else try{localStorage.setItem('linjian-session', JSON.stringify(this.session));}catch{}
             this.connectionIntent={mode:'resume',room:''};
             this.notify();void this.prepareScene();
             this.timer = setTimeout(() => this.sync(), 160);
         }
         catch (e) {
             if(this.disposed||generation!==this.generation)return;
-            this.error = e instanceof Error ? e.message : '连接失败';
+            this.error = this.connectionError(e);
             this.notify();
         }
     }
@@ -306,7 +384,7 @@ export class GameClient {
             if (this.disposed || generation !== this.generation)
                 return;
             this.connected = false;
-            this.error = e instanceof Error ? e.message : '连接中断';
+            this.error = this.connectionError(e);
             this.notify();
         }
         finally {
@@ -655,6 +733,6 @@ export class GameClient {
     private keyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
     private viewportChanged=()=>{this.screenPointer=null;this.pointer=null;this.pauseControls();};
     private blur = () => { this.viewportChanged(); };
-    destroy() { this.cancelPreparation();this.stopAssets();this.pauseControls();this.ready=false;this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
+    destroy() { this.saveLocalWorld(true);this.cancelPreparation();this.stopAssets();this.pauseControls();this.ready=false;this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)
         clearTimeout(this.timer); this.canvas.removeEventListener('pointermove', this.pointerMove); this.canvas.removeEventListener('pointerdown', this.pointerDown); this.canvas.removeEventListener('contextmenu', this.contextMenu);this.canvas.removeEventListener('wheel',this.wheel); window.removeEventListener('pointerup', this.pointerUp);window.removeEventListener('pointercancel',this.pointerUp); window.removeEventListener('keydown', this.keyDown); window.removeEventListener('keyup', this.keyUp); window.removeEventListener('blur', this.blur);window.removeEventListener('resize',this.viewportChanged); }
 }
