@@ -17,6 +17,7 @@ type ApiReply = {
     token?: string;
     state: WorldState;
     networkVersion?:number;
+    structureVersion?:1;
     version?:number;
     delta?:WorldDelta;
     serverReceivedAt?:number;
@@ -299,6 +300,9 @@ export class GameClient {
                 return;
             this.session = { room: result.room, playerId: result.playerId, token: result.token || (valid ? saved!.token : ''),...(this.localMode?{local:true as const}:{}) };
             this.world = result.state;
+            // Trust the responding server's capability, not a saved world's
+            // migration marker (which could survive a server rollback).
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined};
             this.worldVersion=result.version;
 
             const p = this.world.players[this.session.playerId];
@@ -354,6 +358,7 @@ export class GameClient {
                 return;
             if(result.delta && result.delta.base!==this.worldVersion){this.worldVersion=undefined;throw new Error('正在重新同步');}
             this.world = result.state ?? applyWorldDelta(this.world,result.delta!);
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined};
             this.worldVersion=result.version;
             if(this.signSave&&submitted?.commands.includes(this.signSave.command)){
                 const save=this.signSave;this.signSave=null;

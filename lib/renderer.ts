@@ -3,6 +3,7 @@ import { distance, type WorldState, type Player, type Part, type Tool } from './
 import { ART_DENSITY, HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, CROP_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
 import {drawConnectedWall,connectedWallLayers,drawWallLayer,floorWallInsets} from './connected-wall';
+import {connectedFenceLayers,drawFenceLayer} from './connected-fence';
 import {atmosphere,treeShadows} from './atmosphere';
 import {heroFrame,heroFacing,toolTrailFrame,creatureFrame,creatureFacing,workFrame,type HeroSwing,type WorkSwing} from './animation';
 import {atLevel,floorLevel,floorGroup,layer,MAX_LEVEL,type Building} from './structures';
@@ -143,12 +144,22 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         }else material(ctx,art.floor,b.x,b.y,x,y);
     };
     const queueWall=(queue:{y:number;draw:()=>void}[],b:Building,shift=0,fade=true)=>{
-        for(const part of connectedWallLayers(art,s.buildings,b)){
+        for(const part of connectedWallLayers(art,s.buildings,b,s.structureVersion??0)){
             const depth=b.y+part.depth+shift/TILE;
             queue.push({y:depth,draw:()=>{
                 const left=b.x*TILE+part.x,right=left+part.width,top=b.y*TILE+shift+part.y,bottom=top+part.height;
                 const occludes=fade&&depth>pos.y&&left<pos.x*TILE+7&&right>pos.x*TILE-7&&top<pos.y*TILE&&bottom>pos.y*TILE-32;
                 ctx.save();ctx.globalAlpha=occludes?.42:1;drawWallLayer(ctx,part,b,ox,oy+shift);ctx.restore();
+            }});
+        }
+    };
+    const queueFence=(queue:{y:number;draw:()=>void}[],b:Building,shift=0,fade=true)=>{
+        for(const part of connectedFenceLayers(art,s.buildings,b,s.structureVersion??0)){
+            const depth=b.y+part.depth+shift/TILE;
+            queue.push({y:depth,draw:()=>{
+                const left=b.x*TILE+part.x,right=left+part.width,top=b.y*TILE+shift+part.y,bottom=top+part.height;
+                const occludes=fade&&depth>pos.y&&left<pos.x*TILE+7&&right>pos.x*TILE-7&&top<pos.y*TILE&&bottom>pos.y*TILE-32;
+                ctx.save();ctx.globalAlpha=occludes?.42:1;drawFenceLayer(ctx,part,b,ox,oy+shift);ctx.restore();
             }});
         }
     };
@@ -171,7 +182,8 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                 if(b.kind==='floor')drawFloor(b,shift);
                 else if(b.kind==='roof'){
                     if(!atLevel(s.buildings,b.x,b.y,'floor',lower+1))below.push({y:b.y+.95+shift/TILE,draw:()=>material(ctx,art.roof,b.x,b.y,...roofRect(b.x,b.y,ox,oy+shift))});
-                }else if(layer(b.kind)==='wall'||b.kind==='fence')queueWall(below,b,shift,false);
+                }else if(layer(b.kind)==='wall')queueWall(below,b,shift,false);
+                else if(b.kind==='fence')queueFence(below,b,shift,false);
                 else below.push({y:b.y+.9+shift/TILE,draw:()=>{const bed=b.kind==='bed',size=bed?40:b.kind==='stairs'?30:24,height=bed?24:size;ctx.drawImage(art[b.kind as Sprite],px+(24-size)/2,py+24-height,size,height);}});
             }
             if(lower===0){
@@ -222,7 +234,8 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     for (const b of Object.values(s.buildings)) {
         if (!visible(b.x, b.y) || floorLevel(b)!==level || b.kind === 'floor' || b.kind === 'roof')
             continue;
-        if(layer(b.kind)==='wall'||b.kind==='fence'){queueWall(drawables,b);continue;}
+        if(layer(b.kind)==='wall'){queueWall(drawables,b);continue;}
+        if(b.kind==='fence'){queueFence(drawables,b);continue;}
         drawables.push({ y: b.y + .9, draw: () => {
                 const fade = b.y > pos.y - .3 && b.y < pos.y + 1.2 && Math.abs(b.x + .5 - pos.x) < 1.05;
                 ctx.save();ctx.globalAlpha=fade?.42:1;
@@ -306,7 +319,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         for(const floor of covers.filter(b=>floorLevel(b)===upper&&visible(b.x,b.y))){ctx.globalAlpha=Math.max(0,(opacity(floor)-.14)/.86);drawFloor(floor,-offset);}
         ctx.globalAlpha=1;
         for(const wall of buildings.filter(b=>floorLevel(b)===upper&&layer(b.kind)==='wall'&&visible(b.x,b.y)).sort((a,b)=>a.y-b.y)){
-            const cover=atLevel(s.buildings,wall.x,wall.y,'floor',upper);ctx.globalAlpha=cover?Math.max(0,(opacity(cover)-.14)/.86):1;drawConnectedWall(ctx,art,s.buildings,wall,ox,oy-offset);
+            const cover=atLevel(s.buildings,wall.x,wall.y,'floor',upper);ctx.globalAlpha=cover?Math.max(0,(opacity(cover)-.14)/.86):1;drawConnectedWall(ctx,art,s.buildings,wall,ox,oy-offset,s.structureVersion??0);
         }ctx.globalAlpha=1;
     }
     for(const b of roofs)if(visible(b.x,b.y)){

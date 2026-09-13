@@ -1,11 +1,11 @@
 import {ART_DENSITY,type Atlas} from './art';
-import {atLevel,floorLevel,wallLinks,wallRects,wallOccupies,type Building} from './structures';
+import {atLevel,floorLevel,wallLinks,wallRects,type Building} from './structures';
 import {material} from './tiles';
 type Walls=Readonly<Record<string,Building>>;
 export const wallConnections=wallLinks;
-export function wallLayout(buildings:Walls,x:number,y:number,level=0){
-    const links=wallLinks(buildings,x,y,level),vertical=(links.north||links.south)&&!links.east&&!links.west;
-    const rects=wallRects(buildings,x,y,level),left=Math.min(...rects.map(r=>r[0])),right=Math.max(...rects.map(r=>r[0]+r[2]));
+export function wallLayout(buildings:Walls,x:number,y:number,level=0,rules=1){
+    const links=wallLinks(buildings,x,y,level,rules),vertical=(links.north||links.south)&&!links.east&&!links.west;
+    const rects=wallRects(buildings,x,y,level,rules),left=Math.min(...rects.map(r=>r[0])),right=Math.max(...rects.map(r=>r[0]+r[2]));
     return{...links,vertical,x:left,width:right-left};
 }
 export function floorWallInsets(buildings:Walls,x:number,y:number,level=0){
@@ -15,10 +15,15 @@ export function floorWallInsets(buildings:Walls,x:number,y:number,level=0){
 }
 // The same narrow footprint drives drawing and collision. Only exterior
 // boundaries receive outlines: adjoining cells share uninterrupted wood.
-function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
-    const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level),shape=wallLayout(buildings,b.x,b.y,level);
-    const x=b.x*24+ox,y=b.y*24+oy,height=b.kind==='fence'?10:19;
-    const occupied=(px:number,py:number)=>wallOccupies(buildings,b.x+(px+.5)/24,b.y+(py+.5)/24,level);
+function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number,rules:number){
+    const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level,rules),shape=wallLayout(buildings,b.x,b.y,level,rules);
+    const x=b.x*24+ox,y=b.y*24+oy,height=19;
+    const occupied=(px:number,py:number)=>{
+        const tx=b.x+Math.floor(px/24),ty=b.y+Math.floor(py/24);
+        if(!atLevel(buildings,tx,ty,'wall',level)&&!(rules===0&&atLevel(buildings,tx,ty,'fence',level)?.kind==='fence'))return false;
+        const x=((px%24)+24)%24+.5,y=((py%24)+24)%24+.5;
+        return wallRects(buildings,tx,ty,level,rules).some(([rx,ry,w,h])=>x>=rx&&x<rx+w&&y>=ry&&y<ry+h);
+    };
     for(let py=0;py<24;py++)for(let px=0;px<24;){
         if(!occupied(px,py)||occupied(px,py+1)){px++;continue;}
         const start=px;while(px<24&&occupied(px,py)&&!occupied(px,py+1))px++;
@@ -43,28 +48,29 @@ function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls
 export type WallLayer={image:HTMLCanvasElement;sx:number;sy:number;width:number;height:number;x:number;y:number;depth:number};
 type WallStamp={image:HTMLCanvasElement;layers?:WallLayer[]};
 const wallStamps=new WeakMap<Atlas,Map<string,WallStamp>>();
-function wallStamp(art:Atlas,buildings:Walls,b:Building){
+function wallStamp(art:Atlas,buildings:Walls,b:Building,rules:number){
     let cache=wallStamps.get(art);if(!cache){cache=new Map();wallStamps.set(art,cache);}
     const level=floorLevel(b),neighbors=[[0,-1],[1,0],[0,1],[-1,0]].map(([dx,dy])=>{
-        const n=atLevel(buildings,b.x+dx,b.y+dy,'wall',level)??atLevel(buildings,b.x+dx,b.y+dy,'fence',level);
-        return n&&(['wall','door','window','fence'] as string[]).includes(n.kind)?n.kind+':'+!!n.open:'';
+        const fixture=rules===0?atLevel(buildings,b.x+dx,b.y+dy,'fence',level):undefined;
+        const n=atLevel(buildings,b.x+dx,b.y+dy,'wall',level)??(fixture?.kind==='fence'?fixture:undefined);
+        return n?n.kind+':'+!!n.open:'';
     });
-    const key=[b.kind,!!b.open,...neighbors,b.x%2,b.y%2].join(':');let stamp=cache.get(key);
+    const key=[rules,b.kind,!!b.open,...neighbors,b.x%2,b.y%2].join(':');let stamp=cache.get(key);
     if(!stamp){
         const image=document.createElement('canvas');image.width=40*ART_DENSITY;image.height=64*ART_DENSITY;
         const context=image.getContext('2d',{willReadFrequently:true})!;context.imageSmoothingEnabled=false;context.scale(ART_DENSITY,ART_DENSITY);
-        drawWallUncached(context,art,buildings,b,-b.x*24+8,-b.y*24+32);stamp={image};
+        drawWallUncached(context,art,buildings,b,-b.x*24+8,-b.y*24+32,rules);stamp={image};
         if(cache.size>=512)cache.delete(cache.keys().next().value!);cache.set(key,stamp);
     }
     return stamp;
 }
 // Partition the final visible pixels, so a pixel belongs to exactly one depth.
 // Fading multiple wall layers therefore never darkens overlapping faces twice.
-export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building):readonly WallLayer[]{
-    const stamp=wallStamp(art,buildings,b);if(stamp.layers)return stamp.layers;
+export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building,rules=1):readonly WallLayer[]{
+    const stamp=wallStamp(art,buildings,b,rules);if(stamp.layers)return stamp.layers;
     const sourceWidth=40*ART_DENSITY,sourceHeight=64*ART_DENSITY;
     const context=stamp.image.getContext('2d')!,pixels=context.getImageData(0,0,sourceWidth,sourceHeight).data;
-    const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level),shape=wallLayout(buildings,b.x,b.y,level),height=b.kind==='fence'?10:19;
+    const level=floorLevel(b),rects=wallRects(buildings,b.x,b.y,level,rules),shape=wallLayout(buildings,b.x,b.y,level,rules),height=19;
     let facade:Uint8ClampedArray|undefined;
     if(!shape.vertical&&(b.kind==='door'||b.kind==='window')){
         const mask=document.createElement('canvas');mask.width=sourceWidth;mask.height=sourceHeight;const ctx=mask.getContext('2d',{willReadFrequently:true})!;ctx.imageSmoothingEnabled=false;ctx.scale(ART_DENSITY,ART_DENSITY);
@@ -93,6 +99,6 @@ export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building):readon
 export function drawWallLayer(ctx:CanvasRenderingContext2D,part:WallLayer,b:Building,ox:number,oy:number){
     ctx.drawImage(part.image,part.sx,part.sy,part.width*ART_DENSITY,part.height*ART_DENSITY,b.x*24+ox+part.x,b.y*24+oy+part.y,part.width,part.height);
 }
-export function drawConnectedWall(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number){
-    ctx.drawImage(wallStamp(art,buildings,b).image,b.x*24+ox-8,b.y*24+oy-32,40,64);
+export function drawConnectedWall(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number,rules=1){
+    ctx.drawImage(wallStamp(art,buildings,b,rules).image,b.x*24+ox-8,b.y*24+oy-32,40,64);
 }

@@ -2,7 +2,7 @@ import {ACTIVITY_TIMING,CAMPFIRE,FOOD_HEAL,cookingRecipe,nearCampfire,canCast,ty
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
 import {CROPS,FARM_WATER_MS,cropProgress,growPlot,soilRecovery,plotKey,type CropKind,type Plot} from './farming';
 import {CREATURES,CREATURE_SPAWNS,type CreatureKind} from './creatures';
-import {atLevel,stairAt,buildingKey,floorLevel,canReachGround,wallRects,wallOccupies,layer,MAX_LEVEL,COSTS,PART_NAMES,SIGN_TEXT_LIMIT,normalizeSignText,type Part,type Building} from './structures';
+import {atLevel,stairAt,buildingKey,floorLevel,canReachGround,barrierRects,wallRects,wallOccupies,layer,MAX_LEVEL,COSTS,PART_NAMES,SIGN_TEXT_LIMIT,normalizeSignText,type Part,type Building} from './structures';
 export {buildingKey,layer,COSTS,PART_NAMES};
 export type {Part,Building};
 export type Tool = 'axe' | 'pick' | 'sword' | 'build' | 'hoe' | 'water' | 'seed' | 'rod';
@@ -85,6 +85,7 @@ export type WorldState = {
     events: GameEvent[];
     plots?:Record<string,Plot>;
     creatureVersion?:number;
+    structureVersion?:1;
 };
 export type GameEvent = {
     id: string;
@@ -136,6 +137,9 @@ export function createPlayer(id: string, secret: string, name: string, color: nu
     return { id, secret, name, x: SPAWN.x + color * .8, y: SPAWN.y, face: 'down', hp: 100, stamina: 100, inventory: { wood: 0, stone: 0, copper: 0, essence: 0,carrotSeed:6,tomatoSeed:6,wheatSeed:6,carrot:0,tomato:0,wheat:0,fish:0,meal:0 }, seen: now, actionAt: 0, dodgeUntil: 0, hitUntil: 0, swingUntil: 0, seq: 0, woodGathered: 0, kills: 0, color };
 }
 export function normalizeWorld(s:WorldState,now:number){
+    // Only authoritative/local simulation migrates rules. Remote snapshots are
+    // consumed as sent; an older server omits this capability field.
+    s.structureVersion=1;
     // Existing saves begin their first day when they are migrated, rather than
     // inheriting thousands of short game days from their real creation date.
     if(!Number.isFinite(s.dayStartedAt))s.dayStartedAt=now;
@@ -161,7 +165,7 @@ export function normalizeWorld(s:WorldState,now:number){
 export function isBlocked(s: WorldState, x: number, y: number, level=0) {
     if(level>0){
         if(!atLevel(s.buildings,Math.floor(x),Math.floor(y),'floor',level))return true;
-        return wallOccupies(s.buildings,x,y,level);
+        return wallOccupies(s.buildings,x,y,level,s.structureVersion??0);
     }
     const t=terrainAt(Math.floor(x),Math.floor(y));
     if ((sceneAt(x)==='surface'&&(x<1||y<1||x>WORLD_SIZE-2||y>WORLD_SIZE-2)) || t==='water'||t==='cave-wall')
@@ -170,7 +174,7 @@ export function isBlocked(s: WorldState, x: number, y: number, level=0) {
     const r = resourceAt(x, y);
     if (r && r.kind !== 'berry' && !s.depleted[r.id])
         return true;
-    return wallOccupies(s.buildings,x,y,level);
+    return wallOccupies(s.buildings,x,y,level,s.structureVersion??0);
 }
 export function clearLine(s: WorldState, a: {x:number;y:number;level?:number}, b: {x:number;y:number;level?:number}) {
     if(floorLevel(a)!==floorLevel(b))return false;
@@ -192,7 +196,7 @@ export function move(s: WorldState, p: {
         // Thin walls can fit between a body's corners: intersect the full footprint.
         for(let ty=Math.floor(y-.2);ty<=Math.floor(y+.2);ty++)for(let tx=Math.floor(x-.2);tx<=Math.floor(x+.2);tx++){
             if(!atLevel(s.buildings,tx,ty,'wall',level)&&atLevel(s.buildings,tx,ty,'fence',level)?.kind!=='fence')continue;
-            if(wallRects(s.buildings,tx,ty,level).some(([rx,ry,w,h])=>x+.2>tx+rx/24&&x-.2<tx+(rx+w)/24&&y+.2>ty+ry/24&&y-.2<ty+(ry+h)/24))return false;
+            if(barrierRects(s.buildings,tx,ty,level,s.structureVersion??0).some(([rx,ry,w,h])=>x+.2>tx+rx/24&&x-.2<tx+(rx+w)/24&&y+.2>ty+ry/24&&y-.2<ty+(ry+h)/24))return false;
         }
         return true;
     };
@@ -333,6 +337,7 @@ export function canBuild(s:WorldState,p:Player,x:number,y:number,part:Part):stri
     if(resource&&!s.depleted[resource.id])return '先清理资源';
     if(s.plots?.[plotKey(x,y)]&&level===0)return '这里是耕地';
     if(atLevel(s.buildings,x,y,part,level))return '已被占用';
+    if(s.structureVersion===1&&((layer(part)==='wall'&&atLevel(s.buildings,x,y,'fence',level)?.kind==='fence')||(part==='fence'&&atLevel(s.buildings,x,y,'wall',level))))return '已被占用';
     if(part!=='floor'&&part!=='roof'&&part!=='stairs'&&stairAt(s.buildings,x,y,level))return '保留楼梯出入口';
     const outdoor=level===0&&['fence','planter','lantern','sign'].includes(part);
     if(part!=='floor'&&!outdoor&&!atLevel(s.buildings,x,y,'floor',level))return '需要地板';

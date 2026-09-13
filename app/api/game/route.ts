@@ -20,7 +20,7 @@ export function OPTIONS(req: Request) {
 async function hash(token: string) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(b), n => n.toString(16).padStart(2, '0')).join(''); }
 export async function POST(req: Request) {
     const serverReceivedAt=Date.now();
-    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
+    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,structureVersion:1,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
     if (!allowedRequest(req)) return reply({ error: '来源不受支持' }, 403);
     try {
         if (Number(req.headers.get('content-length') ?? 0) > 12000)
