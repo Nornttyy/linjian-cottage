@@ -5,7 +5,8 @@ import {material,terrainTile} from './tiles';
 import {drawConnectedWall,connectedWallLayers,drawWallLayer,floorWallInsets} from './connected-wall';
 import {connectedFenceLayers,drawFenceLayer} from './connected-fence';
 import {atmosphere,treeShadows} from './atmosphere';
-import {heroFrame,heroFacing,toolTrailFrame,creatureFrame,creatureFacing,workFrame,type HeroSwing,type WorkSwing} from './animation';
+import {heroFrame,heroFacing,toolTrailFrame,creatureFrame,creatureFacing,workFrame,fishingFrame,type HeroSwing,type WorkSwing} from './animation';
+import {fishingActive} from './fishing';
 import {atLevel,floorLevel,floorGroup,layer,MAX_LEVEL,type Building} from './structures';
 import {cropStage,soilOpacity,type Plot} from './farming';
 import {CREATURES} from './creatures';
@@ -293,11 +294,24 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         if (!visible(point.x, point.y))
             continue;
         const work=local?view.localWork:p.workAction&&p.workStart!==undefined&&p.workUntil?{action:p.workAction,start:p.workStart,until:p.workUntil,face:p.swingFace??p.face}:null;
+        if(fishingActive(p.fishing)){
+            const fishing=p.fishing!;
+            drawables.push({y:fishing.target.y+.5,draw:()=>{
+                const cast=Math.max(0,Math.min(1,(t-fishing.startedAt)/(fishing.castUntil-fishing.startedAt)));
+                const startX=point.x*TILE+ox+(p.swingFace==='left'?-12:p.swingFace==='right'?12:0),startY=point.y*TILE+oy-24;
+                const bob=fishing.phase==='bite'?Math.round(Math.sin(t/60)*2):Math.round(Math.sin(t/240));
+                const endX=Math.round(startX+((fishing.target.x+.5)*TILE+ox-startX)*cast),endY=Math.round(startY+((fishing.target.y+.5)*TILE+oy-startY)*cast)+bob;
+                ctx.save();ctx.lineWidth=1;ctx.strokeStyle='#f0e8c5bb';ctx.beginPath();ctx.moveTo(Math.round(startX),Math.round(startY));ctx.lineTo(endX,endY);ctx.stroke();
+                ctx.fillStyle='#eee7c4';ctx.fillRect(endX-1,endY-4,3,3);ctx.fillStyle='#c87658';ctx.fillRect(endX-1,endY-1,3,3);
+                if(cast===1){ctx.strokeStyle='#d5efdf88';ctx.beginPath();ctx.ellipse(endX,endY+2,5+Math.sin(t/180),2,0,0,Math.PI*2);ctx.stroke();}
+                ctx.restore();
+            }});
+        }
         drawables.push({ y: point.y+(work?.action==='sleep'&&t<work.until ? .2 : 0), draw: () => {
                 const moving=local?pos.moving:(p.movingUntil??0)>s.tick,swing=local?view.localSwing:undefined;
                 const face=work&&t<work.until?work.face:heroFacing(p,local?pos.face:p.face,t,swing);
-                const frame=(work?workFrame(work,t):null)??heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
-                const trail=work&&t<work.until?null:toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
+                const frame=fishingFrame(p.fishing,p.swingFace??face,t)??(work?workFrame(work,t):null)??heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
+                const trail=fishingActive(p.fishing)||work&&t<work.until?null:toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
                 const drawTrail=()=>{if(!trail||!art[trail])return;const size=trail.startsWith('trail-sword')?56:44;
                     ctx.save();ctx.translate(px,py-12);ctx.rotate(face==='down'?Math.PI/2:face==='up'?-Math.PI/2:face==='left'?Math.PI:0);
                     ctx.globalAlpha=.8;ctx.drawImage(art[trail],-size/2,-size/2,size,size);ctx.restore();};
@@ -370,7 +384,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         else if(e.kind==='spore'){ctx.globalAlpha=(1-f)*.65;for(let i=0;i<8;i++){const a=i*Math.PI/4,r=8+f*34;ctx.drawImage(art.mushrooms,x+Math.cos(a)*r-3,y+20+Math.sin(a)*r*.65-3,7,7);}}
         else if(e.kind==='water'){ctx.globalAlpha=(1-f)*.7;for(let i=0;i<5;i++)ctx.drawImage(art['water-drop'],x-8+i*4,y+12+f*8-(i%2)*5,3,5);}
         else if (e.amount) {
-            const type = e.kind==='harvest'?e.crop:e.kind==='eat'||e.kind==='sleep'?'heart':e.kind;
+            const type = e.item??(e.kind==='harvest'?e.crop:e.kind==='eat'||e.kind==='sleep'?'heart':e.kind);
             const icon = art[type as Sprite];
             if (icon)
                 ctx.drawImage(icon, x - 11, y - 8, 9, 9);

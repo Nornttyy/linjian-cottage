@@ -1,7 +1,7 @@
 "use client";
 import {useState} from 'react';
 import type {Inventory as Resources} from '@/lib/simulation';
-import {HOTBAR_SIZE,ITEMS,itemCount,itemDescription,visibleItem,type ItemSlot} from '@/lib/inventory';
+import {HOTBAR_SIZE,BACKPACK_PAGE_SIZE,BACKPACK_SIZE,ITEMS,itemCount,itemDescription,visibleItem,type ItemSlot} from '@/lib/inventory';
 import Icon from './ItemIcon';
 
 export default function Inventory({slots,resources,selected,onMove,onQuickMove,onClose}:{
@@ -9,6 +9,7 @@ export default function Inventory({slots,resources,selected,onMove,onQuickMove,o
     onMove:(from:number,to:number)=>void;onQuickMove:(from:number)=>void;onClose:()=>void;
 }){
     const [picked,setPicked]=useState<number|null>(null),[hovered,setHovered]=useState<number|null>(null);
+    const [page,setPage]=useState(0),pages=BACKPACK_SIZE/BACKPACK_PAGE_SIZE;
     const itemAt=(index:number)=>visibleItem(slots[index],resources);
     const description=itemDescription(itemAt(hovered??picked??selected));
     const slot=(index:number)=>{
@@ -29,7 +30,8 @@ export default function Inventory({slots,resources,selected,onMove,onQuickMove,o
     };
     return <div className="modal-backdrop" onClick={onClose}><section className="inventory-panel" role="dialog" aria-modal="true" aria-label="背包" onClick={event=>event.stopPropagation()}>
         <header><h2>背包</h2><button autoFocus className="close" onClick={onClose} aria-label="关闭背包">×</button></header>
-        <div className="inventory-grid" aria-label="背包格子">{slots.slice(HOTBAR_SIZE).map((_,i)=>slot(i+HOTBAR_SIZE))}</div>
+        <nav className="inventory-pages" aria-label="背包分页">{Array.from({length:pages},(_,i)=><button key={i} onClick={()=>{setPage(i);setHovered(null);}} aria-current={page===i?'page':undefined}>第{i+1}页</button>)}</nav>
+        <div className="inventory-grid" aria-label={'背包第'+(page+1)+'页'}>{slots.slice(HOTBAR_SIZE+page*BACKPACK_PAGE_SIZE,HOTBAR_SIZE+(page+1)*BACKPACK_PAGE_SIZE).map((_,i)=>slot(i+HOTBAR_SIZE+page*BACKPACK_PAGE_SIZE))}</div>
         <div className="inventory-divider"><span>快捷栏</span><kbd>1 — 9</kbd></div>
         <div className="inventory-grid inventory-hotbar" aria-label="背包内快捷栏">{slots.slice(0,HOTBAR_SIZE).map((_,i)=>slot(i))}</div>
         <div className="inventory-description" aria-live="polite">{description||' '}</div>

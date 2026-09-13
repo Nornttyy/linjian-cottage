@@ -1,4 +1,6 @@
-import {CAMPFIRE,cookingRecipe,nearCampfire,canCast} from './activities';
+import {CAMPFIRE,nearCampfire,canCast,type FoodKind} from './activities';
+import {foodHeal,resolveRecipe,validateSelection,type IngredientId,type CookMethod} from './cooking';
+import {advanceFishing,hookFishing,setFishingHeld,fishingActive,type FishingState} from './fishing';
 import {applyWorldDelta,type WorldDelta} from './world-delta';
 import { loadArt, type Atlas } from './art';
 import {getAssetLoading,subscribeAssets} from './asset-loading';
@@ -18,6 +20,7 @@ type ApiReply = {
     state: WorldState;
     networkVersion?:number;
     structureVersion?:1;
+    activityVersion?:2;
     version?:number;
     delta?:WorldDelta;
     serverReceivedAt?:number;
@@ -47,6 +50,8 @@ export type ClientState = {
     sound:boolean;
     localSaved:boolean;
     loading:LoadingState;
+    cookingOpen:boolean;
+    cookingBusy:boolean;
 };
 export class GameClient {
     world = createWorld();
@@ -58,6 +63,14 @@ export class GameClient {
     slots=defaultSlots();
     selectedSlot=0;
     paused = false;
+    cookingOpen=false;
+    private fishingHeld=false;
+    private fishingPointerId:number|null=null;
+    private fishingPreview:FishingState|undefined;
+    private fishingSource:FishingState|undefined;
+    private fishingInputs:{command:Command;at:number}[]=[];
+    private lastFishingSignal=0;
+    private pantryPending:Command|null=null;
     private audio=new GameAudio();
     private localWork:WorkSwing|null=null;
     private workCommand:Command|null=null;
@@ -139,7 +152,78 @@ export class GameClient {
         this.frame = requestAnimationFrame(this.animate);
     }
     notify() { if (!this.disposed)
-        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot,sound:this.audio.enabled,localSaved:this.localSaved,loading:this.loading }); }
+        this.changed({ world: this.world, session: this.session, tool: this.tool, part: this.part, remove: this.remove, connected: this.connected, error: this.error, art: this.art,slots:this.slots,selectedSlot:this.selectedSlot,sound:this.audio.enabled,localSaved:this.localSaved,loading:this.loading,cookingOpen:this.cookingOpen,cookingBusy:this.cookingBusy }); }
+    get cookingBusy(){const p=this.session?this.world.players[this.session.playerId]:undefined;return !!this.pantryPending||this.workCommand?.type==='cook'||p?.pendingActivity?.action==='cook'||p?.workAction==='cook'&&(p.workUntil??0)>this.serverNow();}
+    get fishing(){return this.session?this.world.players[this.session.playerId]?.fishing:undefined;}
+    get fishingBusy(){return fishingActive(this.fishing)||this.workCommand?.type==='fish';}
+    getFishingView(localNow=Date.now()):FishingState|undefined{
+        const state=this.fishing;if(!state)return;
+        const now=this.serverNow(localNow);
+        if(this.fishingSource!==state){
+            this.fishingSource=state;this.fishingPreview=state;
+            for(const input of this.fishingInputs){
+                if(input.command.fishingId!==state.id)continue;
+                const time=Math.max(this.fishingPreview.updatedAt,input.at);
+                this.fishingPreview=input.command.type==='fishHook'?hookFishing(this.fishingPreview,time).state:setFishingHeld(this.fishingPreview,input.command.held===true,time).state;
+            }
+        }
+        // A control change is applied at its timestamp, never to the preceding
+        // network interval. The preview never writes inventory or world state.
+        const next=advanceFishing(this.fishingPreview??state,now).state;this.fishingPreview=next;
+        return next.phase==='caught'&&state.phase!=='caught'?{...next,phase:'reeling',progress:.99}:next;
+    }
+    fishingPress(down:boolean){
+        const now=Date.now(),state=this.getFishingView(now);
+        if(!down)this.fishingHeld=false;
+        if(!this.playable||down&&this.paused)return false;
+        if(!state||!fishingActive(state))return false;
+        if(down&&state.phase==='waiting'){this.fishingHeld=false;return false;}
+        this.audio.unlock();this.fishingHeld=down;
+        const send=(command:Command)=>{
+            if(!this.command(command))return false;
+            const at=this.serverNow(now);this.fishingInputs.push({command,at});
+            this.fishingPreview=command.type==='fishHook'?hookFishing(this.fishingPreview??state,at).state:setFishingHeld(this.fishingPreview??state,down,at).state;
+            this.lastFishingSignal=now;return true;
+        };
+        if(down&&state.phase==='bite'){
+            if(this.commands.some(c=>c.type==='fishHook'&&c.fishingId===state.id)||this.pending?.commands.some(c=>c.type==='fishHook'&&c.fishingId===state.id))return true;
+            this.audio.play('water',.5);return send({type:'fishHook',fishingId:state.id});
+        }
+        if(state.phase==='reeling'||!down){
+            const removed=this.commands.filter(c=>c.type==='fishControl'&&c.fishingId===state.id);
+            this.commands=this.commands.filter(c=>c.type!=='fishControl'||c.fishingId!==state.id);
+            this.fishingInputs=this.fishingInputs.filter(input=>!removed.includes(input.command));
+            return send({type:'fishControl',fishingId:state.id,held:down});
+        }
+        return true;
+    }
+    cancelFishing(){
+        this.fishingHeld=false;
+        const state=this.fishing,start=this.workCommand?.type==='fish'?this.workCommand:this.pending?.commands.find(c=>c.type==='fish');
+        if(start&&this.commands.includes(start)){
+            this.commands=this.commands.filter(c=>c!==start);this.workCommand=null;this.localWork=null;this.feedbackQueue=this.feedbackQueue.filter(entry=>entry.command!==start);
+            if(!fishingActive(state)){this.fishingPreview=undefined;this.fishingInputs=[];return true;}
+        }
+        const id=fishingActive(state)?state!.id:start?.id;if(!id)return false;
+        this.commands=this.commands.filter(c=>!['fishControl','fishHook'].includes(c.type)||c.fishingId!==id);
+        this.fishingInputs=this.fishingInputs.filter(input=>input.command.fishingId!==id);
+        if(this.commands.some(c=>c.type==='fishCancel'&&c.fishingId===id)||this.pending?.commands.some(c=>c.type==='fishCancel'&&c.fishingId===id))return true;
+        return this.command({type:'fishCancel',fishingId:id});
+    }
+    closeCooking(){this.cookingOpen=false;this.notify();}
+    cook(method:CookMethod,ingredients:IngredientId[]){
+        const p=this.session?this.world.players[this.session.playerId]:undefined;
+        if(!p||!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2)return false;
+        if(!nearCampfire(this.pos)){this.message('到营火旁烹饪');return false;}
+        const selection=validateSelection(ingredients,p.inventory);if(!selection.ok){this.message(selection.error);return false;}
+        if(!resolveRecipe(method,ingredients)){this.message('这些食材不适合这项做法');return false;}
+        const accepted=this.startWork('cook',{type:'cook',method,ingredients:[...ingredients]},Date.now());this.notify();return accepted;
+    }
+    takePantry(offer:string){
+        if(!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2||!nearCampfire(this.pos))return false;
+        const command:Command={type:'pantry',offer};if(!this.command(command))return false;
+        this.pantryPending=command;this.notify();return true;
+    }
     get playable(){return this.ready&&this.connected&&!this.disposed;}
     get loading():LoadingState{
         const assets=getAssetLoading(),total=assets.total+4;
@@ -223,7 +307,7 @@ export class GameClient {
         if(this.localMode)return this.localRequest(body);
         const sentAt=Date.now(),requestGeneration=this.generation;
         let response:Response;
-        try{response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});}
+        try{response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body as object,activityVersion:2,structureVersion:1}),signal:AbortSignal.timeout(8000)});}
         catch(error){
             const timedOut=typeof DOMException!=='undefined'&&error instanceof DOMException&&error.name==='TimeoutError';
             if(error instanceof TypeError||timedOut)throw new MultiplayerUnavailableError(timedOut?'多人服务器连接超时':'多人服务器暂时无法连接');
@@ -257,6 +341,7 @@ export class GameClient {
     }
     async connect(mode: 'resume' | 'create' | 'join' | 'local' = 'resume', room = '') {
         if(this.disposed)return;
+        this.cookingOpen=false;this.pantryPending=null;this.fishingHeld=false;this.fishingInputs=[];this.fishingPreview=undefined;this.fishingSource=undefined;
         this.connectionIntent={mode,room};
         this.signSave?.resolve('已切换世界');this.signSave=null;if(this.activeSignId){this.activeSignId=null;this.signToggle(null);}
         const generation = ++this.generation;
@@ -302,7 +387,7 @@ export class GameClient {
             this.world = result.state;
             // Trust the responding server's capability, not a saved world's
             // migration marker (which could survive a server rollback).
-            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined};
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined};
             this.worldVersion=result.version;
 
             const p = this.world.players[this.session.playerId];
@@ -358,7 +443,7 @@ export class GameClient {
                 return;
             if(result.delta && result.delta.base!==this.worldVersion){this.worldVersion=undefined;throw new Error('正在重新同步');}
             this.world = result.state ?? applyWorldDelta(this.world,result.delta!);
-            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined};
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined};
             this.worldVersion=result.version;
             if(this.signSave&&submitted?.commands.includes(this.signSave.command)){
                 const save=this.signSave;this.signSave=null;
@@ -367,10 +452,15 @@ export class GameClient {
             }
             if(this.unconfirmedSwing && submitted?.commands.includes(this.unconfirmedSwing))this.unconfirmedSwing=null;
             if(this.workCommand&&submitted?.commands.includes(this.workCommand))this.workCommand=null;
+            this.fishingInputs=this.fishingInputs.filter(input=>!submitted?.commands.includes(input.command));
+            if(this.pantryPending&&submitted?.commands.includes(this.pantryPending))this.pantryPending=null;
+            if(!fishingActive(this.fishing))this.fishingHeld=false;
+            if(this.fishing&&!fishingActive(this.fishing)&&this.localWork?.action==='fish'){this.localWork=null;this.feedbackQueue=this.feedbackQueue.filter(entry=>entry.command.type!=='fish');}
             this.pending = null;
             this.connected = true;
             this.error = '';
             const p = this.world.players[session.playerId];
+            if(!this.fishingHeld&&p.fishing?.held&&fishingActive(p.fishing)&&!this.commands.some(c=>c.type==='fishControl'&&!c.held))this.fishingPress(false);
             const sleepKnown=this.sleepDispatchId&&(sleep?.id===this.sleepDispatchId||p.lastCommandId===this.sleepDispatchId);
             if(this.localWork?.action==='sleep'&&((sleepKnown&&(p.lastCommandId!==this.sleepDispatchId||p.workAction!=='sleep'||(p.workUntil??0)<=this.serverNow()))||(p.hurtAt??-Infinity)>=this.serverNow(this.localWork.start))){
                 this.localWork=null;this.feedbackQueue=this.feedbackQueue.filter(entry=>entry.command.id!==this.sleepDispatchId);
@@ -478,7 +568,7 @@ export class GameClient {
         if(this.heldPointerId!==null&&pointerId!==undefined&&pointerId!==this.heldPointerId)return false;
         this.held=false;this.heldButton=0;this.heldPointerId=null;this.buildStamp='';return true;
     }
-    pauseControls(){this.keys.clear();this.releaseHeld();}
+    pauseControls(){this.keys.clear();this.releaseHeld();this.fishingPointerId=null;if(this.fishingHeld)this.fishingPress(false);}
     startTouchUse(pointerId?:number){
         this.audio.unlock();
         if(this.paused||!this.playable||this.held)return false;
@@ -503,7 +593,7 @@ export class GameClient {
         // Before dispatch, movement must stay out of the attack's pre-action movement batch.
         // Once sent, the bounded server timestamp lets local recovery finish before its acknowledgement.
         const awaitingDispatch=!!this.unconfirmedSwing&&(this.networkVersion<2||this.commands.includes(this.unconfirmedSwing));
-        return awaitingDispatch||!!this.workCommand&&this.commands.includes(this.workCommand)||now<this.toolLockUntil();
+        return this.fishingBusy||awaitingDispatch||!!this.workCommand&&this.commands.includes(this.workCommand)||now<this.toolLockUntil();
     }
     private dodgePending() {
         return this.commands.some(c=>c.type==='dodge') || !!this.pending?.commands.some(c=>c.type==='dodge');
@@ -512,7 +602,8 @@ export class GameClient {
         const localNow=Date.now(),player=this.session?this.world.players[this.session.playerId]:undefined;
         if(command.type==='dodge'&&(this.toolLocked()||this.dodgePending()||!!player&&this.serverNow(localNow)<player.dodgeUntil+450))return false;
         if(command.type==='interact'&&(localNow-this.lastInteractAt<250||this.commands.some(c=>c.type==='interact')||this.pending?.commands.some(c=>c.type==='interact')))return false;
-        if(this.paused&&command!==this.signSave?.command || !this.playable || this.commands.length>=5)return false;
+        const modalAction=this.cookingOpen&&['cook','pantry'].includes(command.type)||command.type==='fishCancel'||command.type==='fishControl'&&command.held===false;
+        if(this.paused&&command!==this.signSave?.command&&!modalAction || !this.playable || this.commands.length>=5)return false;
         if(command.type!=='wake'&&command.type!=='sleep')this.wakeSleep();
         if(this.commands.length>=5)return false;
         if(command.type==='interact')this.lastInteractAt=localNow;
@@ -552,8 +643,7 @@ export class GameClient {
             return this.startWork('sleep',{type:'sleep',target:bed.id,face:'up'},now);
         }
         if(nearCampfire(this.pos)&&(!point||distance(point,CAMPFIRE)<1.2)){
-            this.held=false;if(!cookingRecipe(p.inventory)){this.message('需要1条鱼、2根胡萝卜、2个番茄或3份小麦');return true;}
-            return this.startWork('cook',{type:'cook'},now);
+            this.held=false;this.pauseControls();this.cookingOpen=true;this.notify();return true;
         }
         return false;
     }
@@ -592,7 +682,7 @@ export class GameClient {
         }
         const farm=this.tool==='hoe'||this.tool==='water'||this.tool==='seed';
         if(ITEMS[item].kind==='resource'&&!farm){
-            if(now-this.lastClick>=400){if(item==='essence')this.command({type:'heal'});else if((item==='carrot'||item==='tomato'||item==='meal')&&p.hp<100)this.startWork('eat',{type:'eat',food:item},now);this.lastClick=now;}return;
+            if(now-this.lastClick>=400){if(item==='essence')this.command({type:'heal'});else if(foodHeal(item)&&(p.hp<100||p.stamina<100))this.startWork('eat',{type:'eat',food:item as FoodKind},now);this.lastClick=now;}return;
         }
         if(this.tool==='build'){
             if(now-this.lastClick<300)return;
@@ -601,8 +691,10 @@ export class GameClient {
             if(!removing){const error=canBuild(this.world,{...p,...this.pos},cell.x,cell.y,this.part);if(error){this.message(error);return;}}
             if(!this.startWork('hammer',removing?{type:'remove',...cell}:{type:'build',...cell,part:this.part},now))return;
         }else if(this.tool==='rod'){
+            if(this.world.activityVersion!==2){this.message('此房间尚未支持新版钓鱼，可在本机世界体验');this.held=false;return;}
             if(!canCast(this.pos,x,y)){this.message('站在岸边，点击附近的水面');this.held=false;return;}
             if(!this.startWork('fish',{type:'fish',x,y},now))return;
+            this.held=false;this.fishingHeld=false;
         }else if(farm){
             if(this.serverNow(now)<p.actionAt)return;
             const type=this.tool==='hoe'?'till':this.tool==='water'?'water':'plant',stamp=`${x}:${y}:${type}:${this.crop}`;
@@ -673,7 +765,8 @@ export class GameClient {
             this.pointer = pointerWorld(this.canvas, this.pos, this.screenPointer.x, this.screenPointer.y);
         if (this.held)
             this.act();
-        const now=Date.now();this.feedback(now);const pose=now<Math.max(this.localSwing?.until??0,this.localWork?.until??0)?'tool':this.pos.moving?'walk':'idle';
+        const now=Date.now();if(this.fishingHeld&&!this.paused&&(this.fishingPreview?.phase==='reeling'||this.fishing?.phase==='reeling')&&now-this.lastFishingSignal>=500)this.fishingPress(true);
+        this.feedback(now);const pose=now<Math.max(this.localSwing?.until??0,this.localWork?.until??0)?'tool':this.pos.moving?'walk':'idle';
         if(pose!==this.poseState){this.poseState=pose;this.poseStarted=now;}
         this.draw(now);
         this.frame = requestAnimationFrame(this.animate);
@@ -689,6 +782,11 @@ export class GameClient {
     private pointerDown=(e:PointerEvent)=>{
         this.audio.unlock();if(e.button!==0&&e.button!==2)return;
         if(this.paused||!this.playable)return;
+        if(fishingActive(this.fishing)){
+            e.preventDefault();if(e.button===2){this.cancelFishing();return;}
+            if(this.fishingPointerId!==null)return;
+            this.fishingPointerId=e.pointerId;this.canvas.setPointerCapture?.(e.pointerId);this.fishingPress(true);return;
+        }
         if(e.button===2&&this.tool!=='build'){
             e.preventDefault();this.pointerMove(e);
             const point=this.pointer,door=point?atLevel(this.world.buildings,Math.floor(point.x),Math.floor(point.y),'wall',floorLevel(this.pos)):undefined;
@@ -700,6 +798,7 @@ export class GameClient {
         if(e.button===0||this.tool==='build')this.act();
     };
     private pointerUp = (e?:PointerEvent) => {
+        if(this.fishingPointerId!==null&&(!e||e.pointerId===this.fishingPointerId)){this.fishingPointerId=null;this.fishingPress(false);}
         if(!this.releaseHeld(e?.pointerId))return;
         if(e?.pointerType==='touch'){this.screenPointer=null;this.pointer=null;}
     };
@@ -710,6 +809,10 @@ export class GameClient {
             return;
         if(!this.playable)return;
         this.audio.unlock();const key = e.key.toLowerCase();
+        if(this.fishingBusy&&!this.paused){
+            if(key==='escape'){e.preventDefault();this.cancelFishing();return;}
+            if(key===' '||key==='f'){e.preventDefault();if(!e.repeat)this.fishingPress(true);return;}
+        }
         if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key))
             e.preventDefault();
         this.keys.add(key);
@@ -735,7 +838,7 @@ export class GameClient {
         if (key === ' ')
             this.command({ type: 'dodge' });
     };
-    private keyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
+    private keyUp = (e: KeyboardEvent) => {const key=e.key.toLowerCase();this.keys.delete(key);if((key===' '||key==='f')&&this.fishingHeld)this.fishingPress(false);};
     private viewportChanged=()=>{this.screenPointer=null;this.pointer=null;this.pauseControls();};
     private blur = () => { this.viewportChanged(); };
     destroy() { this.saveLocalWorld(true);this.cancelPreparation();this.stopAssets();this.pauseControls();this.ready=false;this.signSave?.resolve('已离开世界');this.signSave=null;this.audio.destroy();this.disposed = true; cancelAnimationFrame(this.frame); if (this.timer)

@@ -1,9 +1,10 @@
 import {SPAWN,sceneAt,terrainAt} from './world';
 import {floorLevel} from './structures';
+import {DISHES,type DishId} from './cooking';
 export const CAMPFIRE={x:SPAWN.x,y:SPAWN.y-1.4};
-export const ACTIVITY_TIMING={harvest:{duration:480,contact:220},pickup:{duration:420,contact:200},eat:{duration:600,contact:260},fish:{duration:2400,contact:1900},cook:{duration:1800,contact:1300},sleep:{duration:4000,contact:3600}} as const;
-export type FoodKind='carrot'|'tomato'|'meal';
-export const FOOD_HEAL:Record<FoodKind,number>={carrot:12,tomato:10,meal:36};
+export const ACTIVITY_TIMING={harvest:{duration:480,contact:220},pickup:{duration:420,contact:200},eat:{duration:600,contact:260},fish:{duration:550,contact:250},cook:{duration:1800,contact:1300},sleep:{duration:4000,contact:3600}} as const;
+export type FoodKind='carrot'|'tomato'|'meal'|DishId;
+export const FOOD_HEAL={carrot:12,tomato:10,meal:36,...Object.fromEntries(Object.entries(DISHES).map(([id,dish])=>[id,dish.hp]))} as Record<FoodKind,number>;
 export type CookingIngredient='fish'|'carrot'|'tomato'|'wheat';
 export type CookingRecipe={item:CookingIngredient;count:number};
 const recipes:CookingRecipe[]=[{item:'fish',count:1},{item:'carrot',count:2},{item:'tomato',count:2},{item:'wheat',count:3}];

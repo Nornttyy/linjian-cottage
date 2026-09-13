@@ -67,7 +67,7 @@ try{
         const client=makeClient(messages);
         try{
             await client.connect('create');
-            assert.deepEqual(calls,[{action:'create'}]);
+            assert.deepEqual(calls,[{action:'create',activityVersion:2,structureVersion:1}]);
             assert.equal(client.connected,true,`connect error: ${client.error}`);
             assert.equal(client.error,'');
             assert.equal(client.session?.local,true);
@@ -119,7 +119,7 @@ try{
         const client=makeClient(messages);
         try{
             await client.connect('join','abcd1234');
-            assert.deepEqual(calls,[{action:'join',room:'ABCD1234'}]);
+            assert.deepEqual(calls,[{action:'join',room:'ABCD1234',activityVersion:2,structureVersion:1}]);
             assert.equal(client.connected,false);
             assert.equal(client.session,null);
             assert.equal(client.error,'多人服务器暂时无法连接');

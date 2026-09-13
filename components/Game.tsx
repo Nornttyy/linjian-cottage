@@ -8,6 +8,10 @@ import Tutorial from './Tutorial';
 import Minimap from './Minimap';
 import LoadingScreen from './LoadingScreen';
 import TouchControls from './TouchControls';
+import CookingPanel from './CookingPanel';
+import FishingGame from './FishingGame';
+import {fishingActive} from '@/lib/fishing';
+import {nearCampfire} from '@/lib/activities';
 import type {StartMode} from './MainMenu';
 import {HOTBAR_SIZE,ITEMS,itemCount,itemDescription,visibleItem,defaultSlots} from '@/lib/inventory';
 import {sceneAt,CAVE_ENTRANCE} from '@/lib/world';
@@ -25,17 +29,19 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const [menu,setMenu]=useState(false);
     const [tutorialStoppedAt,setTutorialStoppedAt]=useState(0);
     const loading=state?.loading,loaded=loading?.phase==='ready';
+    const cooking=state?.cookingOpen??false;
     const showNotice = (text: string) => { setNotice(text); if (noticeTimer.current)
         clearTimeout(noticeTimer.current); noticeTimer.current = setTimeout(() => setNotice(''), 1400); };
     useEffect(() => { const game = new GameClient(canvas.current!, setState, showNotice, () => {setMap(v => !v);setRoom(false);setBackpack(false);setSignId(null);}, apiUrl, () => {setBackpack(v=>!v);setMap(false);setRoom(false);setSignId(null);}, id=>{setSignId(id);if(id){setMap(false);setRoom(false);setBackpack(false);}}); client.current = game; game.connect(startMode,initialRoom); return () => { game.destroy(); if (noticeTimer.current)
         clearTimeout(noticeTimer.current); }; }, [apiUrl,startMode,initialRoom]);
     useEffect(() => { if (client.current) {
-        client.current.paused = map || room || backpack || signId!==null || menu;
+        client.current.paused = map || room || backpack || signId!==null || menu || cooking;
         client.current.pauseControls();
-    } }, [map, room, backpack,signId,menu]);
+        if(map||room||backpack||signId!==null||menu)client.current.cancelFishing();
+    } }, [map, room, backpack,signId,menu,cooking]);
     useEffect(() => { if (map && mapCanvas.current && state?.session)
         paintMap(mapCanvas.current, state.world, state.session.playerId,state.art); }, [map, state]);
-    useEffect(() => { const close = (e: KeyboardEvent) => { if(e.key==='Escape'){setMenu(false);setMap(false);setRoom(false);setBackpack(false);setSignId(null);client.current?.closeSign();} }; window.addEventListener('keydown',close); return () => window.removeEventListener('keydown',close); }, []);
+    useEffect(() => { const close = (e: KeyboardEvent) => { if(e.key==='Escape'){setMenu(false);setMap(false);setRoom(false);setBackpack(false);setSignId(null);client.current?.closeSign();client.current?.closeCooking();} }; window.addEventListener('keydown',close); return () => window.removeEventListener('keydown',close); }, []);
     useEffect(()=>{
         if(state?.tool!=='build'||state.remove||map||room||backpack||signId||menu)return;
         const game=client.current;if(!game)return;
@@ -52,7 +58,7 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
         return()=>{cancelAnimationFrame(frame);game.canvas.removeEventListener('pointerdown',down);window.removeEventListener('pointerup',up);window.removeEventListener('blur',up);};
     },[state?.tool,state?.remove,map,room,backpack,signId,menu]);
     const openMenu=()=>{client.current?.pauseControls();setMenu(true);setMap(false);setRoom(false);setBackpack(false);setSignId(null);client.current?.closeSign();};
-    const leave=()=>{if(client.current){client.current.paused=true;client.current.pauseControls();}onExit?.();};
+    const leave=()=>{if(client.current){client.current.cancelFishing();client.current.paused=true;client.current.pauseControls();}onExit?.();};
     const closeSign=()=>{setSignId(null);client.current?.closeSign();};
     const sign=signId?state?.world.buildings[signId]:undefined;
     const player = state?.session ? state.world.players[state.session.playerId] : undefined, inventory = player?.inventory;
@@ -68,8 +74,9 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const count = state ? Object.values(state.world.players).filter(p => state.world.tick - p.seen < 15000).length : 0;
     const clock=state?worldClock(state.world.dayStartedAt??state.world.created,state.world.tick):null;
     const localWorld=state?.session?.local===true;
-    const showConnectionError=Boolean(loaded&&state?.error&&!room&&!backpack&&signId===null&&!menu);
-    return <main className="game-shell"><div className={'game-view'+(state?.tool==='build'?' is-building':'')+(showConnectionError?' has-error':'')} inert={!loaded||map||room||backpack||signId!==null||menu} aria-hidden={!loaded}>
+    const fishing=fishingActive(player?.fishing);
+    const showConnectionError=Boolean(loaded&&state?.error&&!room&&!backpack&&signId===null&&!menu&&!cooking);
+    return <main className="game-shell"><div className={'game-view'+(state?.tool==='build'?' is-building':'')+(showConnectionError?' has-error':'')} inert={!loaded||map||room||backpack||signId!==null||menu||cooking} aria-hidden={!loaded}>
   <canvas ref={canvas} className="world-canvas" aria-label="游戏场景：使用方向控制移动，选择快捷栏物品后点击场景或按使用键操作"/>
   <header className="hud-top"><div className="identity"><h1>林间小筑</h1><span className={'connection-dot ' + (state?.connected ? 'online' : '')} title={state?.connected ? localWorld?(state.localSaved?'本机保存':'本机游玩，无法保存'):'已连接并保存' : '连接中'}/></div>
    <div className="region-label"><span className="region-name">{player ? regionAt(player.x, player.y) : '林间营地'}{level>0&&<> · {level+1}层</>}</span>{clock&&<time className="world-clock" dateTime={clockDateTime(clock)} title={phaseName(clock.phase)}>{formatWorldClock(clock)}</time>}</div>
@@ -77,8 +84,10 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
   </header>
   {trackCave&&player&&sceneAt(player.x)!=='mine'&&<button className="cave-bearing" onClick={()=>setTrackCave(false)} title="取消矿洞标记"><i style={{transform:`rotate(${Math.atan2(CAVE_ENTRANCE.y-player.y,CAVE_ENTRANCE.x-player.x)+Math.PI/2}rad)`}}/>矿洞 · {caveDistance}格</button>}
   <section className="vitals" aria-label="角色状态"><div className="health-row"><Icon name="heart" size={16}/><div className="meter health-meter" role="progressbar" aria-label="生命" aria-valuenow={Math.round(player?.hp || 0)} aria-valuemax={100}><i style={{ width: (player?.hp || 0) + '%' }}/></div><span>{Math.round(player?.hp || 0)}</span></div><div className="stamina-row"><Icon name="stamina" size={14}/><div className="meter stamina-meter" role="progressbar" aria-label="体力" aria-valuenow={Math.round(player?.stamina || 0)} aria-valuemax={100}><i style={{ width: (player?.stamina || 0) + '%' }}/></div></div></section>
-  {tutorialRun>tutorialStoppedAt&&state?.session&&<Tutorial key={state.session.room+':'+state.session.playerId} state={state} restart={tutorialRun} hidden={!loaded||map||room||backpack||signId!==null||menu} onDismiss={()=>setTutorialStoppedAt(tutorialRun)}/>}
-  {loaded&&state?.connected&&<Minimap client={client} hidden={map||room||backpack||signId!==null||menu} onOpen={()=>{client.current?.pauseControls();setMap(true);}}/>}
+  {tutorialRun>tutorialStoppedAt&&state?.session&&<Tutorial key={state.session.room+':'+state.session.playerId} state={state} restart={tutorialRun} hidden={!loaded||map||room||backpack||signId!==null||menu||cooking||fishing} onDismiss={()=>setTutorialStoppedAt(tutorialRun)}/>}
+  {loaded&&state?.connected&&<Minimap client={client} hidden={map||room||backpack||signId!==null||menu||cooking||fishing} onOpen={()=>{client.current?.pauseControls();setMap(true);}}/>}
+  {loaded&&<FishingGame client={client} hidden={map||room||backpack||signId!==null||menu||cooking}/>}
+  {loaded&&player&&nearCampfire(player)&&!fishing&&<button className="camp-kitchen-button" onClick={()=>client.current?.tryActivity()}>营地厨房 <kbd>F</kbd></button>}
   <div className="bottom-controls">
    {(up||down)&&<div className="stairs-controls">{up&&<button onClick={()=>client.current?.command({type:'ascend',target:up.id})}><Icon name="ascend" size={14}/>上楼 <kbd>F</kbd></button>}{down&&<button onClick={()=>client.current?.command({type:'descend',target:down.id})}><Icon name="descend" size={14}/>下楼 <kbd>Shift F</kbd></button>}</div>}
    {state?.tool==='build'&&<section className={'build-menu'+(removing?' is-removing':'')} aria-label="建造菜单">
@@ -107,9 +116,10 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
        </button>;
    })}</nav>
   </div>
-  {!!loaded&&state?.connected&&!map&&!room&&!backpack&&signId===null&&!menu&&<TouchControls client={client} useLabel={touchUseLabel}/>}
+  {!!loaded&&state?.connected&&!map&&!room&&!backpack&&signId===null&&!menu&&!cooking&&!fishing&&<TouchControls client={client} useLabel={touchUseLabel}/>}
   </div>{backpack&&<InventoryPanel slots={slots} resources={inventory} selected={selected} onMove={(from,to)=>client.current?.moveSlot(from,to)} onQuickMove={from=>client.current?.quickMoveSlot(from)} onClose={()=>setBackpack(false)}/> }
   {signId&&<SignPanel key={signId} text={typeof sign?.text==='string'?sign.text:''} available={sign?.kind==='sign'} connectionError={state?.error} onSave={text=>client.current?.saveSign(signId,text)??Promise.resolve('连接中断，请重试')} onClose={closeSign}/>}
+  {cooking&&player&&<CookingPanel player={player} busy={state?.cookingBusy??false} supported={state?.world.activityVersion===2} connected={state?.connected??false} onClose={()=>client.current?.closeCooking()} onCook={(method,ingredients)=>client.current?.cook(method,ingredients)??false} onPantry={offer=>client.current?.takePantry(offer)??false}/>}
   {showConnectionError && <div className="connection-error" role="alert"><span>{state?.error}</span><button onClick={() => client.current?.retryConnection()}>重试</button></div>}
   {menu&&<div className="modal-backdrop" onClick={()=>setMenu(false)}><section className="room-panel pause-panel" role="dialog" aria-modal="true" aria-label="游戏菜单" onClick={event=>event.stopPropagation()} onKeyDown={event=>{
       event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setMenu(false);}

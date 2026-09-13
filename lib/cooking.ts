@@ -1,0 +1,209 @@
+/** Pure cooking rules. One array entry is one ingredient unit; order never matters. */
+export const MAX_COOKING_INGREDIENTS = 5;
+
+export const INGREDIENTS = {
+    fish: { name: '鲜鱼', source: 'fishing' },
+    carrot: { name: '胡萝卜', source: 'farm' },
+    tomato: { name: '番茄', source: 'farm' },
+    wheat: { name: '小麦', source: 'farm' },
+    salmon: { name: '三文鱼', source: 'fishing' },
+    salmonBelly: { name: '三文鱼腩', source: 'fishing' },
+    salmonFatty: { name: '三文鱼大腩', source: 'fishing' },
+    tuna: { name: '金枪鱼', source: 'fishing' },
+    tunaBelly: { name: '金枪鱼腩', source: 'fishing' },
+    tunaFatty: { name: '金枪鱼大腩', source: 'fishing' },
+    sweetShrimp: { name: '小甜虾', source: 'fishing' },
+    largeSweetShrimp: { name: '大甜虾', source: 'fishing' },
+    seaUrchin: { name: '海胆', source: 'fishing' },
+    rice: { name: '米饭', source: 'camp' },
+    nori: { name: '海苔', source: 'camp' },
+    egg: { name: '鸡蛋', source: 'camp' },
+    wagyu: { name: '和牛', source: 'camp' },
+    oil: { name: '食用油', source: 'camp' },
+    sugar: { name: '糖', source: 'camp' },
+    milk: { name: '牛奶', source: 'camp' },
+} as const;
+export type IngredientId = keyof typeof INGREDIENTS;
+export const INGREDIENT_IDS = Object.keys(INGREDIENTS) as IngredientId[];
+
+export const COOK_METHODS = {
+    roast: { name: '烤物', verb: '烘烤' },
+    panFry: { name: '煎物', verb: '香煎' },
+    deepFry: { name: '炸物', verb: '油炸' },
+    bake: { name: '糕点', verb: '烘焙' },
+    sushi: { name: '寿司', verb: '捏制' },
+    sashimi: { name: '刺身', verb: '切片' },
+} as const;
+export type CookMethod = keyof typeof COOK_METHODS;
+export type FoodRecovery = { hp: number; stamina: number };
+
+export const DISHES = {
+    roastFish: { name: '烤鱼', method: 'roast', hp: 32, stamina: 28 },
+    roastVegetables: { name: '烤时蔬', method: 'roast', hp: 24, stamina: 34 },
+    roastWagyu: { name: '烤和牛', method: 'roast', hp: 58, stamina: 50 },
+    roastShrimp: { name: '烤甜虾', method: 'roast', hp: 34, stamina: 36 },
+    panFriedFish: { name: '香煎鱼排', method: 'panFry', hp: 40, stamina: 32 },
+    tamagoyaki: { name: '玉子烧', method: 'panFry', hp: 28, stamina: 40 },
+    panFriedWagyu: { name: '香煎和牛', method: 'panFry', hp: 64, stamina: 54 },
+    friedRice: { name: '田园炒饭', method: 'panFry', hp: 38, stamina: 65 },
+    friedFish: { name: '炸鱼', method: 'deepFry', hp: 44, stamina: 42 },
+    friedShrimp: { name: '炸甜虾', method: 'deepFry', hp: 46, stamina: 46 },
+    vegetableTempura: { name: '蔬菜天妇罗', method: 'deepFry', hp: 32, stamina: 50 },
+    carrotFritter: { name: '胡萝卜炸饼', method: 'deepFry', hp: 36, stamina: 56 },
+    bread: { name: '牛奶面包', method: 'bake', hp: 24, stamina: 58 },
+    carrotCake: { name: '胡萝卜蛋糕', method: 'bake', hp: 46, stamina: 68 },
+    milkPudding: { name: '牛奶布丁', method: 'bake', hp: 36, stamina: 52 },
+    milkCake: { name: '奶香蛋糕', method: 'bake', hp: 40, stamina: 62 },
+    seaUrchinSushi: { name: '海胆寿司', method: 'sushi', hp: 56, stamina: 48 },
+    salmonSushi: { name: '三文鱼寿司', method: 'sushi', hp: 38, stamina: 42 },
+    tunaSushi: { name: '金枪鱼寿司', method: 'sushi', hp: 44, stamina: 42 },
+    tamagoyakiSushi: { name: '玉子烧寿司', method: 'sushi', hp: 30, stamina: 48 },
+    wagyuSushi: { name: '和牛寿司', method: 'sushi', hp: 60, stamina: 52 },
+    sweetShrimpSushi: { name: '甜虾寿司', method: 'sushi', hp: 40, stamina: 44 },
+    salmonSashimi: { name: '三文鱼刺身', method: 'sashimi', hp: 26, stamina: 18 },
+    salmonBellySashimi: { name: '三文鱼腩刺身', method: 'sashimi', hp: 38, stamina: 28 },
+    salmonFattySashimi: { name: '三文鱼大腩刺身', method: 'sashimi', hp: 52, stamina: 38 },
+    tunaSashimi: { name: '金枪鱼刺身', method: 'sashimi', hp: 30, stamina: 20 },
+    tunaBellySashimi: { name: '金枪鱼腩刺身', method: 'sashimi', hp: 44, stamina: 30 },
+    tunaFattySashimi: { name: '金枪鱼大腩刺身', method: 'sashimi', hp: 60, stamina: 42 },
+    sweetShrimpSashimi: { name: '小甜虾刺身', method: 'sashimi', hp: 24, stamina: 22 },
+    largeSweetShrimpSashimi: { name: '大甜虾刺身', method: 'sashimi', hp: 40, stamina: 34 },
+} as const satisfies Record<string, FoodRecovery & { name: string; method: CookMethod }>;
+export type DishId = keyof typeof DISHES;
+export const DISH_IDS = Object.keys(DISHES) as DishId[];
+export type IngredientCounts = Partial<Record<IngredientId, number>>;
+export type SelectionValidation =
+    | { ok: true; ingredients: IngredientId[]; counts: IngredientCounts }
+    | { ok: false; error: string; ingredients: []; counts: IngredientCounts };
+
+const owns = (object: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(object, key);
+export function isIngredient(value: unknown): value is IngredientId {
+    return typeof value === 'string' && owns(INGREDIENTS, value);
+}
+export function isCookMethod(value: unknown): value is CookMethod {
+    return typeof value === 'string' && owns(COOK_METHODS, value);
+}
+export function isDish(value: unknown): value is DishId {
+    return typeof value === 'string' && owns(DISHES, value);
+}
+export function ingredientCounts(ingredients: readonly IngredientId[]): IngredientCounts {
+    const counts: IngredientCounts = {};
+    for (const ingredient of ingredients) counts[ingredient] = (counts[ingredient] ?? 0) + 1;
+    return counts;
+}
+export function validateSelection(value: unknown, inventory?: Readonly<IngredientCounts>): SelectionValidation {
+    const fail = (error: string): SelectionValidation => ({ ok: false, error, ingredients: [], counts: {} });
+    if (!Array.isArray(value) || value.length === 0) return fail('请加入食材');
+    if (value.length > MAX_COOKING_INGREDIENTS) return fail('最多加入5份食材');
+    const entries: unknown[] = [...value];
+    if (!entries.every(isIngredient)) return fail('含有不能烹饪的物品');
+    const ingredients: IngredientId[] = [...entries];
+    const counts = ingredientCounts(ingredients);
+    if (inventory) {
+        for (const ingredient of INGREDIENT_IDS) {
+            const needed = counts[ingredient] ?? 0;
+            if (!needed) continue;
+            const available = inventory[ingredient] ?? 0;
+            if (!Number.isFinite(available) || available < needed) return fail(`${INGREDIENTS[ingredient].name}不足`);
+        }
+    }
+    return { ok: true, ingredients, counts };
+}
+
+/** Groups in one variant are disjoint. Every selected ingredient must be consumed. */
+export type RecipeGroup = { ingredients: readonly IngredientId[]; min: number; max: number };
+export type RecipeVariant = { groups: readonly RecipeGroup[]; quantity: number };
+export type CookingRecipe = { id: DishId; method: CookMethod; variants: readonly RecipeVariant[] };
+const group = (ingredients: IngredientId | readonly IngredientId[], min = 1, max = min): RecipeGroup => ({ ingredients: typeof ingredients === 'string' ? [ingredients] : ingredients, min, max });
+const variant = (groups: readonly RecipeGroup[], quantity = 1): RecipeVariant => ({ groups, quantity });
+const salmon: readonly IngredientId[] = ['salmon', 'salmonBelly', 'salmonFatty'];
+const tuna: readonly IngredientId[] = ['tuna', 'tunaBelly', 'tunaFatty'];
+const fish: readonly IngredientId[] = ['fish', ...salmon, ...tuna];
+const shrimp: readonly IngredientId[] = ['sweetShrimp', 'largeSweetShrimp'];
+const vegetables: readonly IngredientId[] = ['carrot', 'tomato'];
+const recipe = (id: DishId, ...variants: RecipeVariant[]): CookingRecipe => ({ id, method: DISHES[id].method, variants });
+const sushiVariants = (protein: readonly IngredientId[]) => [
+    variant([group('rice'), group('nori'), group(protein)]),
+    variant([group('rice', 2), group('nori'), group(protein, 2)], 2),
+];
+const sashimiVariants = (ingredient: IngredientId) => Array.from({ length: MAX_COOKING_INGREDIENTS }, (_, index) => variant([group(ingredient, index + 1)], index + 1));
+
+export const RECIPES: readonly CookingRecipe[] = [
+    recipe('roastFish', variant([group(fish), group('oil', 0, 1), group(vegetables, 0, 2), group('rice', 0, 1)])),
+    recipe('roastVegetables', variant([group('carrot'), group('tomato'), group('oil', 0, 1), group('rice', 0, 1)])),
+    recipe('roastWagyu', variant([group('wagyu'), group('oil', 0, 1), group(vegetables, 0, 2), group('rice', 0, 1)])),
+    recipe('roastShrimp', variant([group(shrimp), group('oil', 0, 1), group(vegetables, 0, 2), group('rice', 0, 1)])),
+    recipe('panFriedFish', variant([group(fish), group('oil'), group(vegetables, 0, 2), group('rice', 0, 1)])),
+    recipe('tamagoyaki', variant([group('egg', 2), group('sugar'), group('oil'), group('milk', 0, 1)])),
+    recipe('panFriedWagyu', variant([group('wagyu'), group('oil'), group(vegetables, 0, 2), group('rice', 0, 1)])),
+    recipe('friedRice', variant([group('rice'), group('egg'), group('oil'), group('carrot'), group('tomato', 0, 1)])),
+    recipe('friedFish', variant([group(fish), group('wheat'), group('oil'), group('egg', 0, 1), group('carrot', 0, 1)])),
+    recipe('friedShrimp', variant([group(shrimp), group('wheat'), group('oil'), group('egg', 0, 1), group('carrot', 0, 1)])),
+    recipe('vegetableTempura', variant([group('carrot'), group('tomato'), group('wheat'), group('oil'), group('egg', 0, 1)])),
+    recipe('carrotFritter', variant([group('carrot', 2), group('wheat'), group('oil'), group('egg')])),
+    recipe('bread', variant([group('wheat', 2), group('milk'), group('sugar', 0, 1)])),
+    recipe('carrotCake', variant([group('wheat'), group('carrot'), group('egg'), group('sugar'), group('milk')])),
+    recipe('milkPudding', variant([group('milk', 2), group('egg'), group('sugar')])),
+    recipe('milkCake', variant([group('wheat'), group('egg'), group('sugar'), group('milk', 1, 2)])),
+    recipe('seaUrchinSushi', ...sushiVariants(['seaUrchin'])),
+    recipe('salmonSushi', ...sushiVariants(salmon)),
+    recipe('tunaSushi', ...sushiVariants(tuna)),
+    recipe('tamagoyakiSushi', variant([group('rice'), group('nori'), group('egg'), group('sugar')])),
+    recipe('wagyuSushi', ...sushiVariants(['wagyu'])),
+    recipe('sweetShrimpSushi', ...sushiVariants(shrimp)),
+    recipe('salmonSashimi', ...sashimiVariants('salmon')),
+    recipe('salmonBellySashimi', ...sashimiVariants('salmonBelly')),
+    recipe('salmonFattySashimi', ...sashimiVariants('salmonFatty')),
+    recipe('tunaSashimi', ...sashimiVariants('tuna')),
+    recipe('tunaBellySashimi', ...sashimiVariants('tunaBelly')),
+    recipe('tunaFattySashimi', ...sashimiVariants('tunaFatty')),
+    recipe('sweetShrimpSashimi', ...sashimiVariants('sweetShrimp')),
+    recipe('largeSweetShrimpSashimi', ...sashimiVariants('largeSweetShrimp')),
+];
+
+function matches(counts: IngredientCounts, groups: readonly RecipeGroup[]): boolean {
+    for (const ingredient of Object.keys(counts) as IngredientId[]) {
+        if (!groups.some(entry => entry.ingredients.includes(ingredient))) return false;
+    }
+    return groups.every(entry => {
+        const count = entry.ingredients.reduce((sum, ingredient) => sum + (counts[ingredient] ?? 0), 0);
+        return count >= entry.min && count <= entry.max;
+    });
+}
+export type ResolvedRecipe = FoodRecovery & {
+    id: DishId;
+    output: DishId;
+    method: CookMethod;
+    ingredients: IngredientId[];
+    counts: IngredientCounts;
+    quantity: number;
+};
+
+export function resolveRecipe(method: unknown, ingredients: unknown): ResolvedRecipe | null {
+    if (!isCookMethod(method)) return null;
+    const selection = validateSelection(ingredients);
+    if (!selection.ok) return null;
+    for (const entry of RECIPES) {
+        if (entry.method !== method) continue;
+        const chosen = entry.variants.find(option => matches(selection.counts, option.groups));
+        if (chosen) {
+            const dish = DISHES[entry.id];
+            return { id: entry.id, output: entry.id, method, ingredients: selection.ingredients, counts: selection.counts, hp: dish.hp, stamina: dish.stamina, quantity: chosen.quantity };
+        }
+    }
+    return null;
+}
+
+/** An explicit example for a recipe book/autofill. It never includes optional garnish. */
+export function recipeExample(id: DishId): IngredientId[] {
+    const entry = RECIPES.find(value => value.id === id);
+    return entry ? entry.variants[0].groups.flatMap(value => Array<IngredientId>(value.min).fill(value.ingredients[0])) : [];
+}
+
+/** Unknown and uncooked seafood are not directly edible. Legacy meal stays compatible. */
+export function foodHeal(food: unknown): FoodRecovery | null {
+    if (food === 'carrot') return { hp: 12, stamina: 8 };
+    if (food === 'tomato') return { hp: 10, stamina: 10 };
+    if (food === 'meal') return { hp: 36, stamina: 30 };
+    return isDish(food) ? { hp: DISHES[food].hp, stamina: DISHES[food].stamina } : null;
+}

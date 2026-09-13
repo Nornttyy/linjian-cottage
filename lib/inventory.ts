@@ -1,6 +1,8 @@
 import type {Inventory} from './simulation';
+import {INGREDIENTS,DISHES,foodHeal} from './cooking';
 export const HOTBAR_SIZE=9;
-export const BACKPACK_SIZE=27;
+export const BACKPACK_PAGE_SIZE=27;
+export const BACKPACK_SIZE=BACKPACK_PAGE_SIZE*3;
 export type ItemKey='axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'rod'|keyof Inventory;
 export type ItemSlot=ItemKey|null;
 export const ITEMS:Record<ItemKey,{name:string;icon:string;kind:'tool'|'resource'}>={
@@ -10,7 +12,9 @@ export const ITEMS:Record<ItemKey,{name:string;icon:string;kind:'tool'|'resource
     carrotSeed:{name:'胡萝卜种子',icon:'carrot-seed',kind:'resource'},tomatoSeed:{name:'番茄种子',icon:'tomato-seed',kind:'resource'},wheatSeed:{name:'小麦种子',icon:'wheat-seed',kind:'resource'},
     fish:{name:'鲜鱼',icon:'fish',kind:'resource'},meal:{name:'熟食',icon:'meal',kind:'resource'},
     carrot:{name:'胡萝卜',icon:'carrot',kind:'resource'},tomato:{name:'番茄',icon:'tomato',kind:'resource'},wheat:{name:'小麦',icon:'wheat',kind:'resource'},
-};
+    ...Object.fromEntries(Object.entries(INGREDIENTS).map(([id,item])=>[id,{name:item.name,icon:id,kind:'resource' as const}])),
+    ...Object.fromEntries(Object.entries(DISHES).map(([id,item])=>[id,{name:item.name,icon:id,kind:'resource' as const}])),
+} as Record<ItemKey,{name:string;icon:string;kind:'tool'|'resource'}>;
 const tools:ItemKey[]=['axe','pick','sword','hammer','hoe','water','rod'];
 const resources=(Object.keys(ITEMS) as ItemKey[]).filter(item=>ITEMS[item].kind==='resource');
 export function defaultSlots(inventory?:Inventory):ItemSlot[]{
@@ -18,9 +22,10 @@ export function defaultSlots(inventory?:Inventory):ItemSlot[]{
     return restoreSlots(slots,inventory);
 }
 export function restoreSlots(value:unknown,inventory?:Inventory):ItemSlot[]{
-    if(!Array.isArray(value)||value.length!==HOTBAR_SIZE+BACKPACK_SIZE)return defaultSlots(inventory);
+    if(!Array.isArray(value)||(value.length!==HOTBAR_SIZE+BACKPACK_SIZE&&value.length!==36))return defaultSlots(inventory);
     const seen=new Set<ItemKey>();
-    const slots:ItemSlot[]=Array.from(value,item=>{
+    const slots:ItemSlot[]=Array.from({length:HOTBAR_SIZE+BACKPACK_SIZE},(_,index)=>{
+        const item=value[index];
         if(typeof item!=='string'||!Object.hasOwn(ITEMS,item)||seen.has(item as ItemKey))return null;
         const key=item as ItemKey;
         if(ITEMS[key].kind==='resource'&&inventory&&itemCount(key,inventory)<=0)return null;
@@ -43,7 +48,10 @@ export function itemCount(item:ItemSlot,inventory?:Inventory){
 export function visibleItem(item:ItemSlot,inventory?:Inventory):ItemSlot{return itemCount(item,inventory)>0?item:null;}
 export function itemDescription(item:ItemSlot){
     if(!item)return '';
-    return item==='rod'?'鱼竿 · 岸边点击水面钓鱼':item==='fish'?'鲜鱼 · 营火旁烹饪':item==='meal'?'熟食 · 回复36生命':item==='essence'?'精华 · 回复30生命':item==='hammer'?'建造锤':item==='carrot'?'胡萝卜 · 回复12生命':item==='tomato'?'番茄 · 回复10生命':ITEMS[item].name;
+    const recovery=foodHeal(item);
+    if(recovery)return `${ITEMS[item].name} · 生命+${recovery.hp} 体力+${recovery.stamina}`;
+    if(Object.hasOwn(INGREDIENTS,item))return `${ITEMS[item].name} · 营火旁烹饪`;
+    return item==='rod'?'鱼竿 · 点击水面，咬钩后提竿':item==='essence'?'精华 · 回复30生命':item==='hammer'?'建造锤':ITEMS[item].name;
 }
 export function swapSlots(slots:ItemSlot[],from:number,to:number):ItemSlot[]{
     if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||from>=slots.length||to>=slots.length||from===to)return slots;
