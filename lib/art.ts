@@ -176,23 +176,24 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
     return cells;
 }
 async function femaleSheet(spec:FemaleSheet){
-    const original=await load('/art/'+spec.file),layout=spec.base?heroLayouts[spec.base]:undefined;
-    // Reuse the action's registration, not the male artwork. Extra margins keep
-    // the independently drawn female silhouette and ponytail inside each crop.
+    const original=await load('/art/'+spec.file),layout=spec.base?heroLayouts[spec.base]:undefined,registration=spec.registration??layout;
+    // Dedicated female registration takes precedence. Legacy action crops keep
+    // extra margins for the independently drawn silhouette and ponytail.
     let img:HTMLImageElement|HTMLCanvasElement=original;
-    if(layout&&(img.width!==2048||img.height!==768)){const resized=canvas(2048,768),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(img,0,0,2048,768);img=resized;}
+    if(registration&&(img.width!==2048||img.height!==768)){const resized=canvas(2048,768),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(img,0,0,2048,768);img=resized;}
     const cells=Array.from({length:24},(_,i)=>{
-        const row=Math.floor(i/8),col=i%8,base=layout?.frames[i]??[col*img.width/8,row*img.height/3,img.width/8,img.height/3];
-        const margin=layout?40:0,sourceRow=Math.floor((base[1]+base[3]/2)/(img.height/3));
-        const x=Math.max(0,Math.floor(base[0]-margin)),y=Math.max(spec.rowEdges?.[sourceRow]??sourceRow*img.height/3,Math.floor(base[1]-margin));
-        const right=Math.min(img.width,Math.ceil(base[0]+base[2]+margin)),bottom=Math.min(spec.rowEdges?.[sourceRow+1]??(sourceRow+1)*img.height/3,Math.ceil(base[1]+base[3]+margin));
+        const row=Math.floor(i/8),col=i%8,base=registration?.frames[i]??[col*img.width/8,row*img.height/3,img.width/8,img.height/3];
+        const margin=spec.registration?0:layout?40:0,sourceRow=Math.floor((base[1]+base[3]/2)/(img.height/3));
+        const rowTop=spec.registration?0:spec.rowEdges?.[sourceRow]??sourceRow*img.height/3,rowBottom=spec.registration?img.height:spec.rowEdges?.[sourceRow+1]??(sourceRow+1)*img.height/3;
+        const x=Math.max(0,Math.floor(base[0]-margin)),y=Math.max(rowTop,Math.floor(base[1]-margin));
+        const right=Math.min(img.width,Math.ceil(base[0]+base[2]+margin)),bottom=Math.min(rowBottom,Math.ceil(base[1]+base[3]+margin));
         const c=canvas(right-x,bottom-y);c.getContext('2d')!.drawImage(img,x,y,c.width,c.height,0,0,c.width,c.height);
         cleanFragments(c,true);return{c,x,y,box:bounds(c)};
     });
     return cells.map(({c,x,y,box},i)=>{
         const row=Math.floor(i/8),out=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;
         const scale=31/FEMALE_BODY_HEIGHTS[spec.action][row];
-        const anchor=layout?[layout.frames[i][0]+layout.anchors[i][0]-x,layout.frames[i][1]+layout.anchors[i][1]-y]:[(box.x0+box.x1+1)/2,box.y1+1];
+        const anchor=registration?[registration.frames[i][0]+registration.anchors[i][0]-x,registration.frames[i][1]+registration.anchors[i][1]-y]:[(box.x0+box.x1+1)/2,box.y1+1];
         const dx=Math.round(HERO_SIZE.anchorX-anchor[0]*scale),dy=Math.round(HERO_SIZE.anchorY-anchor[1]*scale);
         ctx.drawImage(c,dx,dy,c.width*scale,c.height*scale);
         if(spec.action==='water'&&layout){
