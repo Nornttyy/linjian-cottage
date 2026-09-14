@@ -33,6 +33,7 @@ const cancellations=new Map<number,Set<()=>void>>();
 function publish(value:AssetLoading){snapshot=value;for(const listener of listeners)listener();}
 export const subscribeAssets=(listener:()=>void)=>{listeners.add(listener);return()=>{listeners.delete(listener);};};
 export const getAssetLoading=()=>snapshot;
+export const getServerAssetLoading=()=>initial;
 export const assetsReady=()=>snapshot.phase==='ready';
 export const serverAssetsReady=()=>false;
 function cancelAssets(attempt:number){

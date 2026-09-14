@@ -1,2 +1,3 @@
 import GameShell from '@/components/GameShell';
-export default function Home() { return <GameShell />; }
+import SiteEntry from '@/components/SiteEntry';
+export default function Home() { return <SiteEntry><GameShell /></SiteEntry>; }

@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {runInNewContext} from 'node:vm';
+import {compileProject} from './test-support.mjs';
+const project=compileProject({name:'site-entry'}),names=['document','window','setTimeout','clearTimeout'],original=new Map(names.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));let checks=0;
+try{
+ const test=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+ mkdirSync(join(project.temp,'components'),{recursive:true});const file=join(project.temp,'components/entry-host.mjs');
+ writeFileSync(file,`export const states=[],refs=[],effects=[],calls=[];let si=0,ri=0,ei=0;export let loading={phase:'images',loaded:0,total:66};export function setLoading(v){loading=v;}export function reset(clear=false){si=ri=ei=0;if(clear){states.length=refs.length=effects.length=calls.length=0;loading={phase:'images',loaded:0,total:66};}}export function useState(v){const i=si++;if(!(i in states))states[i]=v;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v];}export function useRef(v){return refs[ri++]??={current:v};}export function useEffect(fn){effects[ei++]=fn;}export function useSyncExternalStore(s,get){return get();}export function getAssetLoading(){return loading;}export function getServerAssetLoading(){return{phase:'idle',loaded:0,total:66};}export function subscribeAssets(){return()=>{};}export function loadArt(){calls.push('load');return Promise.resolve({});}export function jsx(type,props,key){return{type,props:props||{},key};}export const jsxs=jsx;`);
+ const host=await import(pathToFileURL(file)),{default:SiteEntry}=await import(project.compileFile('components/SiteEntry.tsx',{'react':'./entry-host.mjs','react/jsx-runtime':'./entry-host.mjs','@/lib/art':'./entry-host.mjs','@/lib/asset-loading':'./entry-host.mjs'}));
+ const shell={hidden:false},events=[],timers=new Map();let timerId=0;
+ globalThis.document={getElementById:id=>id==='site-bootstrap'?shell:null};globalThis.window={dispatchEvent:e=>events.push(e.type)};globalThis.setTimeout=(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;};globalThis.clearTimeout=id=>timers.delete(id);
+ const child={type:'game-menu',props:{}},nodes=n=>!n||typeof n!=='object'?[]:[n,...[n.props?.children].flat(5).flatMap(nodes)];
+ const text=n=>typeof n==='string'?n:n&&typeof n==='object'?[n.props?.children].flat(5).map(text).join(''):'';
+ const render=()=>{host.reset();return SiteEntry({children:child});},button=(tree,label)=>nodes(tree).find(n=>n.type==='button'&&text(n).includes(label)),image=tree=>nodes(tree).find(n=>n.type==='img');
+ const fresh=()=>{host.reset(true);timers.clear();shell.hidden=false;events.length=0;return render();};
+ test('first application render shows the loader without mounting the menu or opening a world',()=>{const tree=fresh();assert.equal(tree.type,'section');assert(!nodes(tree).includes(child));assert.equal(host.calls.length,0);host.effects[0]();assert.equal(shell.hidden,true);assert.deepEqual(events,['linjian:booted']);assert.equal(host.calls.length,1);});
+ test('progress counts real loaded assets and never advances on a timer',()=>{fresh();host.setLoading({phase:'images',loaded:12,total:66});let tree=render(),bar=nodes(tree).find(n=>n.props.role==='progressbar');assert.equal(bar.props['aria-valuenow'],12);assert.equal(bar.props['aria-valuemax'],66);host.effects[1]();assert.equal(timers.size,0);host.setLoading({phase:'atlas',loaded:66,total:66});tree=render();assert.notEqual(tree,child);assert(text(tree).includes('点亮小屋'));});
+ test('completed background images before hydration cannot leave startup stuck',()=>{fresh();host.refs[0].current={complete:true,naturalWidth:1672};host.setLoading({phase:'ready',loaded:66,total:66});render();host.effects[0]();const tree=render();assert(tree.props.className.includes('entry-ready'));host.effects[1]();const timer=[...timers.values()][0];assert.equal(timer.ms,260);timer.fn();assert.equal(render(),child);});
+ test('assets alone cannot release the gate before the menu background loads',()=>{fresh();host.setLoading({phase:'ready',loaded:66,total:66});let tree=render();assert(!tree.props.className.includes('entry-ready'));host.effects[1]();assert.equal(timers.size,0);image(tree).props.onLoad();tree=render();assert(tree.props.className.includes('entry-ready'));});
+ test('a background that failed before hydration exposes retry instead of waiting forever',()=>{fresh();host.refs[0].current={complete:true,naturalWidth:0,currentSrc:'./art/menu.png'};host.setLoading({phase:'ready',loaded:66,total:66});render();host.effects[0]();const tree=render();assert(button(tree,'重试加载'));assert(nodes(tree).some(n=>n.props.role==='alert'));});
+ test('load failures expose retry and retry clears the failed background state',()=>{let tree=fresh();image(tree).props.onError();host.setLoading({phase:'error',loaded:3,total:66});tree=render();assert(nodes(tree).some(n=>n.props.role==='alert'));button(tree,'重试加载').props.onClick();host.setLoading({phase:'images',loaded:0,total:66});tree=render();assert.equal(image(tree).key,1);assert(!nodes(tree).some(n=>n.props.role==='alert'));host.effects[0]();assert.equal(host.calls.length,1);});
+ test('entering the menu early leaves shared preparation alive and does not start a game',()=>{let tree=fresh();host.effects[0]();button(tree,'先去主菜单').props.onClick();assert.equal(render(),child);host.setLoading({phase:'error',loaded:1,total:66});assert.equal(render(),child);assert.equal(host.calls.length,1);});
+ test('the readiness fade timer is cancelled on cleanup',()=>{fresh();host.refs[0].current={complete:true,naturalWidth:100};host.setLoading({phase:'ready',loaded:66,total:66});render();host.effects[0]();render();const cleanup=host.effects[1]();assert.equal(timers.size,1);cleanup();assert.equal(timers.size,0);});
+ const {ENTRY_MARKUP,ENTRY_CSS,ENTRY_WATCHDOG}=await import(project.module('site-entry-shell'));
+ test('the first-paint shell is self-contained and a slow bundle exposes working reload recovery',()=>{
+  assert(ENTRY_MARKUP.includes('林间小筑'));assert(ENTRY_MARKUP.includes('role="progressbar"'));assert(!ENTRY_MARKUP.includes('aria-valuenow'));assert(ENTRY_CSS.includes('prefers-reduced-motion'));
+  const status={textContent:''},retry={hidden:true},bootstrap={hidden:false,querySelector:q=>q==='[data-entry-status]'?status:retry},jobs=new Map(),listeners=new Map();let id=0;
+  runInNewContext(ENTRY_WATCHDOG,{document:{getElementById:()=>bootstrap},window:{addEventListener:(type,fn)=>listeners.set(type,fn)},setTimeout:(fn,ms)=>{jobs.set(++id,{fn,ms});return id;},clearTimeout:id=>jobs.delete(id)});
+  const task=[...jobs.values()][0];assert.equal(task.ms,20000);task.fn();assert.equal(retry.hidden,false);assert(status.textContent.includes('加载较慢'));listeners.get('linjian:booted')();assert.equal(jobs.size,0);
+ });
+ console.log(`${checks} website entry checks; 0 failures`);
+}finally{for(const [k,v]of original)if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];project.cleanup();}
