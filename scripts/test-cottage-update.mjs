@@ -9,7 +9,7 @@ try{
  function fixture(){const now=100000,s=sim.createWorld(now),p=sim.createPlayer('p','secret','Chef',0,now);s.players={p};s.mobs=[];for(const r of world.RESOURCE_MAP.values())s.depleted[r.id]=true;p.x=act.CAMPFIRE.x;p.y=act.CAMPFIRE.y-2;return{s,p,now};}
  function send(f,c){const result=sim.applyInput(f.s,'p',{seq:f.p.seq+1,dx:0,dy:0,movements:[],commands:[{...c,id:'cmd'+(f.p.seq+1),issuedAt:f.now}]},f.now);assert.equal(result,null);}
  function finish(f,ms){sim.tickWorld(f.s,f.now+ms);f.now+=2000;}
- for(const id of cook.DISH_IDS)await test(id+' supports multiple combinations with different recovery',()=>{
+ for(const id of cook.DISH_IDS.filter(id=>!['dubiousMash','toastedWood','stoneRice','copperLump'].includes(id)))await test(id+' supports multiple combinations with different recovery',()=>{
    const ingredients=cook.recipeExample(id),first=cook.resolveRecipe(cook.DISHES[id].method,ingredients);assert.equal(first.id,id);
    const candidates=[...cook.INGREDIENT_IDS.map(extra=>[...ingredients,extra]),...ingredients.map((_,i)=>ingredients.filter((_,j)=>i!==j))];
    const other=candidates.map(items=>cook.resolveRecipe(first.method,items)).find(r=>r&&r.id===id&&(r.hp!==first.hp||r.stamina!==first.stamina));

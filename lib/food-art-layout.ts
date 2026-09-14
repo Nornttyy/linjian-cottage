@@ -29,6 +29,7 @@ export const FOOD_SHEETS = [
     {file: 'food-sashimi-v1.png', size: [1774, 887], columns: 4, rows: 2,
         ids: ['salmonSashimi', 'salmonBellySashimi', 'salmonFattySashimi', 'tunaSashimi',
             'tunaBellySashimi', 'tunaFattySashimi', 'sweetShrimpSashimi', 'largeSweetShrimpSashimi']},
+    {file:'food-odd-v1.png',size:[1536,1024],columns:3,rows:3,ids:['dubiousMash','toastedWood','stoneRice','copperLump','starlightPudding','glimmerRice','seedCracker','surfTurf','leftoverStew']},
 ] as const satisfies readonly FoodSheet[];
 
 export const FOOD_ICON_SIZE = 32;

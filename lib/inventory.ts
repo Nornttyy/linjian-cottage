@@ -12,7 +12,7 @@ export const ITEMS:Record<ItemKey,{name:string;icon:string;kind:'tool'|'resource
     carrotSeed:{name:'胡萝卜种子',icon:'carrot-seed',kind:'resource'},tomatoSeed:{name:'番茄种子',icon:'tomato-seed',kind:'resource'},wheatSeed:{name:'小麦种子',icon:'wheat-seed',kind:'resource'},
     fish:{name:'鲜鱼',icon:'fish',kind:'resource'},meal:{name:'熟食',icon:'meal',kind:'resource'},
     carrot:{name:'胡萝卜',icon:'carrot',kind:'resource'},tomato:{name:'番茄',icon:'tomato',kind:'resource'},wheat:{name:'小麦',icon:'wheat',kind:'resource'},
-    ...Object.fromEntries(Object.entries(INGREDIENTS).map(([id,item])=>[id,{name:item.name,icon:id,kind:'resource' as const}])),
+    ...Object.fromEntries(Object.entries(INGREDIENTS).map(([id,item])=>[id,{name:item.name,icon:({carrotSeed:'carrot-seed',tomatoSeed:'tomato-seed',wheatSeed:'wheat-seed'} as Record<string,string>)[id]??id,kind:'resource' as const}])),
     ...Object.fromEntries(Object.entries(DISHES).map(([id,item])=>[id,{name:item.name,icon:id,kind:'resource' as const}])),
 } as Record<ItemKey,{name:string;icon:string;kind:'tool'|'resource'}>;
 const tools:ItemKey[]=['axe','pick','sword','hammer','hoe','water','rod'];
@@ -50,8 +50,9 @@ export function itemDescription(item:ItemSlot,owner?:CookingOwner){
     if(!item)return '';
     const recovery=mealRecovery(owner,item);
     if(recovery)return `${ITEMS[item].name} · 生命+${recovery.hp} 体力+${recovery.stamina}${owner?.meals&&Object.hasOwn(owner.meals,item)?' · 按制作顺序食用':''}`;
+    if(item==='essence')return '精华 · 回复30生命，也能用于奇特料理';
     if(Object.hasOwn(INGREDIENTS,item))return `${ITEMS[item].name} · 营火旁烹饪`;
-    return item==='rod'?'鱼竿 · 点击水面，咬钩后提竿':item==='essence'?'精华 · 回复30生命':item==='hammer'?'建造锤':ITEMS[item].name;
+    return item==='rod'?'鱼竿 · 点击水面，咬钩后提竿':item==='hammer'?'建造锤':ITEMS[item].name;
 }
 export function swapSlots(slots:ItemSlot[],from:number,to:number):ItemSlot[]{
     if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||from>=slots.length||to>=slots.length||from===to)return slots;

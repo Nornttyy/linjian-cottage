@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
+import type {Appearance} from '@/lib/appearance';
 import { GameClient, type ClientState } from '@/lib/client';
 import Icon from './ItemIcon';
 import InventoryPanel from './Inventory';
@@ -20,7 +21,7 @@ import {buildCost} from '@/lib/simulation';
 import { paintMap, regionAt, buildTarget } from '@/lib/renderer';
 import {clockDateTime,formatWorldClock,phaseName,worldClock} from '@/lib/day-night';
 
-export default function Game({ apiUrl = '/api/game',startMode='resume',initialRoom='',characterId,characterName,onExit,onTutorial,tutorialRun=0 }: { apiUrl?: string;characterId?:string;characterName?:string;startMode?:StartMode;initialRoom?:string;onExit?:()=>void;onTutorial?:()=>void;tutorialRun?:number }) {
+export default function Game({ apiUrl = '/api/game',startMode='resume',initialRoom='',characterId,characterName,appearance,onExit,onTutorial,tutorialRun=0 }: { apiUrl?: string;characterId?:string;characterName?:string;appearance?:Appearance;startMode?:StartMode;initialRoom?:string;onExit?:()=>void;onTutorial?:()=>void;tutorialRun?:number }) {
     const canvas = useRef<HTMLCanvasElement>(null), mapCanvas = useRef<HTMLCanvasElement>(null), client = useRef<GameClient | null>(null), noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hotbarDrag=useRef<number|null>(null);
     const [state, setState] = useState<ClientState | null>(null), [map, setMap] = useState(false), [room, setRoom] = useState(false), [backpack,setBackpack]=useState(false), [roomCode, setRoomCode] = useState(''), [notice, setNotice] = useState(''),[trackCave,setTrackCave]=useState(false);
@@ -32,8 +33,8 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const cooking=state?.cookingOpen??false;
     const showNotice = (text: string) => { setNotice(text); if (noticeTimer.current)
         clearTimeout(noticeTimer.current); noticeTimer.current = setTimeout(() => setNotice(''), 1400); };
-    useEffect(() => { const game = new GameClient(canvas.current!, setState, showNotice, () => {setMap(v => !v);setRoom(false);setBackpack(false);setSignId(null);}, apiUrl, () => {setBackpack(v=>!v);setMap(false);setRoom(false);setSignId(null);}, id=>{setSignId(id);if(id){setMap(false);setRoom(false);setBackpack(false);}},characterId,characterName); client.current = game; game.connect(startMode,initialRoom); return () => { game.destroy(); if (noticeTimer.current)
-        clearTimeout(noticeTimer.current); }; }, [apiUrl,startMode,initialRoom,characterId,characterName]);
+    useEffect(() => { const game = new GameClient(canvas.current!, setState, showNotice, () => {setMap(v => !v);setRoom(false);setBackpack(false);setSignId(null);}, apiUrl, () => {setBackpack(v=>!v);setMap(false);setRoom(false);setSignId(null);}, id=>{setSignId(id);if(id){setMap(false);setRoom(false);setBackpack(false);}},characterId,characterName,appearance); client.current = game; game.connect(startMode,initialRoom); return () => { game.destroy(); if (noticeTimer.current)
+        clearTimeout(noticeTimer.current); }; }, [apiUrl,startMode,initialRoom,characterId,characterName,appearance]);
     useEffect(() => { if (client.current) {
         client.current.paused = map || room || backpack || signId!==null || menu || cooking;
         client.current.pauseControls();
@@ -119,7 +120,7 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
   {!!loaded&&state?.connected&&!map&&!room&&!backpack&&signId===null&&!menu&&!cooking&&!fishing&&<TouchControls client={client} useLabel={touchUseLabel}/>}
   </div>{backpack&&<InventoryPanel player={player} slots={slots} resources={inventory} selected={selected} onMove={(from,to)=>client.current?.moveSlot(from,to)} onQuickMove={from=>client.current?.quickMoveSlot(from)} onClose={()=>setBackpack(false)}/> }
   {signId&&<SignPanel key={signId} text={typeof sign?.text==='string'?sign.text:''} available={sign?.kind==='sign'} connectionError={state?.error} onSave={text=>client.current?.saveSign(signId,text)??Promise.resolve('连接中断，请重试')} onClose={closeSign}/>}
-  {cooking&&player&&<CookingPanel buildings={state!.world.buildings} player={player} busy={state?.cookingBusy??false} supported={state?.world.activityVersion===2&&state?.world.cottageVersion===2} connected={state?.connected??false} onClose={()=>client.current?.closeCooking()} onCook={(method,ingredients)=>client.current?.cook(method,ingredients)??false} onPantry={offer=>client.current?.takePantry(offer)??false}/>}
+  {cooking&&player&&<CookingPanel buildings={state!.world.buildings} player={player} busy={state?.cookingBusy??false} supported={state?.world.activityVersion===2&&state?.world.cottageVersion===2&&state?.world.cookingVersion===3} connected={state?.connected??false} onClose={()=>client.current?.closeCooking()} onCook={(method,ingredients)=>client.current?.cook(method,ingredients)??false} onPantry={offer=>client.current?.takePantry(offer)??false}/>}
   {showConnectionError && <div className="connection-error" role="alert"><span>{state?.error}</span><button onClick={() => client.current?.retryConnection()}>重试</button></div>}
   {menu&&<div className="modal-backdrop" onClick={()=>setMenu(false)}><section className="room-panel pause-panel" role="dialog" aria-modal="true" aria-label="游戏菜单" onClick={event=>event.stopPropagation()} onKeyDown={event=>{
       event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setMenu(false);}

@@ -1,3 +1,5 @@
+import {dressedHero} from './hero-appearance';
+import type {Appearance} from './appearance';
 import { COLORS, resourcesInRect, resourceAt, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { distance, type WorldState, type Player, type Part, type Tool } from './simulation';
 import { ART_DENSITY, HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, CROP_SIZE, type Atlas, type Sprite } from './art';
@@ -32,6 +34,7 @@ export type View = {
     } | null;
     time: number;
     roomKey?: string;
+    localAppearance?:Appearance;
     fadeUntil?: number;
     localSwing?: HeroSwing | null;
     motionElapsed?: number;
@@ -129,13 +132,13 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
     }
     treeShadows(ctx,s,{...pos,level:0},art,ox,groundOy,t);
     const visible = (x: number, y: number) => x > minX - 4 && x < maxX + 4 && y > minY - 4 && y < maxY + 3;
-    const sprite = (name: Sprite, x: number, y: number, width: number, height: number, alpha = 1, flip = false) => { ctx.save(); ctx.globalAlpha = alpha; const px = Math.round(x * TILE + ox), py = Math.round(y * TILE + oy); if (flip) {
+    const sprite = (name: Sprite, x: number, y: number, width: number, height: number, alpha = 1, flip = false,appearance?:Appearance) => { ctx.save(); ctx.globalAlpha = alpha; const px = Math.round(x * TILE + ox), py = Math.round(y * TILE + oy); if (flip) {
         ctx.translate(px, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(art[name], -width / 2, py - height, width, height);
+        ctx.drawImage(appearance?dressedHero(art,name,appearance):art[name], -width / 2, py - height, width, height);
     }
     else
-        ctx.drawImage(art[name], Math.round(px - width / 2), py - height, width, height); ctx.restore(); };
+        ctx.drawImage(appearance?dressedHero(art,name,appearance):art[name], Math.round(px - width / 2), py - height, width, height); ctx.restore(); };
     const drawFloor=(b:Building,shift=0)=>{
         const inset=floorWallInsets(s.buildings,b.x,b.y,floorLevel(b));
         const x=b.x*TILE+ox,y=b.y*TILE+oy+shift;
@@ -205,7 +208,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             for(const p of Object.values(s.players))if(floorLevel(p)===lower&&t-p.seen<15000&&visible(p.x,p.y)){
                 const work=p.workAction&&p.workStart!==undefined&&p.workUntil?{action:p.workAction,start:p.workStart,until:p.workUntil,face:p.swingFace??p.face}:null;
                 const face=work&&t<work.until?work.face:heroFacing(p,p.face,t),frame=(work?workFrame(work,t):null)??heroFrame(p,face,(p.movingUntil??0)>s.tick,t,p.equipped??'axe');
-                below.push({y:p.y+shift/TILE+(work?.action==='sleep'&&t<work.until ? .2 : 0),draw:()=>sprite(frame,p.x,p.y+shift/TILE+(HERO_SIZE.height-HERO_SIZE.anchorY)/TILE,HERO_SIZE.width,HERO_SIZE.height,1,face==='left')});
+                below.push({y:p.y+shift/TILE+(work?.action==='sleep'&&t<work.until ? .2 : 0),draw:()=>sprite(frame,p.x,p.y+shift/TILE+(HERO_SIZE.height-HERO_SIZE.anchorY)/TILE,HERO_SIZE.width,HERO_SIZE.height,1,face==='left',p.id===id?(view.localAppearance??p.appearance):p.appearance)});
             }
             for(const m of s.mobs)if(floorLevel(m)===lower&&visible(m.x,m.y)){
                 const frame=creatureFrame(m,t,(m.movingUntil??0)>s.tick);if(frame)below.push({y:m.y+shift/TILE,draw:()=>sprite(frame,m.x,m.y+shift/TILE+(SLIME_SIZE.height-SLIME_SIZE.anchorY)/TILE,SLIME_SIZE.width,SLIME_SIZE.height,1,(m.kind==='boar'||m.kind==='mushroom')&&creatureFacing(m,t)==='left')});
@@ -320,7 +323,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                 ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-6,point.y*TILE+oy-2,12,3);
                 if(face==='up')drawTrail();
                 ctx.save();ctx.translate(px,py);
-                if(face==='left')ctx.scale(-1,1);ctx.drawImage(art[frame],-HERO_SIZE.anchorX,-HERO_SIZE.anchorY,HERO_SIZE.width,HERO_SIZE.height);ctx.restore();
+                if(face==='left')ctx.scale(-1,1);ctx.drawImage(dressedHero(art,frame,p.id===id?(view.localAppearance??p.appearance):p.appearance),-HERO_SIZE.anchorX,-HERO_SIZE.anchorY,HERO_SIZE.width,HERO_SIZE.height);ctx.restore();
                 if(face!=='up')drawTrail();
                 if(!local){ctx.fillStyle=['#ffe7a1','#f8a77d','#7cc9e2','#c8a0e8'][p.color%4];ctx.fillRect(point.x*TILE+ox-3,point.y*TILE+oy-37,6,2);}
             } });

@@ -1,5 +1,6 @@
+import {normalizeAppearance,type Appearance} from './appearance';
 import {ACTIVITY_TIMING,campfireNear,nearCampfire,canCast,type FoodKind,type CookingRecipe} from './activities';
-import {INGREDIENT_IDS,DISH_IDS,foodHeal,mealRecovery,consumeMeal,rememberCooking,type CookingJournal,resolveRecipe,validateSelection,type IngredientId,type DishId,type CookMethod,type ResolvedRecipe} from './cooking';
+import {INGREDIENT_IDS,DISH_IDS,foodHeal,mealRecovery,consumeMeal,rememberCooking,migrateCooking,type CookingJournal,resolveRecipe,validateSelection,type IngredientId,type DishId,type CookMethod,type ResolvedRecipe} from './cooking';
 import {startFishing,advanceFishing,hookFishing,setFishingHeld,cancelFishing,fishingActive,type FishingState,type FishingUpdate} from './fishing';
 import {pantryOffer} from './pantry';
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
@@ -30,6 +31,7 @@ export type PendingActivity={action:'fish'|'cook'|'sleep'|'pickup'|'eat';start:n
 export type Player = CookingJournal & {
     id: string;
     name: string;
+    appearance?:Appearance;
     secret?: string;
     x: number;
     y: number;
@@ -95,6 +97,7 @@ export type WorldState = {
     structureVersion?:1;
     activityVersion?:2;
     cottageVersion?:2;
+    cookingVersion?:3;
 };
 export type GameEvent = {
     id: string;
@@ -151,11 +154,14 @@ export function normalizeWorld(s:WorldState,now:number){
     // consumed as sent; an older server omits this capability field.
     s.structureVersion=1;s.cottageVersion=2;
     const migrateActivities=s.activityVersion!==2;s.activityVersion=2;
+    const migrateRecipes=s.cookingVersion!==3;s.cookingVersion=3;
     // Existing saves begin their first day when they are migrated, rather than
     // inheriting thousands of short game days from their real creation date.
     if(!Number.isFinite(s.dayStartedAt))s.dayStartedAt=now;
     s.plots??={};
     for(const p of Object.values(s.players)){
+        if(migrateRecipes)migrateCooking(p);
+        if(p.appearance)p.appearance=normalizeAppearance(p.appearance);
         p.level=floorLevel(p);
         for(const key of ['carrotSeed','tomatoSeed','wheatSeed'] as const)p.inventory[key]??=6;
         for(const key of ['carrot','tomato','wheat','fish','meal'] as const)p.inventory[key]??=0;
@@ -481,7 +487,7 @@ function resolveActivity(s:WorldState,p:Player,now:number){
     }else if(activity.action==='cook'){
         const recipe=activity.cooking&&resolveRecipe(activity.cooking.method,activity.cooking.ingredients);
         if(!nearCampfire(p,s.buildings)||!recipe||!validateSelection(recipe.ingredients,p.inventory).ok){stop();return;}
-        for(const [item,count]of Object.entries(recipe.counts))p.inventory[item as IngredientId]=(p.inventory[item as IngredientId]??0)-count;
+        for(const [item,count]of Object.entries(recipe.counts))for(let i=0;i<count;i++){consumeMeal(p,item);p.inventory[item as IngredientId]=(p.inventory[item as IngredientId]??0)-1;}
         const discovered=rememberCooking(p,recipe,now);
         p.inventory[recipe.output]=(p.inventory[recipe.output]??0)+recipe.quantity;
         p.cookingResult={id:activity.commandId??String(now),dish:recipe.output,quantity:recipe.quantity,time:now,discovered,hp:recipe.hp,stamina:recipe.stamina};

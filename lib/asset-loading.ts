@@ -1,3 +1,4 @@
+import {FEMALE_SHEETS} from './female-art-layout';
 import {FOOD_SHEETS} from './food-art-layout';
 
 export const ART_FILES = [
@@ -8,6 +9,7 @@ export const ART_FILES = [
     'boar-directions.png','mushroom-directions.png','activity-items.png','hero-harvest.png','hero-pickup.png','hero-eat.png',
     'hero-fish.png','hero-cook.png','hero-sleep.png','hero-roll.png','bed-horizontal.png',
     'landscape-terrain-v3.png','landscape-props-v3.png','landscape-landmarks-v3.png',
+    ...FEMALE_SHEETS.map(sheet=>sheet.file),
     ...FOOD_SHEETS.map(sheet=>sheet.file)
 ] as const;
 export const ART_LOAD_BATCH_SIZE=4;

@@ -1,7 +1,8 @@
+import {normalizeAppearance,appearanceKey,type Appearance} from './appearance';
 import {applyInput,tickWorld,publicWorld,type Input,type WorldState} from './simulation';
 import {worldDelta,type WorldDelta} from './world-delta';
 type Database={prepare(sql:string):{bind(...values:unknown[]):{first<T>():Promise<T|null>;run():Promise<{meta:{changes?:number}}>}}};
-type Options={input?:Input;poll?:boolean;sinceVersion?:number;normalize?:(state:WorldState)=>void};
+type Options={appearance?:Appearance;input?:Input;poll?:boolean;sinceVersion?:number;normalize?:(state:WorldState)=>void};
 type Result={status:number;room?:string;playerId?:string;state?:WorldState;delta?:WorldDelta;version?:number;message?:string|null;error?:string;attempts?:number};
 type Entry={secret:string;options:Options};
 // Cache only public snapshots. Missing/evicted baselines always receive a full snapshot.
@@ -29,8 +30,10 @@ async function commit(db:Database,room:string,secret:string,options:Options):Pro
         const playerId=Object.keys(state.players).find(id=>state.players[id].secret===secret);
         if(!playerId)return{status:403,error:'连接已失效'};
         const now=Math.max(Date.now(),state.tick),accepted=!options.poll||!!options.input&&options.input.seq>state.players[playerId].seq;
+        const changedAppearance=options.appearance!==undefined&&appearanceKey(state.players[playerId].appearance)!==appearanceKey(options.appearance);
+        if(changedAppearance)state.players[playerId].appearance=normalizeAppearance(options.appearance);
         const needsTick=now-state.tick>=100||Object.values(state.players).some(p=>p.pendingStrike&&p.pendingStrike.at<=now);
-        if(!accepted&&!needsTick)return response(room,playerId,state,row.version,entry,null,attempt);
+        if(!accepted&&!needsTick&&!changedAppearance)return response(room,playerId,state,row.version,entry,null,attempt);
         tickWorld(state,now);
         let message:string|null=null;
         if(options.input)message=applyInput(state,playerId,options.input,now);

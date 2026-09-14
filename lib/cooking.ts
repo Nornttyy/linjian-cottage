@@ -1,7 +1,7 @@
 /** Pure cooking rules. One array entry is one ingredient unit; order never matters. */
 export const MAX_COOKING_INGREDIENTS = 5;
 
-export const INGREDIENTS = {
+const RAW_INGREDIENTS = {
     fish: { name: '鲜鱼', source: 'fishing' },
     carrot: { name: '胡萝卜', source: 'farm' },
     tomato: { name: '番茄', source: 'farm' },
@@ -22,9 +22,9 @@ export const INGREDIENTS = {
     oil: { name: '食用油', source: 'camp' },
     sugar: { name: '糖', source: 'camp' },
     milk: { name: '牛奶', source: 'camp' },
+    wood: {name:'木材',source:'forage'},stone:{name:'石头',source:'forage'},copper:{name:'铜矿',source:'forage'},essence:{name:'精华',source:'forage'},
+    carrotSeed:{name:'胡萝卜种子',source:'farm'},tomatoSeed:{name:'番茄种子',source:'farm'},wheatSeed:{name:'小麦种子',source:'farm'},meal:{name:'熟食',source:'leftovers'},
 } as const;
-export type IngredientId = keyof typeof INGREDIENTS;
-export const INGREDIENT_IDS = Object.keys(INGREDIENTS) as IngredientId[];
 
 export const COOK_METHODS = {
     roast: { name: '烤物', verb: '烘烤' },
@@ -68,9 +68,22 @@ export const DISHES = {
     tunaFattySashimi: { name: '金枪鱼大腩刺身', method: 'sashimi', hp: 60, stamina: 42 },
     sweetShrimpSashimi: { name: '小甜虾刺身', method: 'sashimi', hp: 24, stamina: 22 },
     largeSweetShrimpSashimi: { name: '大甜虾刺身', method: 'sashimi', hp: 40, stamina: 34 },
+    dubiousMash:{name:'怪味糊糊',method:'roast',hp:1,stamina:3},
+    toastedWood:{name:'焦木脆片',method:'roast',hp:0,stamina:2},
+    stoneRice:{name:'石头焗饭',method:'roast',hp:0,stamina:4},
+    copperLump:{name:'铜锅焦团',method:'roast',hp:0,stamina:0},
+    starlightPudding:{name:'星露布丁',method:'bake',hp:50,stamina:55},
+    glimmerRice:{name:'奇光饭团',method:'sushi',hp:38,stamina:58},
+    seedCracker:{name:'种籽薄饼',method:'bake',hp:16,stamina:40},
+    surfTurf:{name:'海陆大杂烩',method:'panFry',hp:48,stamina:44},
+    leftoverStew:{name:'剩菜乱炖',method:'panFry',hp:12,stamina:20},
 } as const satisfies Record<string, FoodRecovery & { name: string; method: CookMethod }>;
 export type DishId = keyof typeof DISHES;
 export const DISH_IDS = Object.keys(DISHES) as DishId[];
+export const INGREDIENTS={...RAW_INGREDIENTS,...Object.fromEntries(Object.entries(DISHES).map(([id,dish])=>[id,{name:dish.name,source:'leftovers' as const}]))} as typeof RAW_INGREDIENTS & Record<DishId,{name:string;source:'leftovers'}>;
+export type IngredientId = keyof typeof INGREDIENTS;
+export const INGREDIENT_IDS = Object.keys(INGREDIENTS) as IngredientId[];
+export const ODD_DISH_IDS:readonly DishId[]=['dubiousMash','toastedWood','stoneRice','copperLump','starlightPudding','glimmerRice','seedCracker','surfTurf','leftoverStew'];
 export type IngredientCounts = Partial<Record<IngredientId, number>>;
 export type SelectionValidation =
     | { ok: true; ingredients: IngredientId[]; counts: IngredientCounts }
@@ -159,6 +172,14 @@ export const RECIPES: readonly CookingRecipe[] = [
     recipe('tunaFattySashimi', ...sashimiVariants('tunaFatty')),
     recipe('sweetShrimpSashimi', ...sashimiVariants('sweetShrimp')),
     recipe('largeSweetShrimpSashimi', ...sashimiVariants('largeSweetShrimp')),
+    recipe('dubiousMash',variant([group('sugar'),group('milk')])),
+    recipe('toastedWood',variant([group('wood')])),recipe('stoneRice',variant([group('stone'),group('rice')])),
+    recipe('copperLump',variant([group('copper')])),
+    recipe('starlightPudding',variant([group('essence'),group('milk'),group('sugar')])),
+    recipe('glimmerRice',variant([group('essence'),group('rice'),group('nori')])),
+    recipe('seedCracker',variant([group('wheatSeed'),group('wheat'),group('oil')])),
+    recipe('surfTurf',variant([group('wagyu'),group('fish'),group('oil')])),
+    recipe('leftoverStew',variant([group('meal'),group('carrot')])),
 ];
 
 export type ResolvedRecipe = FoodRecovery & {
@@ -167,7 +188,7 @@ export type ResolvedRecipe = FoodRecovery & {
 };
 // Main ingredients determine the dish; every other edible ingredient is a garnish.
 // There is no exact recipe or unlock requirement for cooking.
-export function resolveRecipe(method: unknown, ingredients: unknown): ResolvedRecipe | null {
+function resolveLegacyRecipe(method: unknown, ingredients: unknown): ResolvedRecipe | null {
     if (!isCookMethod(method)) return null;
     const selection=validateSelection(ingredients);if(!selection.ok)return null;
     const {counts}=selection,n=(id:IngredientId)=>counts[id]??0;
@@ -188,43 +209,90 @@ export function resolveRecipe(method: unknown, ingredients: unknown): ResolvedRe
         if(main){output=(`${main}Sashimi`) as DishId;quantity=n(main);}
     }
     if(!output)return null;
-    const nutrition=selection.ingredients.reduce((sum,id)=>({hp:sum.hp+NUTRITION[id][0],stamina:sum.stamina+NUTRITION[id][1]}),{hp:0,stamina:0});
+    const nutrition=selection.ingredients.reduce((sum,id)=>({hp:sum.hp+nutritionOf(id)[0],stamina:sum.stamina+nutritionOf(id)[1]}),{hp:0,stamina:0});
     const dish=DISHES[output],key=method+':'+INGREDIENT_IDS.flatMap(id=>n(id)?[id+'='+n(id)]:[]).join(',');
     return {id:output,output,method,ingredients:[...selection.ingredients],counts,quantity,key,
         hp:Math.min(100,Math.round(dish.hp*.55+nutrition.hp/quantity*.65)),
         stamina:Math.min(100,Math.round(dish.stamina*.55+nutrition.stamina/quantity*.65))};
 }
-const NUTRITION:Record<IngredientId,readonly [number,number]>={
+const NUTRITION:Partial<Record<IngredientId,readonly [number,number]>>={
     fish:[14,10],carrot:[10,6],tomato:[8,10],wheat:[4,18],
     salmon:[16,11],salmonBelly:[23,16],salmonFatty:[31,22],
     tuna:[19,12],tunaBelly:[27,18],tunaFatty:[36,25],
     sweetShrimp:[14,13],largeSweetShrimp:[24,21],seaUrchin:[30,18],
     rice:[3,22],nori:[7,3],egg:[13,12],wagyu:[34,23],oil:[2,8],sugar:[0,14],milk:[12,10],
 };
-export type DiscoveredRecipe={method:CookMethod;ingredients:IngredientId[];discoveredAt:number};
-export type CookedBatch={ingredients:IngredientId[];quantity:number};
+const seeds:readonly IngredientId[]=['carrotSeed','tomatoSeed','wheatSeed'];
+const failedDishes:readonly DishId[]=['dubiousMash','toastedWood','stoneRice','copperLump'];
+function nutritionOf(id:IngredientId):readonly [number,number]{
+    if(NUTRITION[id])return NUTRITION[id]!;
+    if(isDish(id))return [Math.min(12,DISHES[id].hp/3),Math.min(18,DISHES[id].stamina/3)];
+    return seeds.includes(id)?[2,8]:id==='essence'?[20,12]:id==='meal'?[10,12]:[0,0];
+}
+/** Flexible ingredient families, with incompatible mixtures producing real odd dishes. */
+export function resolveRecipe(method:unknown,ingredients:unknown):ResolvedRecipe|null{
+    if(!isCookMethod(method))return null;
+    const selection=validateSelection(ingredients);if(!selection.ok)return null;
+    const {counts}=selection,n=(id:IngredientId)=>counts[id]??0,has=(ids:readonly IngredientId[])=>ids.some(id=>n(id)>0);
+    const only=(ids:readonly IngredientId[])=>selection.ingredients.every(id=>ids.includes(id));
+    const seafood=[...fish,...shrimp,'seaUrchin'] as IngredientId[];
+    const legacy=resolveLegacyRecipe(method,ingredients);
+    let special:DishId|undefined;
+    // Mineral/wood experiments always take precedence, even with expensive food.
+    if(n('copper'))special='copperLump';
+    else if(n('stone'))special=n('rice')?'stoneRice':'dubiousMash';
+    else if(n('wood'))special='toastedWood';
+    else if(has(failedDishes))special='dubiousMash';
+    else if(n('essence')){
+        special=method==='bake'&&n('milk')&&n('sugar')&&only(['essence','milk','sugar','egg'])?'starlightPudding':
+            method==='sushi'&&n('rice')&&n('nori')&&only(['essence','rice','nori','egg'])?'glimmerRice':'dubiousMash';
+    }else if(has(seeds))special=method==='bake'&&n('wheat')&&n('oil')&&only([...seeds,'wheat','oil','egg','milk','sugar'])?'seedCracker':'dubiousMash';
+    else if(selection.ingredients.some(id=>isDish(id)||id==='meal'))special=(method==='panFry'||method==='roast')&&!n('sugar')&&only([...DISH_IDS.filter(id=>!failedDishes.includes(id)&&!['bread','carrotCake','milkPudding','milkCake','starlightPudding'].includes(id)),'meal',...vegetables,'rice','egg','oil','nori'])?'leftoverStew':'dubiousMash';
+    else if(n('wagyu')&&has(seafood))special=(method==='roast'||method==='panFry')&&!n('sugar')&&only(['wagyu',...seafood,...vegetables,'oil','rice','nori'])?'surfTurf':'dubiousMash';
+    else {
+        let reasonable=false;
+        if(method==='roast')reasonable=!!legacy&&n('sugar')<=1&&only([...fish,...shrimp,'wagyu',...vegetables,'oil','rice','nori','milk','sugar']);
+        if(method==='panFry')reasonable=!!legacy&&!!n('oil')&&n('sugar')<=1&&only([...fish,...shrimp,'wagyu',...vegetables,'oil','rice','nori','milk','sugar','egg']);
+        if(method==='deepFry')reasonable=!!legacy&&!!n('oil')&&(!!n('wheat')||!!n('egg'))&&only([...fish,...shrimp,...vegetables,'oil','wheat','egg','rice','nori']);
+        if(method==='bake')reasonable=!!legacy&&!!n('milk')&&(!!n('wheat')||!!n('egg'))&&only(['wheat','milk','egg','sugar','carrot']);
+        if(method==='sushi')reasonable=!!legacy&&only(['rice','nori',...salmon,...tuna,...shrimp,'wagyu','seaUrchin','egg',...(n('egg')?['sugar' as const]:[])]);
+        if(method==='sashimi')reasonable=!!legacy&&only([legacy.ingredients.find(id=>id+'Sashimi'===legacy.id)!,'nori']);
+        if(reasonable)return legacy;
+        special='dubiousMash';
+    }
+    const output=special!,dish=DISHES[output],nutrition=selection.ingredients.reduce((sum,id)=>[sum[0]+nutritionOf(id)[0],sum[1]+nutritionOf(id)[1]],[0,0]);
+    const failed=failedDishes.includes(output),leftovers=output==='leftoverStew';
+    return {id:output,output,method,ingredients:[...selection.ingredients],counts,quantity:1,
+        key:method+':'+INGREDIENT_IDS.flatMap(id=>n(id)?[id+'='+n(id)]:[]).join(','),
+        hp:failed?dish.hp:Math.min(leftovers?24:90,Math.round(dish.hp*.55+nutrition[0]*.45)),
+        stamina:failed?dish.stamina:Math.min(leftovers?36:90,Math.round(dish.stamina*.55+nutrition[1]*.45))};
+}
+
+export type DiscoveredRecipe={method:CookMethod;ingredients:IngredientId[];discoveredAt:number;dish?:DishId};
+export type CookedBatch={ingredients:IngredientId[];quantity:number;method?:CookMethod;recovery?:FoodRecovery};
 export type CookingJournal={recipes?:Record<string,DiscoveredRecipe>;meals?:Partial<Record<DishId,CookedBatch[]>>};
 export type CookingOwner=CookingJournal&{inventory:Partial<Record<DishId,number>>};
 export function knownRecipes(owner:CookingJournal){
     return Object.values(owner.recipes??{}).flatMap(entry=>{
-        const result=entry&&resolveRecipe(entry.method,entry.ingredients);return result?[result]:[];
+        const result=entry&&resolveRecipe(entry.method,entry.ingredients);return result&&(!entry.dish||entry.dish===result.id)?[result]:[];
     });
 }
 export function rememberCooking(owner:CookingOwner,recipe:ResolvedRecipe,now:number){
-    owner.recipes??={};const discovered=!Object.hasOwn(owner.recipes,recipe.key);
-    if(discovered)owner.recipes[recipe.key]={method:recipe.method,ingredients:[...recipe.ingredients],discoveredAt:now};
+    owner.recipes??={};const previous=owner.recipes[recipe.key],discovered=!previous||(previous.dish!==undefined&&previous.dish!==recipe.id);
+    if(discovered)owner.recipes[recipe.key]={method:recipe.method,ingredients:[...recipe.ingredients],discoveredAt:now,dish:recipe.id};
     owner.meals??={};const batches=owner.meals[recipe.output]??=[];
     // Old dishes without batch data retain their original recovery and are eaten first.
     const last=batches.at(-1);
-    if(last&&resolveRecipe(recipe.method,last.ingredients)?.key===recipe.key)last.quantity+=recipe.quantity;
-    else batches.push({ingredients:[...recipe.ingredients],quantity:recipe.quantity});
+    if(last&&last.method===recipe.method&&last.recovery?.hp===recipe.hp&&last.recovery?.stamina===recipe.stamina&&resolveRecipe(recipe.method,last.ingredients)?.key===recipe.key)last.quantity+=recipe.quantity;
+    else batches.push({ingredients:[...recipe.ingredients],quantity:recipe.quantity,method:recipe.method,recovery:{hp:recipe.hp,stamina:recipe.stamina}});
     return discovered;
 }
 export function mealRecovery(owner:CookingOwner|undefined,food:unknown):FoodRecovery|null{
     if(!owner||!isDish(food))return foodHeal(food);
     const batches=owner.meals?.[food]??[],tracked=batches.reduce((sum,b)=>sum+b.quantity,0);
     if((owner.inventory[food]??0)>tracked)return foodHeal(food);
-    const result=batches[0]&&resolveRecipe(DISHES[food].method,batches[0].ingredients);
+    const batch=batches[0];if(batch?.recovery)return {hp:batch.recovery.hp,stamina:batch.recovery.stamina};
+    const result=batch&&resolveRecipe(batch.method??DISHES[food].method,batch.ingredients);
     return result?.output===food?{hp:result.hp,stamina:result.stamina}:foodHeal(food);
 }
 export function consumeMeal(owner:CookingOwner,food:unknown){
@@ -246,4 +314,13 @@ export function foodHeal(food: unknown): FoodRecovery | null {
     if (food === 'tomato') return { hp: 10, stamina: 10 };
     if (food === 'meal') return { hp: 36, stamina: 30 };
     return isDish(food) ? { hp: DISHES[food].hp, stamina: DISHES[food].stamina } : null;
+}
+
+/** Preserve the recovery of food already cooked before ingredient compatibility changed. */
+export function migrateCooking(owner:CookingOwner){
+    for(const entry of Object.values(owner.recipes??{})){const result=resolveLegacyRecipe(entry.method,entry.ingredients);if(result)entry.dish??=result.id;}
+    for(const id of DISH_IDS)for(const batch of owner.meals?.[id]??[]){
+        const result=resolveLegacyRecipe(batch.method??DISHES[id].method,batch.ingredients);
+        if(result?.id===id){batch.method??=DISHES[id].method;batch.recovery??={hp:result.hp,stamina:result.stamina};}
+    }
 }

@@ -1,3 +1,4 @@
+import {normalizeAppearance} from '@/lib/appearance';
 import {syncRoom} from '@/lib/room-sync';
 import { getStore } from '@/lib/store';
 import { applyInput, createPlayer, createWorld, publicWorld, tickWorld, normalizeWorld, type Input, type WorldState } from '@/lib/simulation';
@@ -20,7 +21,7 @@ export function OPTIONS(req: Request) {
 async function hash(token: string) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(b), n => n.toString(16).padStart(2, '0')).join(''); }
 export async function POST(req: Request) {
     const serverReceivedAt=Date.now();
-    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,structureVersion:1,activityVersion:2,cottageVersion:2,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
+    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,structureVersion:1,activityVersion:2,cottageVersion:2,cookingVersion:3,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
     if (!allowedRequest(req)) return reply({ error: '来源不受支持' }, 403);
     try {
         if (Number(req.headers.get('content-length') ?? 0) > 12000)
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
         const body = payload as {
             action?: string;
             name?:unknown;
+            appearance?:unknown;
             room?: unknown;
             token?: unknown;
             input?: unknown;
@@ -45,6 +47,7 @@ export async function POST(req: Request) {
             const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase(), token = crypto.randomUUID(), playerId = crypto.randomUUID().slice(0, 8), secret = await hash(token);
             const state = createWorld(now);
             state.players[playerId] = createPlayer(playerId, secret, name||'旅人', 0, now);
+            state.players[playerId].appearance=normalizeAppearance(body.appearance);
             await db.prepare('INSERT INTO worlds (id,state,version,updated_at) VALUES (?,?,0,?)').bind(id, JSON.stringify(state), now).run();
             return reply({ room: id, token, playerId, state: publicWorld(state) });
         }
@@ -55,7 +58,7 @@ export async function POST(req: Request) {
             return reply({ error: '请重新连接' }, 403);
         const secret = await hash(token), newId = crypto.randomUUID().slice(0, 8);
         if(body.action==='sync'&&body.protocol===2){
-            const result=await syncRoom(db,body.room,secret,{input:body.input as Input|undefined,poll:body.poll,sinceVersion:body.sinceVersion,normalize:state=>normalizeWorld(state,Date.now())});
+            const result=await syncRoom(db,body.room,secret,{input:body.input as Input|undefined,poll:body.poll,sinceVersion:body.sinceVersion,appearance:body.appearance===undefined?undefined:normalizeAppearance(body.appearance),normalize:state=>normalizeWorld(state,Date.now())});
             const {status,...data}=result;return reply(data,status);
         }
         for (let attempt = 0; attempt < 6; attempt++) {
@@ -72,12 +75,14 @@ export async function POST(req: Request) {
                     return reply({ error: '房间已满' }, 409);
                 playerId = newId;
                 s.players[playerId] = createPlayer(playerId, secret, name||'旅人 ' + (Object.keys(s.players).length + 1), Object.keys(s.players).length, now);
+                s.players[playerId].appearance=normalizeAppearance(body.appearance);
             }
             else {
                 if (!playerId)
                     return reply({ error: '连接已失效' }, 403);
                 tickWorld(s, now);
                 const input = body.input as Input;
+                if(body.appearance!==undefined)s.players[playerId].appearance=normalizeAppearance(body.appearance);
                 if (input)
                     message = applyInput(s, playerId, input, now);
                 else

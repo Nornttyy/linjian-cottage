@@ -32,16 +32,17 @@ export default function CookingPanel({player,buildings,busy,supported,connected,
             <div className="cooking-slots-header"><span>加入食材</span><span>{ingredients.length} / 5</span></div>
             <div className="cooking-slots" aria-label="五个食材槽">{Array.from({length:5},(_,i)=>{
                 const item=ingredients[i];return <button key={i} className={item?'filled':''} disabled={!item||disabled} title={item?'取回'+INGREDIENTS[item].name:'空食材槽'} aria-label={`食材槽${i+1}：${item?INGREDIENTS[item].name:'空'}`} onClick={()=>setIngredients(ingredients.filter((_,index)=>index!==i))}>
-                    {item?<><Icon name={item} size={34}/><span>{INGREDIENTS[item].name}</span></>:<span className="slot-number">{i+1}</span>}
+                    {item?<><Icon name={ITEMS[item].icon} size={34}/><span>{INGREDIENTS[item].name}</span></>:<span className="slot-number">{i+1}</span>}
                 </button>;
             })}</div>
             <section className="recipe-preview" aria-live="polite" aria-label="料理预览">
-                <div className="recipe-dish">{known&&recipe&&<Icon name={recipe.id} size={48}/>}<div><strong>{recipe?(known?DISHES[recipe.id].name:'新的搭配，试着做做看'):ingredients.length?'这项做法还需要主食材':'选择食材和做法'}</strong><span>{recipe?(known?`制作 ${recipe.quantity} 份 · 生命+${recipe.hp} · 体力+${recipe.stamina}`:'做出成品后，记录食谱和恢复效果'):ingredients.length?'试试鱼虾、蔬菜、肉、蛋或谷物':'自由搭配 1～5 份，配料会改变效果'}</span></div></div>
+                <div className="recipe-dish">{known&&recipe&&<Icon name={recipe.id} size={48}/>}<div><strong>{recipe?(known?DISHES[recipe.id].name:'新的搭配，试着做做看'):ingredients.length?'这项做法还需要主食材':'选择食材和做法'}</strong><span>{recipe?(known?`制作 ${recipe.quantity} 份 · 生命+${recipe.hp} · 体力+${recipe.stamina}`:'做出成品后，记录食谱和恢复效果'):ingredients.length?'试试鱼虾、蔬菜、肉、蛋或谷物':'搭配 1～5 份，乱搭也会做出奇葩料理'}</span></div></div>
                 <button className="cook-submit" disabled={disabled||!recipe||!selection.ok} onClick={()=>onCook(method,ingredients)}>{busy?'制作中…':COOK_METHODS[method].verb}</button>
             </section>
             {ingredients.length>0&&!selection.ok&&<p className="kitchen-status" role="status">{selection.error}</p>}
+            <p className="pantry-intro">食材与做法要合拍；种子、材料和剩菜也能试着入锅。奇怪的搭配通常恢复很少。</p>
             <div className="ingredients-header"><h3>背包食材</h3><button disabled={disabled||!ingredients.length} onClick={()=>setIngredients([])}>全部取回</button></div>
-            <div className="ingredient-grid">{available.map(id=>{const left=(inventory[id]??0)-(counts[id]??0);return <button key={id} disabled={disabled||left<=0||ingredients.length>=5} onClick={()=>add(id)} title={INGREDIENTS[id].name} aria-label={`加入${INGREDIENTS[id].name}，剩余${Math.max(0,left)}份`}><Icon name={id} size={30}/><span>{INGREDIENTS[id].name}</span><b>{Math.max(0,left)}</b></button>;})}</div>
+            <div className="ingredient-grid">{available.map(id=>{const left=(inventory[id]??0)-(counts[id]??0);return <button key={id} disabled={disabled||left<=0||ingredients.length>=5} onClick={()=>add(id)} title={INGREDIENTS[id].name} aria-label={`加入${INGREDIENTS[id].name}，剩余${Math.max(0,left)}份`}><Icon name={ITEMS[id].icon} size={30}/><span>{INGREDIENTS[id].name}</span><b>{Math.max(0,left)}</b></button>;})}</div>
             {!available.length&&<div className="empty-ingredients"><p>钓鱼、种田，或在营地换些食材。</p><button onClick={()=>setTab('pantry')}>查看食材补给</button></div>}
         </>}
         {tab==='recipes'&&<><p className="pantry-intro">已发现 {new Set(discovered.map(entry=>entry.id)).size} / {DISH_IDS.length} 道料理 · {discovered.length} 种搭配。做出新搭配后会自动记录。</p><div className="recipe-book">{discovered.filter(entry=>entry.method===method).map(entry=>{

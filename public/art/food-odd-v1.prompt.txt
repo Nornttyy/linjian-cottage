@@ -1,0 +1,11 @@
+Mode: built-in image_gen, stylized-concept. Reference: existing food atlas, style only.
+Production pixel-art food inventory atlas for the existing cozy game. Create nine icons in a strict three-column, three-row equal grid, with spacious margins. Coarse regular square pixels, 24–32 pixels of detail, warm moderate colors, soft brown outlines and cream plates.
+Row 1: dubious mash, a muted mauve-gray stew with a fish tail, carrot lump and sour green wisp; three toasted wood chips with charred edges; white rice baked with three gray pebbles.
+Row 2: a brown copper-flecked burnt lump with gray smoke; pale lavender milk pudding with two gold stars and honey glaze; triangular white rice ball with green seaweed, lavender glow and two gold stars.
+Row 3: two thin golden seed crackers; surf-and-turf bowl with beef, coral fish, pink shrimp and carrot broth; leftover stew with rice, omelette, bread crust and vegetables in orange broth.
+No faces, words, cutlery or backdrop. Genuine transparent PNG.
+
+Selected built-in background-extraction request:
+请把参考图九种料理抠图，生成正式的透明背景PNG素材图集。关键是输出PNG必须有真正的 alpha 透明通道，背景像素 alpha=0，绝不能画灰白棋盘格。图中保留原来的九种食物、奶油色碗盘、灰色石头、烟和星光，三列三行布局与颜色不变。去掉图案以外全部棋盘格和涡纹背景，空白部分完全透明，不填任何颜色，不添加阴影。请输出真正透明的PNG cutout sprite sheet。
+
+The built-in result contained a painted background. With the user's authorization, scripts/export-transparent-atlas.mjs removed only the background and translated the nine complete food shapes into equal cells; retained food pixels were not repainted. Final file: food-odd-v1.png, RGBA1536x1024.

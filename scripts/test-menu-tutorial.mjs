@@ -30,7 +30,7 @@ try{
  const host=await import(pathToFileURL(hostPath));const react={'react':'./menu-host.mjs','react/jsx-runtime':'./menu-host.mjs'};
  const {default:Menu}=await import(project.compileFile('components/MainMenu.tsx',{...react,'./CharacterMenu':'./menu-host.mjs'}));
  const {default:Shell}=await import(project.compileFile('components/GameShell.tsx',{...react,'./Game':'./menu-host.mjs','./MainMenu':'./menu-host.mjs','./CharacterMenu':'./menu-host.mjs'}));
- const {default:CharacterMenu}=await import(project.compileFile('components/CharacterMenu.tsx',react));
+ const {default:CharacterMenu}=await import(project.compileFile('components/CharacterMenu.tsx',{...react,'./CharacterPortrait':'./menu-host.mjs'}));
  const characters=await import(project.module('characters'));
  const {default:Tutorial}=await import(project.compileFile('components/Tutorial.tsx',react));
  const {default:Game}=await import(project.compileFile('components/Game.tsx',{...react,'@/lib/client':'./menu-host.mjs','./LoadingScreen':'./menu-host.mjs','./Inventory':'./menu-host.mjs','./SignPanel':'./menu-host.mjs','./Minimap':'./menu-host.mjs','./Tutorial':'./menu-host.mjs','./ItemIcon':'./menu-host.mjs','./TouchControls':'./menu-host.mjs','./CookingPanel':'./menu-host.mjs','./FishingGame':'./menu-host.mjs'}));
@@ -66,6 +66,17 @@ try{
   nodes(tree).find(n=>n.type==='input').props.onChange({target:{value:'青禾'}});tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render(CharacterMenu,props);assert(text(tree).includes('青禾'));assert.equal(chosen.length,0);
   button(tree,'改名').props.onClick();tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='input').props.onChange({target:{value:'青禾子'}});tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render(CharacterMenu,props);button(tree,'开始游戏').props.onClick();assert.equal(chosen[0].name,'青禾子');
   host.reset(true);render(Shell).props.onStart('local');const game=choosePending();assert.equal(game.props.characterId,chosen[0].id);assert.equal(game.props.characterName,'青禾子');assert.equal(game.props.startMode,'local');storage.clear();
+ });
+ test('female appearance and independent garment colors persist through create, edit and launch',()=>{
+  resetShell();const chosen=[],props={mode:'local',onChoose:hero=>chosen.push(hero),onBack(){}};let tree=render(CharacterMenu,props);
+  button(tree,'女角色').props.onClick();tree=render(CharacterMenu,props);
+  nodes(tree).find(n=>n.props?.['aria-label']==='上衣颜色：紫藤').props.onClick();tree=render(CharacterMenu,props);
+  nodes(tree).find(n=>n.props?.['aria-label']==='裤子颜色：米白').props.onClick();tree=render(CharacterMenu,props);
+  nodes(tree).find(n=>n.type==='input').props.onChange({target:{value:'小夏'}});tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
+  tree=render(CharacterMenu,props);button(tree,'开始游戏').props.onClick();assert.deepEqual(chosen[0].appearance,{body:'female',shirt:'lavender',pants:'cream'});
+  button(tree,'改名').props.onClick();tree=render(CharacterMenu,props);assert.equal(button(tree,'女角色').props['aria-pressed'],true);
+  nodes(tree).find(n=>n.props?.['aria-label']==='上衣颜色：蔷薇').props.onClick();tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});
+  host.reset(true);render(Shell).props.onStart('local');const game=choosePending();assert.deepEqual(game.props.appearance,{body:'female',shirt:'rose',pants:'cream'});storage.clear();
  });
  test('continue remains available when another character has a save, and cannot start an unsaved character',()=>{
   resetShell(legacy);characters.importLegacyCharacter();const fresh=characters.createCharacter('新旅人');let menu=render(Shell);assert.equal(menu.props.savedRoom,legacy.room);menu.props.onStart('resume');const pending=render(Shell);pending.props.onChoose(fresh);assert.equal(host.states[0],null);assert.equal(render(Shell).props.mode,'resume');

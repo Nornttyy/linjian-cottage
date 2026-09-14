@@ -63,8 +63,6 @@ try {
             {method:'sashimi',ingredients:new Array(1)},
             {method:'sashimi',ingredients:['toString']},
             {method:'sashimi',ingredients:['__proto__']},
-            {method:'sashimi',ingredients:['oil','sugar']},
-            {method:'sushi',ingredients:['rice','nori','oil']},
             {method:'unknown',ingredients:['salmon']},
             {method:'sashimi',ingredients:[]},
             {method:'sashimi',ingredients:'salmon'},
@@ -182,16 +180,17 @@ try {
     });
     test('old inventories gain all new keys without losing owned resources and every food fits in the backpack',()=>{
         const f=fixture();f.p.inventory.meal=3;f.p.inventory.wood=4;
-        for(const id of [...cooking.INGREDIENT_IDS,...cooking.DISH_IDS])delete f.p.inventory[id];
+        const legacy=new Set(['wood','stone','copper','essence','carrotSeed','tomatoSeed','wheatSeed','meal']);
+        for(const id of new Set([...cooking.INGREDIENT_IDS,...cooking.DISH_IDS]))if(!legacy.has(id))delete f.p.inventory[id];
         sim.normalizeWorld(f.s,f.now);
-        for(const id of [...cooking.INGREDIENT_IDS,...cooking.DISH_IDS]){
-            assert.equal(f.p.inventory[id],0);assert(inventory.ITEMS[id],id);f.p.inventory[id]=1;
+        for(const id of new Set([...cooking.INGREDIENT_IDS,...cooking.DISH_IDS])){
+            if(!legacy.has(id))assert.equal(f.p.inventory[id],0);assert(inventory.ITEMS[id],id);if(!legacy.has(id))f.p.inventory[id]=1;
         }
         assert.equal(f.p.inventory.meal,3);assert.equal(f.p.inventory.wood,4);
         const oldSlots=Array(36).fill(null);oldSlots[2]='rod';oldSlots[8]='meal';
         const slots=inventory.restoreSlots(oldSlots,f.p.inventory);
         assert.equal(slots[2],'rod');assert.equal(slots[8],'meal');
-        for(const id of [...cooking.INGREDIENT_IDS,...cooking.DISH_IDS])assert(slots.includes(id),id+' must have a visible inventory slot');
+        for(const id of [...cooking.INGREDIENT_IDS,...cooking.DISH_IDS].filter(id=>f.p.inventory[id]>0))assert(slots.includes(id),id+' must have a visible inventory slot');
         assert.equal(new Set(slots.filter(Boolean)).size,slots.filter(Boolean).length);
     });
     console.log(`${passed} cooking integration checks passed; ${failed} failed`);

@@ -1,3 +1,4 @@
+import {normalizeAppearance,type Appearance} from './appearance';
 import {characterSession,saveCharacterSession} from './characters';
 import {campfireNear,nearCampfire,canCast,type FoodKind} from './activities';
 import {foodHeal,resolveRecipe,validateSelection,type IngredientId,type CookMethod} from './cooking';
@@ -23,6 +24,7 @@ type ApiReply = {
     structureVersion?:1;
     activityVersion?:2;
     cottageVersion?:2;
+    cookingVersion?:3;
     version?:number;
     delta?:WorldDelta;
     serverReceivedAt?:number;
@@ -138,7 +140,7 @@ export class GameClient {
     private lastLocalSaveAt=0;
     private activeSignId:string|null=null;
     private signSave:{command:Command;resolve:(error:string|null)=>void}|null=null;
-    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{},private signToggle:(id:string|null)=>void=()=>{},private characterId?:string,private characterName?:string) {
+    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{},private signToggle:(id:string|null)=>void=()=>{},private characterId?:string,private characterName?:string,private characterAppearance?:Appearance) {
         canvas.addEventListener('pointermove', this.pointerMove);
         canvas.addEventListener('pointerdown', this.pointerDown);
         canvas.addEventListener('contextmenu', this.contextMenu);
@@ -215,7 +217,7 @@ export class GameClient {
     closeCooking(){this.cookingOpen=false;this.notify();}
     cook(method:CookMethod,ingredients:IngredientId[]){
         const p=this.session?this.world.players[this.session.playerId]:undefined;
-        if(!p||!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2||this.world.cottageVersion!==2)return false;
+        if(!p||!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2||this.world.cottageVersion!==2||this.world.cookingVersion!==3)return false;
         if(!nearCampfire(this.pos,this.world.buildings)){this.message('到营火旁烹饪');return false;}
         const selection=validateSelection(ingredients,p.inventory);if(!selection.ok){this.message(selection.error);return false;}
         if(!resolveRecipe(method,ingredients)){this.message('这些食材不适合这项做法');return false;}
@@ -309,7 +311,7 @@ export class GameClient {
         if(this.localMode)return this.localRequest(body);
         const sentAt=Date.now(),requestGeneration=this.generation;
         let response:Response;
-        try{response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body as object,activityVersion:2,structureVersion:1}),signal:AbortSignal.timeout(8000)});}
+        try{response=await fetch(this.apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body as object,appearance:this.characterAppearance,activityVersion:2,structureVersion:1}),signal:AbortSignal.timeout(8000)});}
         catch(error){
             const timedOut=typeof DOMException!=='undefined'&&error instanceof DOMException&&error.name==='TimeoutError';
             if(error instanceof TypeError||timedOut)throw new MultiplayerUnavailableError(timedOut?'多人服务器连接超时':'多人服务器暂时无法连接');
@@ -377,7 +379,7 @@ export class GameClient {
                 this.localMode=true;result=this.restoredLocalReply(saved!);
             }else{
                 this.localMode=false;
-                const body = mode === 'resume' && valid ? { action: 'sync', ...saved } : mode === 'join' ? { action: 'join', room: room.trim().toUpperCase(),name:this.characterName } : { action: 'create',name:this.characterName };
+                const body = mode === 'resume' && valid ? { action: 'sync', ...saved } : mode === 'join' ? { action: 'join', room: room.trim().toUpperCase(),name:this.characterName,appearance:this.characterAppearance } : { action: 'create',name:this.characterName,appearance:this.characterAppearance };
                 try{result=await this.request(body);}catch(error){
                     if(mode!=='create'||!this.canAutoFallback(error))throw error;
                     this.localMode=true;result=this.newLocalReply();
@@ -389,11 +391,12 @@ export class GameClient {
             this.world = result.state;
             // Trust the responding server's capability, not a saved world's
             // migration marker (which could survive a server rollback).
-            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined,cottageVersion:this.localMode||result.cottageVersion===2?2:undefined};
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined,cottageVersion:this.localMode||result.cottageVersion===2?2:undefined,cookingVersion:this.localMode||result.cookingVersion===3?3:undefined};
             this.worldVersion=result.version;
 
             const p = this.world.players[this.session.playerId];
             if(this.localMode&&this.characterName)p.name=this.characterName;
+            if(this.characterAppearance)p.appearance=normalizeAppearance(this.characterAppearance);
             this.pos = { x: p.x, y: p.y,level:floorLevel(p), face: p.face, moving: false };
             this.seq = p.seq;
             this.loadLayout();
@@ -446,7 +449,7 @@ export class GameClient {
                 return;
             if(result.delta && result.delta.base!==this.worldVersion){this.worldVersion=undefined;throw new Error('正在重新同步');}
             this.world = result.state ?? applyWorldDelta(this.world,result.delta!);
-            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined,cottageVersion:this.localMode||result.cottageVersion===2?2:undefined};
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined,cottageVersion:this.localMode||result.cottageVersion===2?2:undefined,cookingVersion:this.localMode||result.cookingVersion===3?3:undefined};
             this.worldVersion=result.version;
             if(this.signSave&&submitted?.commands.includes(this.signSave.command)){
                 const save=this.signSave;this.signSave=null;
@@ -776,7 +779,7 @@ export class GameClient {
     };
     private draw(now:number){
         if (this.art)
-            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
+            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room,localAppearance:this.characterAppearance, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
     }
     private pointerMove = (e: PointerEvent) => {
         if(this.held&&this.heldPointerId!==null&&e.pointerId!==this.heldPointerId)return;

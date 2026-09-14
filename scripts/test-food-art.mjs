@@ -38,9 +38,9 @@ try{
     const {FOOD_SHEETS,foodCellRect,FOOD_ICON_SIZE,foodDetailSize}=await import(project.module('food-art-layout'));
     const {INGREDIENT_IDS,DISH_IDS}=await import(project.module('cooking'));
     const {ART_FILES}=await import(project.module('asset-loading'));
-    const existing=['fish','carrot','tomato','wheat'],expected=[...INGREDIENT_IDS.filter(id=>!existing.includes(id)),...DISH_IDS];
+    const existing=['fish','carrot','tomato','wheat','wood','stone','copper','essence','carrotSeed','tomatoSeed','wheatSeed','meal'],expected=[...INGREDIENT_IDS.filter(id=>!existing.includes(id)&&!DISH_IDS.includes(id)),...DISH_IDS];
     const ids=FOOD_SHEETS.flatMap(sheet=>sheet.ids);
-    assert.equal(ids.length,46);assert.equal(new Set(ids).size,46);
+    assert.equal(ids.length,55);assert.equal(new Set(ids).size,55);
     assert.deepEqual([...ids].sort(),[...expected].sort());
     assert(ids.every(id=>!existing.includes(id)),'existing food sprites are preserved');
     assert.equal(FOOD_ICON_SIZE,32);
@@ -66,5 +66,5 @@ try{
             console.log('PASS generated food icon, alpha and atlas cell:',id);
         }
     }
-    console.log('46 food art checks; 0 failures');
+    console.log('55 food art checks; 0 failures');
 }finally{project.cleanup();}

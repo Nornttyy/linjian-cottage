@@ -1,3 +1,4 @@
+import {FEMALE_SHEETS,type FemaleSheet} from './female-art-layout';
 import {drawConnectedWall} from './connected-wall';
 import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
 import {ART_REVISIONS} from './art-sources';
@@ -11,7 +12,7 @@ import {FOOD_SHEETS,FOOD_ICON_SIZE,foodCellRect,foodDetailSize,type FoodSheet} f
 Object.assign(heroLayouts,workHeroLayouts);
 export type Direction='down'|'up'|'right';
 export type HeroAction='harvest'|'pickup'|'eat'|'fish'|'cook'|'sleep'|'idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
-type BaseSprite='hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
+type BaseSprite=`female-${HeroAction}-${Direction}-${number}`|'hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Sprite=BaseSprite|IngredientId|DishId|'rod'|'fish'|'meal'|'bed'|'campfire'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
 export const ART_DENSITY=2;
@@ -86,7 +87,7 @@ function transparentMatte(c:HTMLCanvasElement,landscapeKey=false,snowKey=false,k
     for(let q=0;q<queue.length;q++){const i=queue[q];p[i*4+3]=0;if(i%w)add(i-1);if(i%w<w-1)add(i+1);if(i>=w)add(i-w);if(i<w*(h-1))add(i+w);}
     ctx.putImageData(data,0,0);
 }
-function cleanFragments(c:HTMLCanvasElement){
+function cleanFragments(c:HTMLCanvasElement,trimNeighbors=false){
     const ctx=c.getContext('2d')!,data=ctx.getImageData(0,0,c.width,c.height),pixels=data.data,w=c.width,h=c.height,seen=new Uint8Array(w*h),groups:number[][]=[];
     for(let start=0;start<w*h;start++){
         if(seen[start]||pixels[start*4+3]<=32)continue;
@@ -97,7 +98,7 @@ function cleanFragments(c:HTMLCanvasElement){
         }}groups.push(q);
     }
     const largest=Math.max(0,...groups.map(g=>g.length));
-    for(const group of groups)if(group.length<largest*.035)for(const i of group)pixels[i*4+3]=0;
+    for(const group of groups)if(group.length<largest*.035||(trimNeighbors&&group.length<largest&&group.some(i=>i%w===0||i%w===w-1||i<w||i>=w*(h-1))))for(const i of group)pixels[i*4+3]=0;
     ctx.putImageData(data,0,0);
 }
 function bounds(c:HTMLCanvasElement){
@@ -173,6 +174,28 @@ async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'
         ctx.drawImage(c,SLIME_SIZE.anchorX-(x-2)*scale,SLIME_SIZE.anchorY-(y-2)*scale,c.width*scale,c.height*scale);cells[i]=out;
     });
     return cells;
+}
+async function femaleSheet(spec:FemaleSheet){
+    const original=await load('/art/'+spec.file),layout=spec.base?heroLayouts[spec.base]:undefined;
+    // Reuse the action's registration, not the male artwork. Extra margins keep
+    // the independently drawn female silhouette and ponytail inside each crop.
+    let img:HTMLImageElement|HTMLCanvasElement=original;
+    if(layout&&(img.width!==2048||img.height!==768)){const resized=canvas(2048,768),rc=resized.getContext('2d')!;rc.imageSmoothingEnabled=false;rc.drawImage(img,0,0,2048,768);img=resized;}
+    const cells=Array.from({length:24},(_,i)=>{
+        const row=Math.floor(i/8),col=i%8,base=layout?.frames[i]??[col*img.width/8,row*img.height/3,img.width/8,img.height/3];
+        const margin=layout?40:0,sourceRow=Math.floor((base[1]+base[3]/2)/(img.height/3));
+        const x=Math.max(0,Math.floor(base[0]-margin)),y=Math.max(sourceRow*img.height/3,Math.floor(base[1]-margin));
+        const right=Math.min(img.width,Math.ceil(base[0]+base[2]+margin)),bottom=Math.min((sourceRow+1)*img.height/3,Math.ceil(base[1]+base[3]+margin));
+        const c=canvas(right-x,bottom-y);c.getContext('2d')!.drawImage(img,x,y,c.width,c.height,0,0,c.width,c.height);
+        cleanFragments(c,true);return{c,x,y,box:bounds(c)};
+    });
+    const heights=Array.from({length:3},(_,row)=>Math.max(...cells.slice(row*8,row*8+8).map(cell=>cell.box.y1-cell.box.y0+1)));
+    return cells.map(({c,x,y,box},i)=>{
+        const row=Math.floor(i/8),out=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;
+        const scale=31/(layout?.bodyHeights[row]??heights[row]);
+        const anchor=layout?[layout.frames[i][0]+layout.anchors[i][0]-x,layout.frames[i][1]+layout.anchors[i][1]-y]:[(box.x0+box.x1+1)/2,box.y1+1];
+        ctx.drawImage(c,Math.round(HERO_SIZE.anchorX-anchor[0]*scale),Math.round(HERO_SIZE.anchorY-anchor[1]*scale),c.width*scale,c.height*scale);return out;
+    });
 }
 function idleFrames(base:HTMLCanvasElement,closed:HTMLCanvasElement,eyes:number[][]){
     const blink=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=blink.getContext('2d')!;
@@ -294,6 +317,15 @@ async function loadAll():Promise<Atlas>{
     const c=canvas(entrance.width,entrance.height);c.getContext('2d')!.drawImage(entrance,0,0);transparentMatte(c,!!ART_REVISIONS['cave-entrance.png']);art['cave-entrance']=cropped(c);
     const exit=canvas(mineExit.width,mineExit.height);exit.getContext('2d')!.drawImage(mineExit,0,0);transparentMatte(exit,!!ART_REVISIONS['mine-exit.png']);art['mine-exit']=cropped(exit);
     art.down=art['idle-down-0'];art.up=art['idle-up-0'];art.right=art['idle-right-0'];art.slime=art['slime-idle-0'];art.wildflowers=art.daisies;
+    const female=await loadAssetBatches(FEMALE_SHEETS.map(spec=>()=>femaleSheet(spec)));
+    for(const [i,spec]of FEMALE_SHEETS.entries())for(const [row,dir]of(['down','up','right'] as const).entries()){
+        const count=spec.action==='idle'?HERO_IDLE_FRAME_COUNT:8;
+        for(let f=0;f<count;f++){
+            const pose=spec.action==='idle'?(f===27||f===28?6:Math.min(4,Math.floor(f/6))):f;
+            const order=spec.base?heroLayouts[spec.base]?.order?.[row]?.[pose]??pose:pose;
+            art[`female-${spec.action}-${dir}-${f}`]=female[i][row*8+order];
+        }
+    }
     art.campfire=art.fire0;
     return art;
 }
