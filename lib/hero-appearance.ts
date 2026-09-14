@@ -1,5 +1,6 @@
 import {CLOTHING_COLORS,appearanceKey,normalizeAppearance,type Appearance,type ClothingColor} from './appearance';
 import type {Atlas,Sprite} from './art';
+import {femaleDyeRegistrations,type DyeRegistration} from './female-art-layout';
 type Pixels={data:Uint8ClampedArray;width:number;height:number};
 type Region={points:number[];x:number;y:number;width:number;height:number};
 function regions(p:Pixels,accept:(r:number,g:number,b:number,i:number)=>boolean):Region[]{
@@ -26,11 +27,11 @@ const frontCan=[
     [[58,70,75,88],[73,79,85,90]],[[58,70,75,88],[73,79,85,90]],
     [[57,68,72,85],[70,70,81,79]],[[58,68,73,85],[71,70,82,79]]
 ];
-export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite){
+export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,registration?:DyeRegistration){
     const water=frame?.match(/^water-(down|up|right)-(\d+)$/),pose=water?Number(water[2])%8:0;
     const toolPixel=(i:number)=>{
         if(!water)return false;
-        const x=i%p.width*128/p.width,y=Math.floor(i/p.width)*128/p.height;
+        const x=i%p.width*128/p.width*(registration?.scale??1)+(registration?.x??0),y=Math.floor(i/p.width)*128/p.height*(registration?.scale??1)+(registration?.y??0);
         if(water[1]==='down')return frontCan[pose].some(([x0,y0,x1,y1])=>x>=x0&&x<x1&&y>=y0&&y<y1);
         return water[1]==='right'&&x>=[66,70,70,68,67,68,65,65][pose]&&y<83;
     };
@@ -63,7 +64,7 @@ export function dressedHero(art:Atlas,frame:Sprite,value?:Appearance):HTMLCanvas
     const out=document.createElement('canvas');out.width=source.width;out.height=source.height;
     const ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(source,0,0);
     const pixels=ctx.getImageData(0,0,out.width,out.height);
-    recolorClothes(pixels,a,frame);ctx.putImageData(pixels,0,0);
+    recolorClothes(pixels,a,frame,femaleDyeRegistrations.get(source));ctx.putImageData(pixels,0,0);
     // Bound memory when a user previews many different outfits in one session.
     if(cache.size>=768)cache.delete(cache.keys().next().value!);cache.set(key,out);return out;
 }

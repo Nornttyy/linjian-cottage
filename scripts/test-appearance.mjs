@@ -39,5 +39,13 @@ try{
  test('appearance survives world JSON migration without changing spawn, name or inventory',()=>{
   const s=sim.createWorld(1),p=sim.createPlayer('p','secret','小夏',2,1);p.appearance={body:'female',shirt:'lavender',pants:'cream'};p.inventory.wood=37;s.players={p};const saved=JSON.parse(JSON.stringify(s));sim.normalizeWorld(saved,2);assert.deepEqual(saved.players.p.appearance,p.appearance);assert.equal(saved.players.p.x,p.x);assert.equal(saved.players.p.name,p.name);assert.equal(saved.players.p.inventory.wood,37);assert.equal(saved.players.p.color,2);
  });
+ test('female water tool masks follow registration changes while the adjacent trousers still dye',()=>{
+  const p={width:128,height:128,data:new Uint8ClampedArray(128*128*4)};
+  const rect=(x,y,w,h)=>{for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)p.data.set([40,145,210,255],(yy*128+xx)*4);};
+  rect(39,76,9,16);rect(48,68,14,17);const before=p.data.slice();
+  hero.recolorClothes(p,{body:'female',shirt:'original',pants:'rose'},'water-down-0',{scale:1,x:10,y:0});
+  for(let y=68;y<85;y++)for(let x=48;x<62;x++){const i=(y*128+x)*4;assert.deepEqual(p.data.slice(i,i+4),before.slice(i,i+4));}
+  const trouser=(88*128+43)*4;assert.notDeepEqual(p.data.slice(trouser,trouser+3),before.slice(trouser,trouser+3));
+ });
  console.log(`${checks} appearance checks; 0 failures`);
 }finally{for(const [k,value]of original){if(value)Object.defineProperty(globalThis,k,value);else delete globalThis[k];}project.cleanup();}

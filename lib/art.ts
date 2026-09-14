@@ -1,4 +1,4 @@
-import {FEMALE_SHEETS,type FemaleSheet} from './female-art-layout';
+import {FEMALE_SHEETS,FEMALE_BODY_HEIGHTS,femaleDyeRegistrations,type FemaleSheet} from './female-art-layout';
 import {drawConnectedWall} from './connected-wall';
 import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
 import {ART_REVISIONS} from './art-sources';
@@ -184,17 +184,22 @@ async function femaleSheet(spec:FemaleSheet){
     const cells=Array.from({length:24},(_,i)=>{
         const row=Math.floor(i/8),col=i%8,base=layout?.frames[i]??[col*img.width/8,row*img.height/3,img.width/8,img.height/3];
         const margin=layout?40:0,sourceRow=Math.floor((base[1]+base[3]/2)/(img.height/3));
-        const x=Math.max(0,Math.floor(base[0]-margin)),y=Math.max(sourceRow*img.height/3,Math.floor(base[1]-margin));
-        const right=Math.min(img.width,Math.ceil(base[0]+base[2]+margin)),bottom=Math.min((sourceRow+1)*img.height/3,Math.ceil(base[1]+base[3]+margin));
+        const x=Math.max(0,Math.floor(base[0]-margin)),y=Math.max(spec.rowEdges?.[sourceRow]??sourceRow*img.height/3,Math.floor(base[1]-margin));
+        const right=Math.min(img.width,Math.ceil(base[0]+base[2]+margin)),bottom=Math.min(spec.rowEdges?.[sourceRow+1]??(sourceRow+1)*img.height/3,Math.ceil(base[1]+base[3]+margin));
         const c=canvas(right-x,bottom-y);c.getContext('2d')!.drawImage(img,x,y,c.width,c.height,0,0,c.width,c.height);
         cleanFragments(c,true);return{c,x,y,box:bounds(c)};
     });
-    const heights=Array.from({length:3},(_,row)=>Math.max(...cells.slice(row*8,row*8+8).map(cell=>cell.box.y1-cell.box.y0+1)));
     return cells.map(({c,x,y,box},i)=>{
         const row=Math.floor(i/8),out=detailCanvas(HERO_SIZE.width,HERO_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;
-        const scale=31/(layout?.bodyHeights[row]??heights[row]);
+        const scale=31/FEMALE_BODY_HEIGHTS[spec.action][row];
         const anchor=layout?[layout.frames[i][0]+layout.anchors[i][0]-x,layout.frames[i][1]+layout.anchors[i][1]-y]:[(box.x0+box.x1+1)/2,box.y1+1];
-        ctx.drawImage(c,Math.round(HERO_SIZE.anchorX-anchor[0]*scale),Math.round(HERO_SIZE.anchorY-anchor[1]*scale),c.width*scale,c.height*scale);return out;
+        const dx=Math.round(HERO_SIZE.anchorX-anchor[0]*scale),dy=Math.round(HERO_SIZE.anchorY-anchor[1]*scale);
+        ctx.drawImage(c,dx,dy,c.width*scale,c.height*scale);
+        if(spec.action==='water'&&layout){
+            const oldScale=31/layout.bodyHeights[row],ratio=oldScale/scale;
+            femaleDyeRegistrations.set(out,{scale:ratio,x:(Math.round(HERO_SIZE.anchorX-anchor[0]*oldScale)-dx*ratio)*ART_DENSITY,y:(Math.round(HERO_SIZE.anchorY-anchor[1]*oldScale)-dy*ratio)*ART_DENSITY});
+        }
+        return out;
     });
 }
 function idleFrames(base:HTMLCanvasElement,closed:HTMLCanvasElement,eyes:number[][]){

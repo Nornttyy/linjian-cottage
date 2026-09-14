@@ -80,7 +80,25 @@ try{
  });
  test('continue remains available when another character has a save, and cannot start an unsaved character',()=>{
   resetShell(legacy);characters.importLegacyCharacter();const fresh=characters.createCharacter('新旅人');let menu=render(Shell);assert.equal(menu.props.savedRoom,legacy.room);menu.props.onStart('resume');const pending=render(Shell);pending.props.onChoose(fresh);assert.equal(host.states[0],null);assert.equal(render(Shell).props.mode,'resume');
-  host.reset(true);const chosen=[],props={mode:'resume',onChoose:p=>chosen.push(p),onBack(){}};const tree=render(CharacterMenu,props);assert(button(tree,'暂无存档').props.disabled);assert(!nodes(tree).some(n=>n.type==='form'));button(tree,'继续游戏').props.onClick();assert.equal(chosen[0].id,'legacy');storage.clear();
+  host.reset(true);const chosen=[],props={mode:'resume',onChoose:p=>chosen.push(p),onBack(){}};const tree=render(CharacterMenu,props);assert(button(tree,'开始新世界'));assert(!nodes(tree).some(n=>n.type==='form'));button(tree,'继续游戏').props.onClick();assert.equal(chosen[0].id,'legacy');storage.clear();
+ });
+ test('add character is available in every entry mode and cancel preserves existing profiles and saves',()=>{
+  for(const mode of ['resume','create','join','local']){
+   resetShell(legacy);characters.importLegacyCharacter();const before=characters.characterSnapshot(),props={mode,onChoose(){},onBack(){}};
+   let tree=render(CharacterMenu,props);assert(!nodes(tree).some(n=>n.type==='form'));button(tree,'添加角色').props.onClick();tree=render(CharacterMenu,props);
+   button(tree,'女角色').props.onClick();nodes(tree).find(n=>n.type==='input').props.onChange({target:{value:'未保存'}});tree=render(CharacterMenu,props);button(tree,'取消').props.onClick();
+   tree=render(CharacterMenu,props);assert(!nodes(tree).some(n=>n.type==='form'));assert.equal(characters.characterSnapshot(),before);assert.deepEqual(characters.characterSession('legacy'),legacy);
+  }
+ });
+ test('repeated additions save independent names and outfits without entering or overwriting a world',()=>{
+  resetShell(legacy);characters.importLegacyCharacter();const chosen=[],props={mode:'resume',onChoose:(...args)=>chosen.push(args),onBack(){}};
+  for(const name of ['春禾','秋叶']){let tree=render(CharacterMenu,props);button(tree,'添加角色').props.onClick();tree=render(CharacterMenu,props);assert.equal(nodes(tree).find(n=>n.type==='input').props.value,'');button(tree,'女角色').props.onClick();tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='input').props.onChange({target:{value:name}});tree=render(CharacterMenu,props);nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});}
+  const list=characters.readCharacters(characters.characterSnapshot());assert.equal(list.characters.length,3);assert.equal(new Set(list.characters.map(p=>p.id)).size,3);assert.deepEqual(list.characters.slice(1).map(p=>p.name),['春禾','秋叶']);assert(list.characters.slice(1).every(p=>p.appearance.body==='female'&&!characters.characterSession(p.id)));assert.deepEqual(characters.characterSession('legacy'),legacy);assert.equal(chosen.length,0);
+  host.reset(true);let tree=render(CharacterMenu,props);assert(text(tree).includes('春禾'));button(tree,'开始新世界').props.onClick();assert.equal(chosen[0][0].name,'春禾');assert.equal(chosen[0][1],true);
+ });
+ test('an explicit new-world choice starts an unsaved profile from Continue while saved profiles still resume',()=>{
+  resetShell(legacy);characters.importLegacyCharacter();const fresh=characters.createCharacter('新旅人');render(Shell).props.onStart('resume');render(Shell).props.onChoose(fresh,true);const game=render(Shell);assert.equal(game.props.startMode,'create');assert.equal(game.props.characterId,fresh.id);assert.equal(game.props.initialRoom,'');assert.deepEqual(characters.characterSession('legacy'),legacy);
+  game.props.onExit();render(Shell).props.onStart('resume');const saved=characters.readCharacters(characters.characterSnapshot()).characters.find(p=>p.id==='legacy');render(Shell).props.onChoose(saved,true);assert.equal(render(Shell).props.startMode,'resume');storage.clear();
  });
  console.log(`${checks} checks; 0 failures`);
 }finally{for(const[k,v]of original)if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];project.cleanup();}

@@ -15,9 +15,10 @@ export default function GameShell({apiUrl='/api/game'}:{apiUrl?:string}){
     const [launch,setLaunch]=useState<{mode:StartMode;room:string;characterId?:string;characterName?:string;appearance?:Appearance}|null>(null),[tutorialRun,setTutorialRun]=useState(0);
     const [pending,setPending]=useState<{mode:StartMode;room:string;tutorial:boolean;error?:string}|null>(null);
     const savedRoom=useSyncExternalStore(subscribeSession,sessionRoom,serverRoom);
-    if(pending)return <CharacterMenu mode={pending.mode} initialError={pending.error} onBack={()=>setPending(null)} onChoose={hero=>{
-        if(pending.mode==='resume'&&!characterSession(hero.id))return;
-        setTutorialRun(pending.tutorial?1:0);setLaunch({mode:pending.mode,room:pending.room,characterId:hero.id,characterName:hero.name,appearance:hero.appearance});setPending(null);
+    if(pending)return <CharacterMenu mode={pending.mode} initialError={pending.error} onBack={()=>setPending(null)} onChoose={(hero,newWorld)=>{
+        const mode=pending.mode==='resume'&&newWorld&&!characterSession(hero.id)?'create':pending.mode;
+        if(mode==='resume'&&!characterSession(hero.id))return;
+        setTutorialRun(pending.tutorial?1:0);setLaunch({mode,room:mode===pending.mode?pending.room:'',characterId:hero.id,characterName:hero.name,appearance:hero.appearance});setPending(null);
     }}/>;
     if(!launch)return <MainMenu savedRoom={savedRoom} onStart={(mode,room='',tutorial=false)=>{
         let error;try{importLegacyCharacter();}catch{error='此设备暂时无法保存角色。';}
