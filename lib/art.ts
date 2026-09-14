@@ -6,6 +6,7 @@ import {creatureLayouts} from './creature-layout';
 import {toolFrames,toolAnchors,toolBodyHeights,baseAnchorX,heroLayouts} from './frame-layout';
 import {workHeroLayouts} from './new-hero-layout';
 import type {IngredientId,DishId} from './cooking';
+import {FOOD_SHEETS,FOOD_ICON_SIZE,foodCellRect,foodDetailSize,type FoodSheet} from './food-art-layout';
 Object.assign(heroLayouts,workHeroLayouts);
 export type Direction='down'|'up'|'right';
 export type HeroAction='harvest'|'pickup'|'eat'|'fish'|'cook'|'sleep'|'idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
@@ -104,6 +105,26 @@ function bounds(c:HTMLCanvasElement){
     return {x0,y0,x1,y1};
 }
 function cropped(c:HTMLCanvasElement){const b=bounds(c),out=canvas(b.x1-b.x0+1,b.y1-b.y0+1);out.getContext('2d')!.drawImage(c,b.x0,b.y0,out.width,out.height,0,0,out.width,out.height);return out;}
+async function foodSheet(layout:FoodSheet){
+    const image=await load('/art/'+layout.file);
+    if(image.width!==layout.size[0]||image.height!==layout.size[1])throw Error('食物素材尺寸不匹配');
+    return layout.ids.map((id,index)=>{
+        const [x,y,width,height]=foodCellRect(layout,index),cell=canvas(width,height),ctx=cell.getContext('2d')!;
+        ctx.drawImage(image,x,y,width,height,0,0,width,height);
+        // Keep the generated PNG alpha untouched on disk. In the game buffer,
+        // snap its faint edge pixels to the same solid pixel grid as the icon.
+        const pixels=ctx.getImageData(0,0,width,height);
+        for(let i=3;i<pixels.data.length;i+=4)pixels.data[i]=pixels.data[i]>=128?255:0;
+        ctx.putImageData(pixels,0,0);cleanFragments(cell);
+        const box=bounds(cell);
+        if(box.x1<box.x0||box.y1<box.y0)throw Error('食物素材为空：'+id);
+        const source=cropped(cell),out=canvas(FOOD_ICON_SIZE,FOOD_ICON_SIZE),target=out.getContext('2d')!;
+        const scale=foodDetailSize(id)/Math.max(source.width,source.height),w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale));
+        target.imageSmoothingEnabled=false;
+        target.drawImage(source,Math.floor((FOOD_ICON_SIZE-w)/2),Math.floor((FOOD_ICON_SIZE-h)/2),w,h);
+        return out;
+    });
+}
 async function sheet(file:string,cols:number,rows:number,kind:'texture'|'prop'|'hero'|'slime'|'effect'){
     const img=await load('/art/'+file),cells:HTMLCanvasElement[]=[];
     const layout=heroLayouts[file],tool=layout?undefined:file.match(/^hero-(axe|pick|sword)/)?.[1] as keyof typeof toolFrames|undefined;
@@ -224,6 +245,8 @@ async function loadAll():Promise<Atlas>{
     assign(['hammer','hoe','water','seed-bag','stairs','stairs-down','ascend','descend','planter','fence','lantern','sign','carrot-seed','tomato-seed','wheat-seed','water-drop'],home);
     const farmCells=farmLayout.frames.map(([x,y,w,h])=>{const c=canvas(w,h);c.getContext('2d')!.drawImage(farm,x,y,w,h,0,0,w,h);transparentMatte(c,!!ART_REVISIONS['farm-growth.png']);return c;});
     assign(['carrot','tomato','wheat'],farmCells.slice(12,15).map(cropped));
+    const food=await loadAssetBatches(FOOD_SHEETS.map(layout=>()=>foodSheet(layout)));
+    FOOD_SHEETS.forEach((layout,index)=>assign([...layout.ids],food[index]));
     for(const [row,crop]of(['carrot','tomato','wheat'] as const).entries()){
         const scale=farmLayout.rowScales[row];
         for(let f=0;f<4;f++){const i=row*4+f,c=farmCells[i],[ax,ay]=farmLayout.anchors[i],out=detailCanvas(CROP_SIZE.width,CROP_SIZE.height),ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(c,Math.round(CROP_SIZE.anchorX-ax*scale),Math.round(CROP_SIZE.anchorY-ay*scale),c.width*scale,c.height*scale);art[`crop-${crop}-${f}`]=out;}

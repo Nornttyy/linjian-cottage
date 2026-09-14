@@ -1,3 +1,5 @@
+import {FOOD_SHEETS} from './food-art-layout';
+
 export const ART_FILES = [
     'surfaces-final.png','objects-final.png','icons-final.png','hero-walk-v2.png','hero-walk.png','hero-motion.png',
     'hero-axe-v3.png','hero-pick-v3.png','hero-sword-v3.png','slime.png','cave-entrance.png','hero-hurt-directions.png',
@@ -5,7 +7,8 @@ export const ART_FILES = [
     'bat.png','boar.png','mushroom.png','hero-hammer.png','hero-hoe.png','hero-water.png','hero-plant.png','mine-exit.png',
     'boar-directions.png','mushroom-directions.png','activity-items.png','hero-harvest.png','hero-pickup.png','hero-eat.png',
     'hero-fish.png','hero-cook.png','hero-sleep.png','hero-roll.png','bed-horizontal.png',
-    'landscape-terrain-v3.png','landscape-props-v3.png','landscape-landmarks-v3.png'
+    'landscape-terrain-v3.png','landscape-props-v3.png','landscape-landmarks-v3.png',
+    ...FOOD_SHEETS.map(sheet=>sheet.file)
 ] as const;
 export const ART_LOAD_BATCH_SIZE=4;
 export const ART_IMAGE_TIMEOUT_MS=120000;
