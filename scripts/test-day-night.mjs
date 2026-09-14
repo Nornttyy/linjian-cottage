@@ -68,9 +68,15 @@ try{
             assert.deepEqual(sample(world.MINE.spawn,dayOrigin),sample(world.MINE.spawn,nightOrigin),'mine canvas output changed with the surface clock');
             const day=sample(world.SPAWN,dayOrigin),night=sample(world.SPAWN,nightOrigin);
             assert.notDeepEqual(day,night,'surface canvas output ignored the clock');
-            assert(layerLogs.flat().some(row=>row[0]==='fill'&&row[1]==='#142342'&&row[2]>=.6),'night must substantially darken unlit ground');
+            assert(layerLogs.flat().some(row=>row[0]==='fill'&&row[1]==='#080e20'&&row[2]>=.85),'night must substantially darken unlit ground');
             assert(night.filter(row=>row[0]==='fill'&&['#efbb72','#fff0cd'].includes(row[1])).every(row=>row[2]===0),'sunlit warm grading must stop at night');
             assert(layerLogs.flat().some(row=>row[0]==='draw'&&row[3]==='destination-out'),'night light mask must keep illuminated areas readable');
+            for(const origin of [world.SPAWN,world.MINE.spawn]){
+                const masks=position=>{for(const log of layerLogs)log.length=0;lighting.atmosphere(makeContext(),state,position,art,ORIGIN,800,450,400-origin.x*24,225-origin.y*24);return layerLogs.flat().filter(row=>row[0]==='draw'&&row[3]==='destination-out');};
+                const fixed=masks(origin);assert(fixed.length>0,'fixed lamps must still light their surroundings');
+                assert.deepEqual(masks({...origin,x:origin.x+3,y:origin.y+2}),fixed,'light masks must not follow a moving player');
+            }
+
         }finally{if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;}
     });
     test('renderer grades the world before drawing build guidance and event feedback',()=>{

@@ -72,13 +72,13 @@ try{
         click(tree.find(node=>node.props['aria-label']==='选择烤鱼配方'));tree=render(properties);
         assert.equal(filled(tree).length,1);assert.equal(calls.length,0);assert.equal(f.p.inventory.fish,6);
     });
-    await test('queued, cancelled and successful cooking keep the recipe without sending twice',()=>{
+    await test('queued and cancelled cooking keep ingredients, successful cooking clears them without another click',()=>{
         host.clear();const f=fixture(),calls=[],properties={...props(f),onCook:(...args)=>{calls.push(args);return true;}};let tree=render(properties);
         click(add(tree,'fish'));tree=render(properties);click(find(tree,'cook-submit'));
         tree=render({...properties,busy:true});assert.equal(filled(tree).length,1,'queueing is not server completion');
         tree=render({...properties,busy:false});assert.equal(filled(tree).length,1,'cancel/rejection should allow retry with selected materials');
         f.p.cookingResult={id:'new-success',dish:'roastFish',quantity:1,time:90000};
-        f.p.inventory.fish=0;tree=render(properties);assert.equal(filled(tree).length,1);assert(text(find(tree,'kitchen-footer')).includes('烤鱼 ×1 已放入背包'));assert(find(tree,'cook-submit').props.disabled);assert.equal(calls.length,1);
+        f.p.inventory.fish=0;tree=render(properties);assert.equal(filled(tree).length,0);assert(text(find(tree,'kitchen-footer')).includes('烤鱼 ×1 已放入背包'));assert(find(tree,'cook-submit').props.disabled);assert.equal(calls.length,1);click(add(tree,'salmon'));tree=render(properties);assert.equal(filled(tree).length,1,'a fresh selection must survive unchanged result updates');
     });
     await test('completion notices use result identity, independent of device/server clock skew',()=>{
         for(const shift of [-3600000,3600000]){

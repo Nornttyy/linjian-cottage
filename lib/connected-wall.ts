@@ -13,6 +13,13 @@ export function floorWallInsets(buildings:Walls,x:number,y:number,level=0){
     const has=(dx:number,dy:number)=>!!atLevel(buildings,x+dx,y+dy,'floor',level);
     return{left:!has(-1,0)&&has(1,0)?9:0,right:has(-1,0)&&!has(1,0)?9:0,top:!has(0,-1)&&has(0,1)?9:0,bottom:has(0,-1)&&!has(0,1)?9:0};
 }
+// Reuse only the existing wooden frame and glass. Its old plaster backing
+// must not cover the shared wall-face / wall-cap materials.
+function drawWindowPane(ctx:CanvasRenderingContext2D,art:Atlas,x:number,y:number,vertical=false){
+    const pane=art.window;
+    ctx.drawImage(pane,Math.round(pane.width*.33),Math.round(pane.height*.30),Math.round(pane.width*.34),Math.round(pane.height*.40),
+        x+(vertical?10:6),y-2,vertical?4:12,14);
+}
 // The same narrow footprint drives drawing and collision. Only exterior
 // boundaries receive outlines: adjoining cells share uninterrupted wood.
 function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls,b:Building,ox:number,oy:number,rules:number){
@@ -36,10 +43,10 @@ function drawWallUncached(ctx:CanvasRenderingContext2D,art:Atlas,buildings:Walls
     for(let py=0;py<24;py++)for(let px=0;px<24;px++)if(occupied(px,py)&&!occupied(px,py-1))ctx.fillRect(x+px,y+py-height,1,1);
     ctx.fillStyle='#a47041';
     for(let py=0;py<24;py++)for(let px=0;px<24;px++)if(occupied(px,py)&&!occupied(px+1,py))ctx.fillRect(x+px,y+py-height,1,1);
-    if(b.kind==='window'||b.kind==='door'){
-        const img=art[b.kind==='door'?(b.open?'door-open':'door'):'window'];
+    if(b.kind==='window')drawWindowPane(ctx,art,x,y,shape.vertical);
+    if(b.kind==='door'){
+        const img=art[b.open?'door-open':'door'];
         if(!shape.vertical)ctx.drawImage(img,x+2,y-13,20,29);
-        else if(b.kind==='window')ctx.drawImage(img,x+10,y-9,4,19);
         else if(!b.open)ctx.drawImage(img,x+10,y-10,4,24);
         else{ctx.save();ctx.translate(x+12,y-15);ctx.rotate(Math.PI/2);ctx.drawImage(art['wall-cap'],0,0,14,4);ctx.restore();}
     }
@@ -74,7 +81,7 @@ export function connectedWallLayers(art:Atlas,buildings:Walls,b:Building,rules=1
     let facade:Uint8ClampedArray|undefined;
     if(!shape.vertical&&(b.kind==='door'||b.kind==='window')){
         const mask=document.createElement('canvas');mask.width=sourceWidth;mask.height=sourceHeight;const ctx=mask.getContext('2d',{willReadFrequently:true})!;ctx.imageSmoothingEnabled=false;ctx.scale(ART_DENSITY,ART_DENSITY);
-        ctx.drawImage(art[b.kind==='door'?(b.open?'door-open':'door'):'window'],10,19,20,29);facade=ctx.getImageData(0,0,sourceWidth,sourceHeight).data;
+        if(b.kind==='window')drawWindowPane(ctx,art,8,32);else ctx.drawImage(art[b.open?'door-open':'door'],10,19,20,29);facade=ctx.getImageData(0,0,sourceWidth,sourceHeight).data;
     }
     const groups=new Map<number,{indices:number[];left:number;top:number;right:number;bottom:number}>();
     for(let sy=0;sy<sourceHeight;sy++)for(let sx=0;sx<sourceWidth;sx++){

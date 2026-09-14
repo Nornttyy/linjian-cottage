@@ -43,7 +43,7 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
         light.fillStyle='#747b963b';light.fillRect(0,0,w,h);
         light.globalCompositeOperation='destination-out';
         const clear=softLight('#000000ed');
-        for(const l of [{x:pos.x,y:pos.y,r:180},...lights]){
+        for(const l of lights){
             const x=l.x*24+ox,y=l.y*24+oy;
             if(x<-l.r||x>w+l.r||y<-l.r||y>h+l.r)continue;
             light.drawImage(clear,x-l.r,y-l.r,l.r*2,l.r*2);
@@ -69,10 +69,10 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
             if(lightLayer.width!==w)lightLayer.width=w;if(lightLayer.height!==h)lightLayer.height=h;
             const light=lightLayer.getContext('2d')!;
             light.clearRect(0,0,w,h);light.globalCompositeOperation='source-over';
-            light.fillStyle='#142342';light.globalAlpha=.64*clock.night;light.fillRect(0,0,w,h);
+            light.fillStyle='#080e20';light.globalAlpha=.88*clock.night;light.fillRect(0,0,w,h);
             light.globalCompositeOperation='destination-out';light.globalAlpha=1;
-            // A little moonlight keeps the player readable; fires light a wider area.
-            for(const l of [{x:pos.x,y:pos.y,r:78},...lights.map(l=>({...l,r:l.r*1.7}))]){
+            // Only fixed fixtures cut through the night; no light follows the player.
+            for(const l of lights.map(l=>({...l,r:l.r*1.7}))){
                 const x=l.x*24+ox,y=l.y*24+oy;
                 if(x<-l.r||x>w+l.r||y<-l.r||y>h+l.r)continue;
                 light.drawImage(softLight('#000000bd'),x-l.r,y-l.r,l.r*2,l.r*2);

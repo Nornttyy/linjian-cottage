@@ -1,3 +1,4 @@
+import {drawConnectedWall} from './connected-wall';
 import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
 import {ART_REVISIONS} from './art-sources';
 import {farmLayout} from './farm-layout';
@@ -298,6 +299,11 @@ async function loadAll():Promise<Atlas>{
 }
 export function paintIcon(ctx:CanvasRenderingContext2D,name:string,art:Atlas|undefined,size:number){
     ctx.clearRect(0,0,size,size);ctx.imageSmoothingEnabled=false;
+    if(art&&(name==='wall'||name==='window'||name==='build')){
+        const kind=name==='window'?'window':'wall',b={id:'0:0:wall',kind,x:0,y:0} as const,scale=Math.min(1,(size-4)/25);
+        ctx.save();ctx.translate(Math.floor((size-24*scale)/2),Math.floor((size-25*scale)/2)+10*scale);ctx.scale(scale,scale);
+        drawConnectedWall(ctx,art,{[b.id]:b},b,0,0);ctx.restore();return;
+    }
     const key=({build:'wall',stone:'stone-icon',copper:'copper-icon'} as Record<string,Sprite>)[name]||name as Sprite;
     const sprite=art?.[key];if(!sprite)return;
     const scale=Math.min((size-4)/sprite.width,(size-4)/sprite.height);

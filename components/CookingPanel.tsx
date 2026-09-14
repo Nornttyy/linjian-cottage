@@ -10,7 +10,8 @@ import Icon from './ItemIcon';
 type Props={player:Player;buildings?:WorldState['buildings'];busy:boolean;supported:boolean;connected:boolean;onClose:()=>void;onCook:(method:CookMethod,ingredients:IngredientId[])=>boolean;onPantry:(offer:PantryOffer)=>boolean};
 export default function CookingPanel({player,buildings,busy,supported,connected,onClose,onCook,onPantry}:Props){
     const [method,setMethod]=useState<CookMethod>('roast'),[ingredients,setIngredients]=useState<IngredientId[]>([]),[tab,setTab]=useState<'cook'|'recipes'|'pantry'>('cook');
-    const [previousResult]=useState(player.cookingResult?.id);
+    const [previousResult]=useState(player.cookingResult?.id),[clearedResult,setClearedResult]=useState(player.cookingResult?.id);
+    if(player.cookingResult&&player.cookingResult.id!==clearedResult){setClearedResult(player.cookingResult.id);setIngredients([]);}
     const inventory=player.inventory,counts=ingredientCounts(ingredients),recipe=resolveRecipe(method,ingredients),selection=validateSelection(ingredients,inventory);
     const near=nearCampfire(player,buildings),disabled=busy||!connected||!near||!supported;
     const result=player.cookingResult&&player.cookingResult.id!==previousResult?player.cookingResult:null;

@@ -1,5 +1,4 @@
 "use client";
-import CharacterMenu from './CharacterMenu';
 import {artFilename} from '@/lib/art-sources';
 import {useState} from 'react';
 export type StartMode='resume'|'create'|'join'|'local';
@@ -8,9 +7,8 @@ export default function MainMenu({savedRoom,onStart}:{savedRoom:string|null;onSt
     return <main className="main-menu"><div className="menu-landscape" aria-hidden="true" style={{backgroundImage:'url(./art/'+artFilename('main-menu-v1.png')+')'}}/>
         <section className="main-menu-panel" aria-labelledby="menu-title">
             <h1 id="menu-title">林间小筑</h1><p className="menu-intro">采集 · 建造 · 和朋友一起生活</p>
-            <CharacterMenu/>
             <div className="main-menu-actions">
-                <button className={savedRoom?'menu-primary':undefined} disabled={!savedRoom} onClick={()=>onStart('resume')}>继续游戏{savedRoom&&<small>{savedRoom}</small>}</button>
+                <button className={savedRoom?'menu-primary':undefined} disabled={!savedRoom} onClick={()=>onStart('resume')}>继续游戏</button>
                 <button className={!savedRoom?'menu-primary':undefined} onClick={()=>onStart('create')}>新世界</button>
                 <button onClick={()=>onStart('local')}>本机世界</button>
                 <button aria-expanded={joining} aria-controls="menu-join" onClick={()=>setJoining(value=>!value)}>加入房间</button>

@@ -51,3 +51,10 @@ export function renameCharacter(id:string,name:string){
     const clean=name.trim().slice(0,16);if(!clean)throw Error('请填写角色名字');
     const list=readCharacters(characterSnapshot()),hero=list.characters.find(p=>p.id===id);if(!hero)throw Error('角色不存在');hero.name=clean;saveList(list);
 }
+
+export function continuableSession(){
+    const list=readCharacters(characterSnapshot());
+    const selected=list.active?characterSession(list.active):null;if(selected)return selected;
+    for(const hero of list.characters){const session=characterSession(hero.id);if(session)return session;}
+    return list.characters.length?null:characterSession();
+}
