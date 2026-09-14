@@ -1,5 +1,5 @@
 import type {Inventory} from './simulation';
-import {INGREDIENTS,DISHES,foodHeal} from './cooking';
+import {INGREDIENTS,DISHES,mealRecovery,type CookingOwner} from './cooking';
 export const HOTBAR_SIZE=9;
 export const BACKPACK_PAGE_SIZE=27;
 export const BACKPACK_SIZE=BACKPACK_PAGE_SIZE*3;
@@ -46,10 +46,10 @@ export function itemCount(item:ItemSlot,inventory?:Inventory){
     return item&&ITEMS[item].kind==='resource'?inventory?.[item as keyof Inventory]??0:item?1:0;
 }
 export function visibleItem(item:ItemSlot,inventory?:Inventory):ItemSlot{return itemCount(item,inventory)>0?item:null;}
-export function itemDescription(item:ItemSlot){
+export function itemDescription(item:ItemSlot,owner?:CookingOwner){
     if(!item)return '';
-    const recovery=foodHeal(item);
-    if(recovery)return `${ITEMS[item].name} · 生命+${recovery.hp} 体力+${recovery.stamina}`;
+    const recovery=mealRecovery(owner,item);
+    if(recovery)return `${ITEMS[item].name} · 生命+${recovery.hp} 体力+${recovery.stamina}${owner?.meals&&Object.hasOwn(owner.meals,item)?' · 按制作顺序食用':''}`;
     if(Object.hasOwn(INGREDIENTS,item))return `${ITEMS[item].name} · 营火旁烹饪`;
     return item==='rod'?'鱼竿 · 点击水面，咬钩后提竿':item==='essence'?'精华 · 回复30生命':item==='hammer'?'建造锤':ITEMS[item].name;
 }

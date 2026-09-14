@@ -69,7 +69,7 @@ export function pickResource(point: {
     y: number;
 }, s: WorldState, p: Position): Resource | undefined {
     if(floorLevel(p)>0)return undefined;
-    return resourcesInRect(p.x-9,p.y-9,p.x+9,p.y+9).filter(r => !s.depleted[r.id] && Math.abs(r.x - p.x) < 9 && Math.abs(r.y - p.y) < 9 && point.x >= r.x - .6 && point.x <= r.x + 1.6 && point.y >= r.y - (r.kind === 'tree' || r.kind === 'pine' ? 2 : 0) && point.y <= r.y + 1.1).sort((a, b) => b.y - a.y)[0];
+    return resourcesInRect(p.x-9,p.y-9,p.x+9,p.y+9).filter(r => (!s.depleted[r.id]||((r.kind==='tree'||r.kind==='pine')&&!s.removedStumps?.[r.id])) && Math.abs(r.x - p.x) < 9 && Math.abs(r.y - p.y) < 9 && point.x >= r.x - .6 && point.x <= r.x + 1.6 && point.y >= r.y - (!s.depleted[r.id]&&(r.kind === 'tree' || r.kind === 'pine') ? 2 : 0) && point.y <= r.y + 1.1).sort((a, b) => b.y - a.y)[0];
 }
 function roofGroup(s:WorldState,p:Position){return floorGroup(s.buildings,p.x,p.y,floorLevel(p));}
 type SlimeDrawPosition={x:number;y:number;fromX:number;fromY:number;toX:number;toY:number;started:number;duration:number;tick:number;lastDraw:number;dead:boolean;phase:string};
@@ -185,12 +185,13 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                     if(!atLevel(s.buildings,b.x,b.y,'floor',lower+1))below.push({y:b.y+.95+shift/TILE,draw:()=>material(ctx,art.roof,b.x,b.y,...roofRect(b.x,b.y,ox,oy+shift))});
                 }else if(layer(b.kind)==='wall')queueWall(below,b,shift,false);
                 else if(b.kind==='fence')queueFence(below,b,shift,false);
+                else if(b.kind==='campfire')below.push({y:b.y+.5+shift/TILE,draw:()=>ctx.drawImage(art[`fire${Math.floor(t/FIRE_FRAME_MS)%FIRE_FRAME_COUNT}`],px+12-FIRE_SIZE.anchorX,py+12-FIRE_SIZE.anchorY,FIRE_SIZE.width,FIRE_SIZE.height)});
                 else below.push({y:b.y+.9+shift/TILE,draw:()=>{const bed=b.kind==='bed',size=bed?40:b.kind==='stairs'?30:24,height=bed?24:size;ctx.drawImage(art[b.kind as Sprite],px+(24-size)/2,py+24-height,size,height);}});
             }
             if(lower===0){
                 for(const r of resourcesInRect(minX-4,minY-level-4,maxX+4,maxY+3)){
                     if(!visible(r.x,r.y))continue;
-                    if(s.depleted[r.id]){if(r.kind==='tree'||r.kind==='pine')sprite('stump',r.x+.5,r.y+1+level,14,12);continue;}
+                    if(s.depleted[r.id]){if((r.kind==='tree'||r.kind==='pine')&&!s.removedStumps?.[r.id])sprite('stump',r.x+.5,r.y+1+level,14,12);continue;}
                     const tree=r.kind==='tree'||r.kind==='pine';
                     below.push({y:r.y+.8+level,draw:()=>sprite(resourceSprite(r),r.x+.5,r.y+1+level,tree?43:r.kind==='berry'?24:25,tree?58:r.kind==='berry'?21:24)});
                 }
@@ -226,7 +227,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         if (!visible(r.x, r.y))
             continue;
         if (s.depleted[r.id]) {
-            if (r.kind === 'tree' || r.kind === 'pine')
+            if ((r.kind === 'tree' || r.kind === 'pine')&&!s.removedStumps?.[r.id])
                 sprite('stump', r.x + .5, r.y + 1, 14, 12);
             continue;
         }
@@ -237,6 +238,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             continue;
         if(layer(b.kind)==='wall'){queueWall(drawables,b);continue;}
         if(b.kind==='fence'){queueFence(drawables,b);continue;}
+        if(b.kind==='campfire'){drawables.push({y:b.y+.5,draw:()=>ctx.drawImage(art[`fire${Math.floor(t/FIRE_FRAME_MS)%FIRE_FRAME_COUNT}`],(b.x+.5)*TILE+ox-FIRE_SIZE.anchorX,(b.y+.5)*TILE+oy-FIRE_SIZE.anchorY,FIRE_SIZE.width,FIRE_SIZE.height)});continue;}
         drawables.push({ y: b.y + .9, draw: () => {
                 const fade = b.y > pos.y - .3 && b.y < pos.y + 1.2 && Math.abs(b.x + .5 - pos.x) < 1.05;
                 ctx.save();ctx.globalAlpha=fade?.42:1;
@@ -309,7 +311,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         }
         drawables.push({ y: point.y+(work?.action==='sleep'&&t<work.until ? .2 : 0), draw: () => {
                 const moving=local?pos.moving:(p.movingUntil??0)>s.tick,swing=local?view.localSwing:undefined;
-                const face=work&&t<work.until?work.face:heroFacing(p,local?pos.face:p.face,t,swing);
+                const face=fishingFrame(p.fishing,p.swingFace??p.face,t)?p.swingFace??p.face:work&&t<work.until?work.face:heroFacing(p,local?pos.face:p.face,t,swing);
                 const frame=fishingFrame(p.fishing,p.swingFace??face,t)??(work?workFrame(work,t):null)??heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
                 const trail=fishingActive(p.fishing)||work&&t<work.until?null:toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
                 const drawTrail=()=>{if(!trail||!art[trail])return;const size=trail.startsWith('trail-sword')?56:44;

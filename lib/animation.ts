@@ -1,7 +1,7 @@
 import {CREATURES} from './creatures';
 import {frameKey,HERO_FRAME_COUNT,HERO_IDLE_FRAME_COUNT,type Sprite,type Direction} from './art';
 import {TOOL_TIMING,type Player,type Mob,type Tool,type CombatTool,type WorkAction,WORK_TIMING} from './simulation';
-import type {FishingState} from './fishing';
+import {FISHING_CAST_MS,type FishingState} from './fishing';
 export type HeroSwing={tool:CombatTool;face:Player['face'];start:number;until:number};
 
 export function swingFrame(action:CombatTool,elapsed:number){
@@ -50,9 +50,13 @@ export type WorkSwing={action:WorkAction;face:Player['face'];start:number;until:
 export function fishingFrame(fishing:FishingState|undefined,face:Player['face'],time:number):Sprite|null{
     if(!fishing||time<fishing.startedAt)return null;
     const finished=fishing.phase==='caught'||fishing.phase==='escaped';
-    if(finished&&time-(fishing.finishedAt??0)>300)return null;
+    const age=time-(fishing.finishedAt??time);
+    if(finished&&(age<0||age>=400||['hurt','moved','disconnected'].includes(fishing.reason??'')))return null;
     const direction=face==='left'?'right':face;
-    const frame=finished?7:time<fishing.castUntil?Math.min(3,Math.floor((time-fishing.startedAt)/550*4)):fishing.phase==='reeling'?4+Math.floor((time-(fishing.reelStartedAt??time))/150)%3:fishing.phase==='bite'?4:3;
+    // Hold the cast pose throughout the minigame. Frames 5–6 lift the rod
+    // out of the water and belong only to the single finishing motion.
+    const frame=finished?(fishing.phase==='caught'&&age<220?6:7):
+        time<fishing.castUntil?Math.min(3,Math.floor((time-fishing.startedAt)/FISHING_CAST_MS*4)):3;
     return `fish-${direction}-${frame}` as Sprite;
 }
 export function workFrame(work:WorkSwing,time:number):Sprite|null{

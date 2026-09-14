@@ -161,37 +161,77 @@ export const RECIPES: readonly CookingRecipe[] = [
     recipe('largeSweetShrimpSashimi', ...sashimiVariants('largeSweetShrimp')),
 ];
 
-function matches(counts: IngredientCounts, groups: readonly RecipeGroup[]): boolean {
-    for (const ingredient of Object.keys(counts) as IngredientId[]) {
-        if (!groups.some(entry => entry.ingredients.includes(ingredient))) return false;
-    }
-    return groups.every(entry => {
-        const count = entry.ingredients.reduce((sum, ingredient) => sum + (counts[ingredient] ?? 0), 0);
-        return count >= entry.min && count <= entry.max;
-    });
-}
 export type ResolvedRecipe = FoodRecovery & {
-    id: DishId;
-    output: DishId;
-    method: CookMethod;
-    ingredients: IngredientId[];
-    counts: IngredientCounts;
-    quantity: number;
+    id: DishId; output: DishId; method: CookMethod; ingredients: IngredientId[];
+    counts: IngredientCounts; quantity: number; key:string;
 };
-
+// Main ingredients determine the dish; every other edible ingredient is a garnish.
+// There is no exact recipe or unlock requirement for cooking.
 export function resolveRecipe(method: unknown, ingredients: unknown): ResolvedRecipe | null {
     if (!isCookMethod(method)) return null;
-    const selection = validateSelection(ingredients);
-    if (!selection.ok) return null;
-    for (const entry of RECIPES) {
-        if (entry.method !== method) continue;
-        const chosen = entry.variants.find(option => matches(selection.counts, option.groups));
-        if (chosen) {
-            const dish = DISHES[entry.id];
-            return { id: entry.id, output: entry.id, method, ingredients: selection.ingredients, counts: selection.counts, hp: dish.hp, stamina: dish.stamina, quantity: chosen.quantity };
-        }
+    const selection=validateSelection(ingredients);if(!selection.ok)return null;
+    const {counts}=selection,n=(id:IngredientId)=>counts[id]??0;
+    const total=(ids:readonly IngredientId[])=>ids.reduce((sum,id)=>sum+n(id),0);
+    const dominant=(ids:readonly IngredientId[])=>[...ids].filter(id=>n(id)>0).sort((a,b)=>n(b)-n(a)||INGREDIENT_IDS.indexOf(a)-INGREDIENT_IDS.indexOf(b))[0];
+    const protein=dominant(['wagyu',...fish,...shrimp,'seaUrchin','egg']);
+    let output:DishId|undefined,quantity=1;
+    if(method==='roast')output=protein==='wagyu'?'roastWagyu':protein&&shrimp.includes(protein)?'roastShrimp':protein&&fish.includes(protein)?'roastFish':total(vegetables)?'roastVegetables':undefined;
+    if(method==='panFry')output=n('rice')?'friedRice':protein==='wagyu'?'panFriedWagyu':protein&&fish.includes(protein)?'panFriedFish':n('egg')?'tamagoyaki':undefined;
+    if(method==='deepFry')output=protein&&fish.includes(protein)?'friedFish':protein&&shrimp.includes(protein)?'friedShrimp':n('carrot')&&(!n('tomato')||n('carrot')>=2)?'carrotFritter':total(vegetables)?'vegetableTempura':undefined;
+    if(method==='bake')output=n('carrot')&&n('wheat')?'carrotCake':n('wheat')&&n('milk')&&(n('egg')||n('sugar'))&&n('wheat')<2?'milkCake':n('wheat')?'bread':n('milk')?'milkPudding':undefined;
+    if(method==='sushi'&&n('rice')){
+        output=protein==='wagyu'?'wagyuSushi':protein==='seaUrchin'?'seaUrchinSushi':protein==='egg'?'tamagoyakiSushi':protein&&salmon.includes(protein)?'salmonSushi':protein&&tuna.includes(protein)?'tunaSushi':protein&&shrimp.includes(protein)?'sweetShrimpSushi':undefined;
+        quantity=Math.max(1,Math.min(n('rice'),total([...salmon,...tuna,...shrimp,'wagyu','seaUrchin','egg'])));
     }
-    return null;
+    if(method==='sashimi'){
+        const main=dominant([...salmon,...tuna,...shrimp]);
+        if(main){output=(`${main}Sashimi`) as DishId;quantity=n(main);}
+    }
+    if(!output)return null;
+    const nutrition=selection.ingredients.reduce((sum,id)=>({hp:sum.hp+NUTRITION[id][0],stamina:sum.stamina+NUTRITION[id][1]}),{hp:0,stamina:0});
+    const dish=DISHES[output],key=method+':'+INGREDIENT_IDS.flatMap(id=>n(id)?[id+'='+n(id)]:[]).join(',');
+    return {id:output,output,method,ingredients:[...selection.ingredients],counts,quantity,key,
+        hp:Math.min(100,Math.round(dish.hp*.55+nutrition.hp/quantity*.65)),
+        stamina:Math.min(100,Math.round(dish.stamina*.55+nutrition.stamina/quantity*.65))};
+}
+const NUTRITION:Record<IngredientId,readonly [number,number]>={
+    fish:[14,10],carrot:[10,6],tomato:[8,10],wheat:[4,18],
+    salmon:[16,11],salmonBelly:[23,16],salmonFatty:[31,22],
+    tuna:[19,12],tunaBelly:[27,18],tunaFatty:[36,25],
+    sweetShrimp:[14,13],largeSweetShrimp:[24,21],seaUrchin:[30,18],
+    rice:[3,22],nori:[7,3],egg:[13,12],wagyu:[34,23],oil:[2,8],sugar:[0,14],milk:[12,10],
+};
+export type DiscoveredRecipe={method:CookMethod;ingredients:IngredientId[];discoveredAt:number};
+export type CookedBatch={ingredients:IngredientId[];quantity:number};
+export type CookingJournal={recipes?:Record<string,DiscoveredRecipe>;meals?:Partial<Record<DishId,CookedBatch[]>>};
+export type CookingOwner=CookingJournal&{inventory:Partial<Record<DishId,number>>};
+export function knownRecipes(owner:CookingJournal){
+    return Object.values(owner.recipes??{}).flatMap(entry=>{
+        const result=entry&&resolveRecipe(entry.method,entry.ingredients);return result?[result]:[];
+    });
+}
+export function rememberCooking(owner:CookingOwner,recipe:ResolvedRecipe,now:number){
+    owner.recipes??={};const discovered=!Object.hasOwn(owner.recipes,recipe.key);
+    if(discovered)owner.recipes[recipe.key]={method:recipe.method,ingredients:[...recipe.ingredients],discoveredAt:now};
+    owner.meals??={};const batches=owner.meals[recipe.output]??=[];
+    // Old dishes without batch data retain their original recovery and are eaten first.
+    const last=batches.at(-1);
+    if(last&&resolveRecipe(recipe.method,last.ingredients)?.key===recipe.key)last.quantity+=recipe.quantity;
+    else batches.push({ingredients:[...recipe.ingredients],quantity:recipe.quantity});
+    return discovered;
+}
+export function mealRecovery(owner:CookingOwner|undefined,food:unknown):FoodRecovery|null{
+    if(!owner||!isDish(food))return foodHeal(food);
+    const batches=owner.meals?.[food]??[],tracked=batches.reduce((sum,b)=>sum+b.quantity,0);
+    if((owner.inventory[food]??0)>tracked)return foodHeal(food);
+    const result=batches[0]&&resolveRecipe(DISHES[food].method,batches[0].ingredients);
+    return result?.output===food?{hp:result.hp,stamina:result.stamina}:foodHeal(food);
+}
+export function consumeMeal(owner:CookingOwner,food:unknown){
+    if(!isDish(food))return;
+    const batches=owner.meals?.[food];if(!batches?.length)return;
+    if((owner.inventory[food]??0)>batches.reduce((sum,b)=>sum+b.quantity,0))return;
+    if(--batches[0].quantity<=0)batches.shift();
 }
 
 /** An explicit example for a recipe book/autofill. It never includes optional garnish. */

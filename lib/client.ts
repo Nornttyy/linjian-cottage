@@ -1,4 +1,5 @@
-import {CAMPFIRE,nearCampfire,canCast,type FoodKind} from './activities';
+import {characterSession,saveCharacterSession} from './characters';
+import {campfireNear,nearCampfire,canCast,type FoodKind} from './activities';
 import {foodHeal,resolveRecipe,validateSelection,type IngredientId,type CookMethod} from './cooking';
 import {advanceFishing,hookFishing,setFishingHeld,fishingActive,type FishingState} from './fishing';
 import {applyWorldDelta,type WorldDelta} from './world-delta';
@@ -21,6 +22,7 @@ type ApiReply = {
     networkVersion?:number;
     structureVersion?:1;
     activityVersion?:2;
+    cottageVersion?:2;
     version?:number;
     delta?:WorldDelta;
     serverReceivedAt?:number;
@@ -136,7 +138,7 @@ export class GameClient {
     private lastLocalSaveAt=0;
     private activeSignId:string|null=null;
     private signSave:{command:Command;resolve:(error:string|null)=>void}|null=null;
-    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{},private signToggle:(id:string|null)=>void=()=>{}) {
+    constructor(public canvas: HTMLCanvasElement, private changed: (value: ClientState) => void, private message: (message: string) => void, private mapToggle: () => void, private apiUrl = '/api/game', private inventoryToggle:()=>void=()=>{},private signToggle:(id:string|null)=>void=()=>{},private characterId?:string,private characterName?:string) {
         canvas.addEventListener('pointermove', this.pointerMove);
         canvas.addEventListener('pointerdown', this.pointerDown);
         canvas.addEventListener('contextmenu', this.contextMenu);
@@ -213,14 +215,14 @@ export class GameClient {
     closeCooking(){this.cookingOpen=false;this.notify();}
     cook(method:CookMethod,ingredients:IngredientId[]){
         const p=this.session?this.world.players[this.session.playerId]:undefined;
-        if(!p||!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2)return false;
-        if(!nearCampfire(this.pos)){this.message('到营火旁烹饪');return false;}
+        if(!p||!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2||this.world.cottageVersion!==2)return false;
+        if(!nearCampfire(this.pos,this.world.buildings)){this.message('到营火旁烹饪');return false;}
         const selection=validateSelection(ingredients,p.inventory);if(!selection.ok){this.message(selection.error);return false;}
         if(!resolveRecipe(method,ingredients)){this.message('这些食材不适合这项做法');return false;}
         const accepted=this.startWork('cook',{type:'cook',method,ingredients:[...ingredients]},Date.now());this.notify();return accepted;
     }
     takePantry(offer:string){
-        if(!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2||!nearCampfire(this.pos))return false;
+        if(!this.cookingOpen||this.cookingBusy||this.world.activityVersion!==2||!nearCampfire(this.pos,this.world.buildings))return false;
         const command:Command={type:'pantry',offer};if(!this.command(command))return false;
         this.pantryPending=command;this.notify();return true;
     }
@@ -263,7 +265,7 @@ export class GameClient {
     private localId(){try{return crypto.randomUUID().replaceAll('-','');}catch{return Math.random().toString(36).slice(2)+Date.now().toString(36);}}
     private newLocalReply(now=Date.now()):ApiReply{
         const seed=this.localId().toUpperCase(),room=('LOCAL'+seed).slice(0,8),playerId=this.localId().slice(0,8),token='local-'+this.localId();
-        const state=createWorld(now);state.players[playerId]=createPlayer(playerId,'local','旅人',0,now);
+        const state=createWorld(now);state.players[playerId]=createPlayer(playerId,'local',this.characterName??'旅人',0,now);
         return{room,playerId,token,state};
     }
     private restoredLocalReply(saved:Session,now=Date.now()):ApiReply{
@@ -279,9 +281,9 @@ export class GameClient {
         if(!force&&now-this.lastLocalSaveAt<1000)return this.localSaved;
         this.lastLocalSaveAt=now;
         try{
-            const session=JSON.stringify(this.session),world=JSON.stringify(this.world);
+            const world=JSON.stringify(this.world);
             localStorage.setItem(this.localStorageKey(this.session),world);
-            localStorage.setItem('linjian-session',session);
+            saveCharacterSession(this.session,this.characterId);
             this.localSaved=true;
         }catch{this.localSaved=false;}
         return this.localSaved;
@@ -364,7 +366,7 @@ export class GameClient {
         try {
             let saved: Session | null = this.session;
             try {
-                if(!saved)saved = JSON.parse(localStorage.getItem('linjian-session') || 'null');
+                if(!saved)saved=this.characterId?characterSession(this.characterId):JSON.parse(localStorage.getItem('linjian-session')||'null');
             }
             catch { }
             const valid = !!(saved && typeof saved.token === 'string' && typeof saved.room === 'string' && typeof saved.playerId === 'string');
@@ -375,7 +377,7 @@ export class GameClient {
                 this.localMode=true;result=this.restoredLocalReply(saved!);
             }else{
                 this.localMode=false;
-                const body = mode === 'resume' && valid ? { action: 'sync', ...saved } : mode === 'join' ? { action: 'join', room: room.trim().toUpperCase() } : { action: 'create' };
+                const body = mode === 'resume' && valid ? { action: 'sync', ...saved } : mode === 'join' ? { action: 'join', room: room.trim().toUpperCase(),name:this.characterName } : { action: 'create',name:this.characterName };
                 try{result=await this.request(body);}catch(error){
                     if(mode!=='create'||!this.canAutoFallback(error))throw error;
                     this.localMode=true;result=this.newLocalReply();
@@ -387,10 +389,11 @@ export class GameClient {
             this.world = result.state;
             // Trust the responding server's capability, not a saved world's
             // migration marker (which could survive a server rollback).
-            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined};
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined,cottageVersion:this.localMode||result.cottageVersion===2?2:undefined};
             this.worldVersion=result.version;
 
             const p = this.world.players[this.session.playerId];
+            if(this.localMode&&this.characterName)p.name=this.characterName;
             this.pos = { x: p.x, y: p.y,level:floorLevel(p), face: p.face, moving: false };
             this.seq = p.seq;
             this.loadLayout();
@@ -398,7 +401,7 @@ export class GameClient {
             if(this.localMode){
                 this.networkVersion=2;this.serverOffset=0;this.bestNetworkRtt=Infinity;this.clockSampleAt=0;
                 const saved=this.saveLocalWorld(true);this.message(saved?(mode==='local'?'已进入本机世界':'多人服务器不可用，已进入本机世界'):'已进入本机世界，但此设备无法保存');
-            }else try{localStorage.setItem('linjian-session', JSON.stringify(this.session));}catch{}
+            }else try{saveCharacterSession(this.session,this.characterId);}catch{}
             this.connectionIntent={mode:'resume',room:''};
             this.notify();void this.prepareScene();
             this.timer = setTimeout(() => this.sync(), 160);
@@ -443,7 +446,7 @@ export class GameClient {
                 return;
             if(result.delta && result.delta.base!==this.worldVersion){this.worldVersion=undefined;throw new Error('正在重新同步');}
             this.world = result.state ?? applyWorldDelta(this.world,result.delta!);
-            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined};
+            this.world={...this.world,structureVersion:this.localMode||result.structureVersion===1?1:undefined,activityVersion:this.localMode||result.activityVersion===2?2:undefined,cottageVersion:this.localMode||result.cottageVersion===2?2:undefined};
             this.worldVersion=result.version;
             if(this.signSave&&submitted?.commands.includes(this.signSave.command)){
                 const save=this.signSave;this.signSave=null;
@@ -562,7 +565,7 @@ export class GameClient {
     quickMoveSlot(from:number){this.releaseHeld();this.slots=quickTransfer(this.slots,from);this.applySlot();this.saveLayout();this.notify();}
     private equipItem(item:ItemKey){this.syncSlots();const index=this.slots.indexOf(item);if(index>=0&&index<HOTBAR_SIZE)this.selectSlot(index);else if(index>=0){this.moveSlot(index,this.selectedSlot);} }
     setTool(tool:Tool){this.equipItem(tool==='build'?'hammer':tool==='seed'?CROPS[this.crop].seed:tool);}
-    setPart(part:Part){this.part=part;this.equipItem('hammer');this.notify();}
+    setPart(part:Part){if(part==='campfire'&&this.world.cottageVersion!==2){this.message('此房间尚未支持建造篝火，可在本机世界体验');return;}this.part=part;this.equipItem('hammer');this.notify();}
     toggleRemove() {const next=!this.remove;this.setPart(this.part);this.remove=next;this.notify();}
     private releaseHeld(pointerId?:number){
         if(this.heldPointerId!==null&&pointerId!==undefined&&pointerId!==this.heldPointerId)return false;
@@ -642,7 +645,7 @@ export class GameClient {
             if(!clearLine(this.world,this.pos,position)||[-.2,.2].some(dx=>[-.2,.2].some(dy=>isBlocked(this.world,position.x+dx,position.y+dy,position.level)))){this.message('床边需要留出空间');return true;}
             return this.startWork('sleep',{type:'sleep',target:bed.id,face:'up'},now);
         }
-        if(nearCampfire(this.pos)&&(!point||distance(point,CAMPFIRE)<1.2)){
+        if(campfireNear(this.pos,this.world.buildings,point)){
             this.held=false;this.pauseControls();this.cookingOpen=true;this.notify();return true;
         }
         return false;

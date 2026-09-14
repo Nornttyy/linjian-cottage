@@ -11,7 +11,7 @@ Object.assign(heroLayouts,workHeroLayouts);
 export type Direction='down'|'up'|'right';
 export type HeroAction='harvest'|'pickup'|'eat'|'fish'|'cook'|'sleep'|'idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
 type BaseSprite='hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
-export type Sprite=BaseSprite|IngredientId|DishId|'rod'|'fish'|'meal'|'bed'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
+export type Sprite=BaseSprite|IngredientId|DishId|'rod'|'fish'|'meal'|'bed'|'campfire'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
 export const ART_DENSITY=2;
 export const HERO_FRAME_COUNT=8;
@@ -293,6 +293,7 @@ async function loadAll():Promise<Atlas>{
     const c=canvas(entrance.width,entrance.height);c.getContext('2d')!.drawImage(entrance,0,0);transparentMatte(c,!!ART_REVISIONS['cave-entrance.png']);art['cave-entrance']=cropped(c);
     const exit=canvas(mineExit.width,mineExit.height);exit.getContext('2d')!.drawImage(mineExit,0,0);transparentMatte(exit,!!ART_REVISIONS['mine-exit.png']);art['mine-exit']=cropped(exit);
     art.down=art['idle-down-0'];art.up=art['idle-up-0'];art.right=art['idle-right-0'];art.slime=art['slime-idle-0'];art.wildflowers=art.daisies;
+    art.campfire=art.fire0;
     return art;
 }
 export function paintIcon(ctx:CanvasRenderingContext2D,name:string,art:Atlas|undefined,size:number){

@@ -50,7 +50,7 @@ try{
         assert.deepEqual(first,second);assert.equal(clock.formatWorldClock(first),clock.formatWorldClock(second));assert.equal(clock.phaseName(first.phase),'黄昏');
     });
     test('real atmosphere keeps mine lighting independent while surface lighting follows the clock',()=>{
-        const original=Object.getOwnPropertyDescriptor(globalThis,'document');let serial=0;
+        const original=Object.getOwnPropertyDescriptor(globalThis,'document');let serial=0;const layerLogs=[];
         const makeContext=(log=[])=>{const stack=[];return{
             globalAlpha:1,globalCompositeOperation:'source-over',imageSmoothingEnabled:false,fillStyle:'',
             save(){stack.push([this.globalAlpha,this.globalCompositeOperation,this.imageSmoothingEnabled,this.fillStyle]);log.push(['save']);},
@@ -61,12 +61,16 @@ try{
             createRadialGradient(){return{addColorStop(){}};},
         };};
         try{
-            Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:{createElement(){const canvas={width:0,height:0,auditName:`canvas-${++serial}`},context=makeContext();canvas.getContext=()=>context;return canvas;}}});
+            Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:{createElement(){const canvas={width:0,height:0,auditName:`canvas-${++serial}`},layerLog=[],context=makeContext(layerLog);layerLogs.push(layerLog);canvas.getContext=()=>context;return canvas;}}});
             const state=sim.createWorld(ORIGIN),art={spark:{name:'spark'}};
-            const sample=(position,origin)=>{state.dayStartedAt=origin;const log=[],ctx=makeContext(log);lighting.atmosphere(ctx,state,position,art,ORIGIN,800,450,0,0);return log;};
+            const sample=(position,origin)=>{state.dayStartedAt=origin;const log=[],ctx=makeContext(log);lighting.atmosphere(ctx,state,position,art,ORIGIN,800,450,400-position.x*24,225-position.y*24);return log;};
             const dayOrigin=ORIGIN,nightOrigin=ORIGIN-clock.DAY_LENGTH_MS/2;
             assert.deepEqual(sample(world.MINE.spawn,dayOrigin),sample(world.MINE.spawn,nightOrigin),'mine canvas output changed with the surface clock');
-            assert.notDeepEqual(sample(world.SPAWN,dayOrigin),sample(world.SPAWN,nightOrigin),'surface canvas output ignored the clock');
+            const day=sample(world.SPAWN,dayOrigin),night=sample(world.SPAWN,nightOrigin);
+            assert.notDeepEqual(day,night,'surface canvas output ignored the clock');
+            assert(layerLogs.flat().some(row=>row[0]==='fill'&&row[1]==='#142342'&&row[2]>=.6),'night must substantially darken unlit ground');
+            assert(night.filter(row=>row[0]==='fill'&&['#efbb72','#fff0cd'].includes(row[1])).every(row=>row[2]===0),'sunlit warm grading must stop at night');
+            assert(layerLogs.flat().some(row=>row[0]==='draw'&&row[3]==='destination-out'),'night light mask must keep illuminated areas readable');
         }finally{if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;}
     });
     test('renderer grades the world before drawing build guidance and event feedback',()=>{

@@ -1,22 +1,22 @@
 "use client";
 import {useState} from 'react';
-import type {Inventory as Resources} from '@/lib/simulation';
+import type {Inventory as Resources,Player} from '@/lib/simulation';
 import {HOTBAR_SIZE,BACKPACK_PAGE_SIZE,BACKPACK_SIZE,ITEMS,itemCount,itemDescription,visibleItem,type ItemSlot} from '@/lib/inventory';
 import Icon from './ItemIcon';
 
-export default function Inventory({slots,resources,selected,onMove,onQuickMove,onClose}:{
-    slots:ItemSlot[];resources?:Resources;selected:number;
+export default function Inventory({slots,resources,player,selected,onMove,onQuickMove,onClose}:{
+    slots:ItemSlot[];resources?:Resources;player?:Player;selected:number;
     onMove:(from:number,to:number)=>void;onQuickMove:(from:number)=>void;onClose:()=>void;
 }){
     const [picked,setPicked]=useState<number|null>(null),[hovered,setHovered]=useState<number|null>(null);
     const [page,setPage]=useState(0),pages=BACKPACK_SIZE/BACKPACK_PAGE_SIZE;
     const itemAt=(index:number)=>visibleItem(slots[index],resources);
-    const description=itemDescription(itemAt(hovered??picked??selected));
+    const description=itemDescription(itemAt(hovered??picked??selected),player);
     const slot=(index:number)=>{
         const item=itemAt(index),entry=item?ITEMS[item]:null,count=itemCount(item,resources);
         return <button key={index} className={'inventory-slot'+(picked===index?' picked':'')+(index===selected?' active-slot':'')}
             aria-label={(index<HOTBAR_SIZE?'快捷栏 '+(index+1):'背包 '+(index-HOTBAR_SIZE+1))+'：'+(entry?entry.name+(entry.kind==='resource'?' '+count:''):'空')}
-            title={itemDescription(item)} draggable={!!item}
+            title={itemDescription(item,player)} draggable={!!item}
             onMouseEnter={()=>setHovered(index)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setHovered(index)}
             onClick={event=>{if(event.shiftKey&&item){onQuickMove(index);setPicked(null);}else if(picked!==null){if(picked!==index)onMove(picked,index);setPicked(null);}else if(item)setPicked(index);}}
             onKeyDown={event=>{if(/^[1-9]$/.test(event.key)){event.preventDefault();event.stopPropagation();onMove(index,Number(event.key)-1);setPicked(null);}}}

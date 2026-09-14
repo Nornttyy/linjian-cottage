@@ -34,7 +34,7 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
     const underground=sceneAt(pos.x)==='mine';
     const clock=worldClock(s.dayStartedAt??s.created,time);
     const region=terrainAt(Math.floor(pos.x),Math.floor(pos.y));
-    const lights=[...(underground?mineLights:surfaceLights.map(l=>({...l,y:l.y+floorLevel(pos)}))),...Object.values(s.buildings).filter(b=>b.kind==='lantern'&&floorLevel(b)===floorLevel(pos)).map(b=>({x:b.x+.5,y:b.y+.35,r:72}))];
+    const lights=[...(underground?mineLights:surfaceLights.map(l=>({...l,y:l.y+floorLevel(pos)}))),...Object.values(s.buildings).filter(b=>(b.kind==='lantern'||b.kind==='campfire')&&floorLevel(b)===floorLevel(pos)).map(b=>({x:b.x+.5,y:b.y+.35,r:b.kind==='campfire'?88:72}))];
     if(underground){
         lightLayer??=document.createElement('canvas');
         if(lightLayer.width!==w)lightLayer.width=w;if(lightLayer.height!==h)lightLayer.height=h;
@@ -51,11 +51,11 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
         light.globalCompositeOperation='source-over';ctx.drawImage(lightLayer,0,0);
     } else {
         // Warm color grade and lifted shadows remain visible across the whole scene.
-        ctx.save();ctx.globalCompositeOperation='soft-light';ctx.globalAlpha=.16+.12*clock.daylight;ctx.fillStyle='#efbb72';ctx.fillRect(0,0,w,h);
-        ctx.globalCompositeOperation='screen';ctx.globalAlpha=.04+.015*clock.daylight;ctx.fillStyle='#fff0cd';ctx.fillRect(0,0,w,h);ctx.restore();
+        ctx.save();ctx.globalCompositeOperation='soft-light';ctx.globalAlpha=.28*clock.daylight;ctx.fillStyle='#efbb72';ctx.fillRect(0,0,w,h);
+        ctx.globalCompositeOperation='screen';ctx.globalAlpha=.055*clock.daylight;ctx.fillStyle='#fff0cd';ctx.fillRect(0,0,w,h);ctx.restore();
         // Broad, slow daylight. Stamps are cached.
         const drift=Math.sin(time/18000+pos.x*.006)*18,day=daylightFor(w,h);
-        ctx.save();ctx.globalAlpha=.38+.62*clock.daylight;
+        ctx.save();ctx.globalAlpha=clock.daylight;
         ctx.drawImage(day.sun,Math.round(-w*.4+drift),Math.round(-h*.65));
         if(region==='forest'||region==='marsh'){
             ctx.globalAlpha*=region==='forest'?.55:1;
@@ -63,9 +63,21 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
         }
         ctx.restore();
         const warmTwilight=Math.max(clock.dawn,clock.dusk);
-        if(warmTwilight>0){ctx.save();ctx.globalCompositeOperation='soft-light';ctx.globalAlpha=.1*warmTwilight;ctx.fillStyle='#e9b58e';ctx.fillRect(0,0,w,h);ctx.restore();}
+        if(warmTwilight>0){ctx.save();ctx.globalCompositeOperation='soft-light';ctx.globalAlpha=.28*warmTwilight;ctx.fillStyle='#e9b58e';ctx.fillRect(0,0,w,h);ctx.restore();}
         if(clock.night>0){
-            ctx.save();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=.18*clock.night;ctx.fillStyle='#7486a6';ctx.fillRect(0,0,w,h);ctx.restore();
+            lightLayer??=document.createElement('canvas');
+            if(lightLayer.width!==w)lightLayer.width=w;if(lightLayer.height!==h)lightLayer.height=h;
+            const light=lightLayer.getContext('2d')!;
+            light.clearRect(0,0,w,h);light.globalCompositeOperation='source-over';
+            light.fillStyle='#142342';light.globalAlpha=.64*clock.night;light.fillRect(0,0,w,h);
+            light.globalCompositeOperation='destination-out';light.globalAlpha=1;
+            // A little moonlight keeps the player readable; fires light a wider area.
+            for(const l of [{x:pos.x,y:pos.y,r:78},...lights.map(l=>({...l,r:l.r*1.7}))]){
+                const x=l.x*24+ox,y=l.y*24+oy;
+                if(x<-l.r||x>w+l.r||y<-l.r||y>h+l.r)continue;
+                light.drawImage(softLight('#000000bd'),x-l.r,y-l.r,l.r*2,l.r*2);
+            }
+            light.globalCompositeOperation='source-over';ctx.drawImage(lightLayer,0,0);
         }
     }
     ctx.save();ctx.globalCompositeOperation='screen';ctx.imageSmoothingEnabled=true;

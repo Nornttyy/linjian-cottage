@@ -1,4 +1,4 @@
-export type Part='floor'|'wall'|'window'|'door'|'roof'|'stairs'|'planter'|'fence'|'lantern'|'sign'|'bed';
+export type Part='floor'|'wall'|'window'|'door'|'roof'|'stairs'|'planter'|'fence'|'lantern'|'sign'|'bed'|'campfire';
 export type Building={id:string;x:number;y:number;kind:Part;open?:boolean;level?:number;text?:string};
 export const MAX_LEVEL=2;
 export const floorLevel=(value:{level?:number})=>Math.max(0,Math.min(MAX_LEVEL,value.level??0));
@@ -11,8 +11,8 @@ export function stairAt(buildings:Readonly<Record<string,Building>>,x:number,y:n
         const b=atLevel(buildings,x-dx,y-dy,'stairs',base);if(b?.kind==='stairs')return b;
     }
 }
-export const PART_NAMES:Record<Part,string>={floor:'地板',wall:'木墙',window:'窗墙',door:'木门',roof:'屋顶',stairs:'楼梯',planter:'花盆',fence:'栅栏',lantern:'提灯',sign:'路牌',bed:'床'};
-export const COSTS:Record<Part,Partial<Record<'wood'|'stone'|'copper',number>>>={floor:{wood:2},wall:{wood:3},window:{wood:3,stone:1},door:{wood:4},roof:{wood:2},stairs:{wood:20,stone:4},planter:{wood:3,stone:2},fence:{wood:2},lantern:{wood:2,copper:1},sign:{wood:2},bed:{wood:12}};
+export const PART_NAMES:Record<Part,string>={floor:'地板',wall:'木墙',window:'窗墙',door:'木门',roof:'屋顶',stairs:'楼梯',planter:'花盆',fence:'栅栏',lantern:'提灯',sign:'路牌',bed:'床',campfire:'篝火'};
+export const COSTS:Record<Part,Partial<Record<'wood'|'stone'|'copper',number>>>={floor:{wood:2},wall:{wood:3},window:{wood:3,stone:1},door:{wood:4},roof:{wood:2},stairs:{wood:20,stone:4},planter:{wood:3,stone:2},fence:{wood:2},lantern:{wood:2,copper:1},sign:{wood:2},bed:{wood:12},campfire:{wood:8,stone:4}};
 const wallAt=(buildings:Readonly<Record<string,Building>>,x:number,y:number,level=0)=>{
     const building=atLevel(buildings,x,y,'wall',level);
     return building&&['wall','window','door'].includes(building.kind)?building:undefined;

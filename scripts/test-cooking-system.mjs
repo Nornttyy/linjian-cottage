@@ -39,7 +39,7 @@ try {
         const expected={...before,[id]:before[id]+resolved.quantity};
         for(const [ingredient,count]of Object.entries(resolved.counts))expected[ingredient]-=count;
         assert.deepEqual(f.p.inventory,expected);
-        assert.deepEqual(f.p.cookingResult,{id:'cmd-1',dish:id,quantity:resolved.quantity,time:f.now+contact});
+        assert.deepEqual(f.p.cookingResult,{id:'cmd-1',dish:id,quantity:resolved.quantity,time:f.now+contact,discovered:true,hp:resolved.hp,stamina:resolved.stamina});
         const event=f.s.events.find(value=>value.kind==='meal');
         assert.equal(event?.item,id);assert.equal(event?.amount,resolved.quantity);
         advance(f,contact+300);advance(f,7000);assert.deepEqual(f.p.inventory,expected);
@@ -63,8 +63,8 @@ try {
             {method:'sashimi',ingredients:new Array(1)},
             {method:'sashimi',ingredients:['toString']},
             {method:'sashimi',ingredients:['__proto__']},
-            {method:'sashimi',ingredients:['salmon','tuna']},
-            {method:'sushi',ingredients:['salmon','rice','nori','oil']},
+            {method:'sashimi',ingredients:['oil','sugar']},
+            {method:'sushi',ingredients:['rice','nori','oil']},
             {method:'unknown',ingredients:['salmon']},
             {method:'sashimi',ingredients:[]},
             {method:'sashimi',ingredients:'salmon'},

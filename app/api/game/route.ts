@@ -20,7 +20,7 @@ export function OPTIONS(req: Request) {
 async function hash(token: string) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)); return Array.from(new Uint8Array(b), n => n.toString(16).padStart(2, '0')).join(''); }
 export async function POST(req: Request) {
     const serverReceivedAt=Date.now();
-    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,structureVersion:1,activityVersion:2,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
+    const reply = (body: unknown, status = 200) => Response.json({...body as object,networkVersion:2,structureVersion:1,activityVersion:2,cottageVersion:2,serverReceivedAt,serverSentAt:Date.now()}, { status, headers: { 'Cache-Control': 'no-store', ...corsHeaders(req) } });
     if (!allowedRequest(req)) return reply({ error: '来源不受支持' }, 403);
     try {
         if (Number(req.headers.get('content-length') ?? 0) > 12000)
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
             return reply({ error: '无效请求' }, 400);
         const body = payload as {
             action?: string;
+            name?:unknown;
             room?: unknown;
             token?: unknown;
             input?: unknown;
@@ -39,10 +40,11 @@ export async function POST(req: Request) {
         };
         const db = await getStore();
         const now = Date.now();
+        const name=typeof body.name==='string'?body.name.trim().replace(/[\u0000-\u001f\u007f]/g,'').slice(0,16):'';
         if (body.action === 'create') {
             const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase(), token = crypto.randomUUID(), playerId = crypto.randomUUID().slice(0, 8), secret = await hash(token);
             const state = createWorld(now);
-            state.players[playerId] = createPlayer(playerId, secret, '旅人', 0, now);
+            state.players[playerId] = createPlayer(playerId, secret, name||'旅人', 0, now);
             await db.prepare('INSERT INTO worlds (id,state,version,updated_at) VALUES (?,?,0,?)').bind(id, JSON.stringify(state), now).run();
             return reply({ room: id, token, playerId, state: publicWorld(state) });
         }
@@ -69,7 +71,7 @@ export async function POST(req: Request) {
                 if (Object.keys(s.players).length >= 4)
                     return reply({ error: '房间已满' }, 409);
                 playerId = newId;
-                s.players[playerId] = createPlayer(playerId, secret, '旅人 ' + (Object.keys(s.players).length + 1), Object.keys(s.players).length, now);
+                s.players[playerId] = createPlayer(playerId, secret, name||'旅人 ' + (Object.keys(s.players).length + 1), Object.keys(s.players).length, now);
             }
             else {
                 if (!playerId)

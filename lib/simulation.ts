@@ -1,5 +1,5 @@
-import {ACTIVITY_TIMING,CAMPFIRE,nearCampfire,canCast,type FoodKind,type CookingRecipe} from './activities';
-import {INGREDIENT_IDS,DISH_IDS,foodHeal,resolveRecipe,validateSelection,type IngredientId,type DishId,type CookMethod,type ResolvedRecipe} from './cooking';
+import {ACTIVITY_TIMING,campfireNear,nearCampfire,canCast,type FoodKind,type CookingRecipe} from './activities';
+import {INGREDIENT_IDS,DISH_IDS,foodHeal,mealRecovery,consumeMeal,rememberCooking,type CookingJournal,resolveRecipe,validateSelection,type IngredientId,type DishId,type CookMethod,type ResolvedRecipe} from './cooking';
 import {startFishing,advanceFishing,hookFishing,setFishingHeld,cancelFishing,fishingActive,type FishingState,type FishingUpdate} from './fishing';
 import {pantryOffer} from './pantry';
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
@@ -27,7 +27,7 @@ export type Inventory = Partial<Record<IngredientId|DishId,number>> & {
     carrotSeed:number;tomatoSeed:number;wheatSeed:number;carrot:number;tomato:number;wheat:number;fish:number;meal:number;
 };
 export type PendingActivity={action:'fish'|'cook'|'sleep'|'pickup'|'eat';start:number;at:number;until:number;x:number;y:number;level:number;fromX:number;fromY:number;target?:string;recipe?:CookingRecipe;cooking?:ResolvedRecipe;food?:FoodKind;commandId?:string};
-export type Player = {
+export type Player = CookingJournal & {
     id: string;
     name: string;
     secret?: string;
@@ -63,7 +63,7 @@ export type Player = {
     pendingActivity?:PendingActivity;
     fishing?:FishingState;
     fishingOrigin?:{x:number;y:number;level:number};
-    cookingResult?:{id:string;dish:DishId;quantity:number;time:number};
+    cookingResult?:{id:string;dish:DishId;quantity:number;time:number;discovered?:boolean;hp?:number;stamina?:number};
 };
 export type Mob = {
     kind?:CreatureKind;level?:number;face?:Player['face'];attackX?:number;attackY?:number;attackAt?:number;chargeUntil?:number;chargeX?:number;chargeY?:number;chargeHits?:string[];
@@ -83,6 +83,7 @@ export type WorldState = {
     players: Record<string, Player>;
     buildings: Record<string, Building>;
     depleted: Record<string, boolean>;
+    removedStumps?:Record<string,boolean>;
     resourceHp: Record<string, number>;
     mobs: Mob[];
     tick: number;
@@ -93,6 +94,7 @@ export type WorldState = {
     creatureVersion?:number;
     structureVersion?:1;
     activityVersion?:2;
+    cottageVersion?:2;
 };
 export type GameEvent = {
     id: string;
@@ -147,7 +149,7 @@ export function createPlayer(id: string, secret: string, name: string, color: nu
 export function normalizeWorld(s:WorldState,now:number){
     // Only authoritative/local simulation migrates rules. Remote snapshots are
     // consumed as sent; an older server omits this capability field.
-    s.structureVersion=1;
+    s.structureVersion=1;s.cottageVersion=2;
     const migrateActivities=s.activityVersion!==2;s.activityVersion=2;
     // Existing saves begin their first day when they are migrated, rather than
     // inheriting thousands of short game days from their real creation date.
@@ -353,7 +355,7 @@ export function canBuild(s:WorldState,p:Player,x:number,y:number,part:Part):stri
     if(atLevel(s.buildings,x,y,part,level))return '已被占用';
     if(s.structureVersion===1&&((layer(part)==='wall'&&atLevel(s.buildings,x,y,'fence',level)?.kind==='fence')||(part==='fence'&&atLevel(s.buildings,x,y,'wall',level))))return '已被占用';
     if(part!=='floor'&&part!=='roof'&&part!=='stairs'&&stairAt(s.buildings,x,y,level))return '保留楼梯出入口';
-    const outdoor=level===0&&['fence','planter','lantern','sign'].includes(part);
+    const outdoor=level===0&&['fence','planter','lantern','sign','campfire'].includes(part);
     if(part!=='floor'&&!outdoor&&!atLevel(s.buildings,x,y,'floor',level))return '需要地板';
     if(part==='floor'&&level>0){
         if(!atLevel(s.buildings,x,y,'floor',level-1))return '楼下需要地板支撑';
@@ -478,15 +480,16 @@ function resolveActivity(s:WorldState,p:Player,now:number){
         stop();return;
     }else if(activity.action==='cook'){
         const recipe=activity.cooking&&resolveRecipe(activity.cooking.method,activity.cooking.ingredients);
-        if(!nearCampfire(p)||!recipe||!validateSelection(recipe.ingredients,p.inventory).ok){stop();return;}
+        if(!nearCampfire(p,s.buildings)||!recipe||!validateSelection(recipe.ingredients,p.inventory).ok){stop();return;}
         for(const [item,count]of Object.entries(recipe.counts))p.inventory[item as IngredientId]=(p.inventory[item as IngredientId]??0)-count;
+        const discovered=rememberCooking(p,recipe,now);
         p.inventory[recipe.output]=(p.inventory[recipe.output]??0)+recipe.quantity;
-        p.cookingResult={id:activity.commandId??String(now),dish:recipe.output,quantity:recipe.quantity,time:now};
-        emit(s,'meal',CAMPFIRE.x,CAMPFIRE.y,recipe.quantity,now,{...details,item:recipe.output});
+        p.cookingResult={id:activity.commandId??String(now),dish:recipe.output,quantity:recipe.quantity,time:now,discovered,hp:recipe.hp,stamina:recipe.stamina};
+        emit(s,'meal',campfireNear(p,s.buildings)!.x,campfireNear(p,s.buildings)!.y,recipe.quantity,now,{...details,item:recipe.output});
     }else if(activity.action==='eat'){
-        const food=activity.food,recovery=foodHeal(food);
+        const food=activity.food,recovery=mealRecovery(p,food);
         if(!food||!recovery||(p.inventory[food]??0)<=0||p.hp>=100&&p.stamina>=100){stop();return;}
-        p.inventory[food]=(p.inventory[food]??0)-1;const amount=Math.min(100-p.hp,recovery.hp);p.hp+=amount;p.stamina=Math.min(100,p.stamina+recovery.stamina);emit(s,'eat',p.x,p.y,amount,now,details);
+        consumeMeal(p,food);p.inventory[food]=(p.inventory[food]??0)-1;const amount=Math.min(100-p.hp,recovery.hp);p.hp+=amount;p.stamina=Math.min(100,p.stamina+recovery.stamina);emit(s,'eat',p.x,p.y,amount,now,details);
     }else if(activity.action==='pickup'){
         const resource=activity.target?RESOURCE_MAP.get(activity.target):undefined;
         if(!resource||resource.kind!=='berry'||s.depleted[resource.id]||distance(p,{x:resource.x+.5,y:resource.y+.5})>2.5){stop();return;}
@@ -513,7 +516,7 @@ function activityCommand(s:WorldState,p:Player,c:Command,now:number):string|null
         p.workAction='fish';p.workStart=now;p.workUntil=fishing.biteUntil+20000;p.swingUntil=p.workUntil;p.actionAt=p.workUntil;p.swingFace=c.face??p.face;p.face=p.swingFace;p.moveCredit=0;p.movingUntil=0;p.lastCommandId=c.id;
         return null;
     }else if(action==='cook'){
-        if(!nearCampfire(p))return '到营火旁烹饪';
+        if(!nearCampfire(p,s.buildings))return '到营火旁烹饪';
         const selection=validateSelection(c.ingredients,p.inventory);if(!selection.ok)return selection.error;
         const recipe=resolveRecipe(c.method,selection.ingredients);if(!recipe)return '这些食材不适合这项做法';cooking=recipe;
     }else if(action==='eat'){
@@ -542,7 +545,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
     if(['fishHook','fishControl','fishCancel'].includes(c.type))return fishingControl(s,p,c,now);
     if(fishingActive(p.fishing))return null;
     if(c.type==='pantry'){
-        if(!nearCampfire(p))return '到营火旁领取食材';
+        if(!nearCampfire(p,s.buildings))return '到营火旁领取食材';
         if(now<Math.max(p.actionAt,p.swingUntil,p.workUntil??0)||p.pendingActivity)return null;
         if(c.id&&c.id===p.lastCommandId)return null;
         const offer=pantryOffer(c.offer);if(!offer)return '请选择补给食材';
@@ -681,13 +684,21 @@ function resolveAttack(s:WorldState,p:Player,c:Command,now:number):string|null{
         }
         if(floorLevel(p)>0)return null;
         const r = c.target ? RESOURCE_MAP.get(c.target) : undefined;
-        if (!r || s.depleted[r.id])
+        if (!r || s.depleted[r.id]&&(!(r.kind==='tree'||r.kind==='pine')||s.removedStumps?.[r.id]))
             return null;
         if (distance(p, { x: r.x + .5, y: r.y + .5 }) > 2.5)
             return '距离太远';
         const tool = r.kind === 'tree' || r.kind === 'pine' || r.kind === 'berry' ? 'axe' : 'pick';
         if (c.tool !== tool)
             return tool === 'axe' ? '使用斧头' : '使用镐';
+        if(s.depleted[r.id]){
+            s.removedStumps??={};s.removedStumps[r.id]=true;
+            const count=1+Math.abs((r.x*73856093^r.y*19349663)>>>0)%3;
+            p.inventory.wood+=count;p.woodGathered+=count;
+            emit(s,'hit',r.x+.5,r.y+.5,1,now,{actorId:p.id,commandId:c.id,targetId:r.id,level:0});
+            emit(s,'wood',r.x+.5,r.y+.5,count,now,{actorId:p.id,commandId:c.id,targetId:r.id,level:0});
+            return null;
+        }
         const hp = (s.resourceHp[r.id] ?? RESOURCE_HP[r.kind]) - 1;
         s.resourceHp[r.id] = hp;
         emit(s,'hit',r.x+.5,r.y+.5,1,now,{actorId:p.id,commandId:c.id,targetId:r.id,level:floorLevel(p)});

@@ -58,16 +58,17 @@ try{
         assert.deepEqual(f.p.inventory,before);click(filled(tree)[2]);tree=render(properties);assert.equal(filled(tree).length,4);
         click(add(tree,'salmon'));tree=render(properties);assert.equal(filled(tree).length,5);assert.deepEqual(f.p.inventory,before);
     });
-    await test('valid previews include the exact dish and failed local submission retains selection',()=>{
+    await test('undiscovered previews conceal the dish and failed local submission retains selection',()=>{
         host.clear();const f=fixture(),calls=[],properties={...props(f),onCook:(...args)=>{calls.push(args);return false;}};
         let tree=render(properties);click(add(tree,'fish'));tree=render(properties);
-        assert(text(find(tree,'recipe-preview')).includes('烤鱼'));assert(text(find(tree,'recipe-preview')).includes('生命+32'));
+        assert(!text(find(tree,'recipe-preview')).includes('烤鱼'));assert(text(find(tree,'recipe-preview')).includes('新的搭配'));
         click(find(tree,'cook-submit'));tree=render(properties);assert.equal(filled(tree).length,1);
         assert.deepEqual(calls,[['roast',['fish']]]);assert.equal(f.p.inventory.fish,6);
     });
     await test('recipe-book selection chooses ingredients without submitting or debiting them',()=>{
         host.clear();const f=fixture(),calls=[],properties={...props(f),onCook:(...args)=>{calls.push(args);return true;}};
-        let tree=render(properties);click(tree.find(node=>node.type==='button'&&text(node)==='配方'));tree=render(properties);
+        cooking.rememberCooking(f.p,cooking.resolveRecipe('roast',['fish']),90000);
+        let tree=render(properties);click(tree.find(node=>node.type==='button'&&text(node)==='食谱'));tree=render(properties);
         click(tree.find(node=>node.props['aria-label']==='选择烤鱼配方'));tree=render(properties);
         assert.equal(filled(tree).length,1);assert.equal(calls.length,0);assert.equal(f.p.inventory.fish,6);
     });
