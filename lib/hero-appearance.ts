@@ -2,6 +2,7 @@ import {colorHex,appearanceKey,normalizeAppearance,type Appearance,type Clothing
 import type {Atlas,Sprite} from './art';
 import {composeWardrobe} from './wardrobe-render';
 import {femaleDyeRegistrations,type DyeRegistration} from './female-art-layout';
+import {fishingRod,fishingRodPixel} from './hero-fishing-art';
 export type Pixels={data:Uint8ClampedArray;width:number;height:number};
 export type Region={points:number[];x:number;y:number;width:number;height:number};
 function regions(p:Pixels,accept:(r:number,g:number,b:number,i:number)=>boolean):Region[]{
@@ -28,10 +29,32 @@ const frontCan=[
     [[58,70,75,88],[73,79,85,90]],[[58,70,75,88],[73,79,85,90]],
     [[57,68,72,85],[70,70,81,79]],[[58,68,73,85],[71,70,82,79]]
 ];
+// Native-frame bounds for folded boots. Here leather touches a palm, or a
+// raised foot is closer to the head than the hips, so component order is unsafe.
+const foldedBoots:Record<string,number[][]>={
+    'male:dodge-right-3':[[62,58,81,71]],
+    'female:dodge-right-3':[[63,57,81,71]],
+    'male:dodge-up-2':[[56,89,66,96],[69,88,79,96]],
+    'male:dodge-up-5':[[47,85,58,95],[60,82,71,97]],
+    'female:dodge-up-5':[[49,87,59,95],[62,82,72,97]]
+};
 export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,registration?:DyeRegistration){
+    const rod=frame?fishingRod(frame,appearance.body):undefined;
+    const rodPixels=new Set<number>();if(rod)for(let i=0;i<p.width*p.height;i++)if(fishingRodPixel(p,i,rod))rodPixels.add(i);
     const water=frame?.match(/^water-(down|up|right)-(\d+)$/),pose=water?Number(water[2])%8:0;
+    // At impact the pick blade sits between the legs and shares the trousers'
+    // blue palette. Its narrow, vertical silhouette belongs to the tool.
+    const pickImpact=frame?.match(/^pick-down-([45])$/);
+    const bladeTip=pickImpact?regions(p,(r,g,b,i)=>Math.floor(i/p.width)>p.height*.70&&g>r*1.15&&b>r*1.2)
+        .filter(r=>r.height>r.width*1.6&&r.height>6*p.width/128)[0]:undefined;
+    const blade=bladeTip?{...bladeTip,y:(pickImpact![1]==='4'?79:77)*p.height/128,height:bladeTip.y+bladeTip.height-(pickImpact![1]==='4'?79:77)*p.height/128}:undefined;
+    const handles=new Set(/^(axe|pick|sword|hammer|hoe|water|fish|cook)-/.test(frame??'')?regions(p,(r,g,b)=>r>g*1.08&&g>b*1.1&&g<175&&r<240)
+        .filter(r=>r.width>25*p.width/128&&r.width>r.height*2.2||r.height>28*p.width/128&&r.height>r.width*2.2).flatMap(r=>r.points):[]);
     let upperCan:Region|undefined;
     const toolPixel=(i:number)=>{
+        if(rodPixels.has(i))return true;
+        if(handles.has(i))return true;
+        if(blade){const x=i%p.width,y=Math.floor(i/p.width);if(x>=blade.x-1&&x<=blade.x+blade.width&&y>=blade.y-1&&y<=blade.y+blade.height)return true;}
         if(!water)return false;
         if(water[1]==='up'&&upperCan){const x=i%p.width,y=Math.floor(i/p.width);return x>=upperCan.x-1&&x<=upperCan.x+upperCan.width&&y>=upperCan.y-1&&y<=upperCan.y+upperCan.height;}
         const x=i%p.width*128/p.width*(registration?.scale??1)+(registration?.x??0),y=Math.floor(i/p.width)*128/p.height*(registration?.scale??1)+(registration?.y??0);
@@ -46,12 +69,19 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     })}));
     if(water?.[1]==='up')upperCan=regions(p,(r,g,b,i)=>i%p.width>p.width*.55&&Math.floor(i/p.width)<p.height*.59&&b>r*1.25&&b-g>20&&g>60)[0];
     const shirt=garments[0].parts[0];let pants=garments[1].parts[0];
+    const upright=!frame?.startsWith('sleep-')&&!frame?.startsWith('dodge-');
+    if(upright&&shirt){
+        // A sleeve shadow may contain more blue pixels than either leg. Pick
+        // the lower garment by its position before attaching the other leg.
+        garments[1].parts.sort((a,b)=>Number(b.y+b.height/2>shirt.y+shirt.height*.65)-Number(a.y+a.height/2>shirt.y+shirt.height*.65)||b.points.length-a.points.length);
+        pants=garments[1].parts[0];
+    }
     const masks:Partial<Record<DyePart,number[]>>={};
     for(const {part,isPants,parts}of garments){
         const main=parts[0];if(!main)continue;
         // Sleeves and the two trouser legs can be disconnected by skin, belt or
         // outlines. Include their nearby components, not just the largest one.
-        const selected=parts.filter(r=>r===main||(!isPants&&r.points.length>=3&&Math.hypot(Math.max(0,main.x-r.x-r.width,r.x-main.x-main.width),Math.max(0,main.y-r.y-r.height,r.y-main.y-main.height))<12*p.width/128)||r.points.length>=4&&
+        const selected=parts.filter(r=>r===main||(isPants&&upright&&shirt&&r.points.length>=3&&Math.abs(r.x+r.width/2-shirt.x-shirt.width/2)<18*p.width/128&&Math.abs(r.y+r.height-main.y-main.height)<7*p.width/128)||(!isPants&&r.points.length>=3&&Math.hypot(Math.max(0,main.x-r.x-r.width,r.x-main.x-main.width),Math.max(0,main.y-r.y-r.height,r.y-main.y-main.height))<12*p.width/128)||r.points.length>=4&&
             (water&&isPants?Math.abs(r.y+r.height-main.y-main.height)<=3:
                 r.x+r.width>=main.x-main.width*.35&&r.x<=main.x+main.width*1.35&&r.y+r.height>=main.y&&r.y<=main.y+main.height));
         masks[part]=selected.flatMap(r=>r.points).filter(i=>!toolPixel(i));
@@ -66,15 +96,36 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     // Grow each material from its identified core into pale highlights and dark
     // seams. Stop at skin, tools and the other garment, not at an arbitrary RGB.
     const shirtSet=new Set(masks.shirt??[]),pantsSet=new Set(masks.pants??[]);
+    let standingWaist=-Infinity;
+    if(frame&&upright&&pantsSet.size){
+        const rows=[...pantsSet].map(i=>Math.floor(i/p.width)).sort((a,b)=>a-b);
+        standingWaist=rows[Math.floor(rows.length*.5)]-8*unit;
+        for(const i of pantsSet)if(Math.floor(i/p.width)<standingWaist){pantsSet.delete(i);shirtSet.add(i);}
+    }
     for(const [part,selected,other]of [['shirt',shirtSet,pantsSet],['pants',pantsSet,shirtSet]] as const){
         const queue=[...selected];for(let q=0;q<queue.length;q++){
             const i=queue[q],x=i%p.width,y=Math.floor(i/p.width);
             for(const [dx,dy]of [[-1,0],[1,0],[0,-1],[0,1]]){
                 const xx=x+dx,yy=y+dy,n=yy*p.width+xx;if(xx<0||xx>=p.width||yy<0||yy>=p.height||selected.has(n)||other.has(n)||toolPixel(n))continue;
+                if(part==='pants'&&yy<standingWaist)continue;
                 const [r,g,b,a]=p.data.subarray(n*4,n*4+4);
                 if(a>=128&&g>r*1.06&&b>r*1.12&&g>24&&b-g>-50){selected.add(n);queue.push(n);}
             }
         }masks[part]=[...selected];
+    }
+    if(frame&&!/^(axe|pick|sword|hammer|hoe|water|fish|cook)-/.test(frame)){
+        // Rolling and sleeping can detach a small cuff from the main shirt.
+        // In these tool-free poses, assign each remaining cloth pixel to its
+        // nearest established material instead of leaving its original cyan.
+        const distance=(i:number,points:Set<number>)=>{let nearest=Infinity;for(const n of points)nearest=Math.min(nearest,(i%p.width-n%p.width)**2+(Math.floor(i/p.width)-Math.floor(n/p.width))**2);return nearest;};
+        for(let i=0;i<p.width*p.height;i++){
+            if(shirtSet.has(i)||pantsSet.has(i))continue;
+            const [r,g,b,a]=p.data.subarray(i*4,i*4+4);
+            if(a<128||g<=r*1.06||b<=r*1.12||g<=24||b-g<=-50)continue;
+            const ds=distance(i,shirtSet),dp=distance(i,pantsSet);if(Math.min(ds,dp)>(lying?576:36)*unit*unit)continue;
+            (ds<=dp?shirtSet:pantsSet).add(i);
+        }
+        masks.shirt=[...shirtSet];masks.pants=[...pantsSet];
     }
     if(masks.pants?.length){
         const points=masks.pants,xs=points.map(i=>i%p.width),ys=points.map(i=>Math.floor(i/p.width)),x=Math.min(...xs),y=Math.min(...ys);
@@ -82,17 +133,22 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     }
     let face:Region|undefined;
     const w=p.width,warm=(r:number,g:number,b:number)=>r>g*1.08&&g>b*1.1;
-    const hairParts=regions(p,(r,g,b)=>warm(r,g,b)&&g<150&&r<225);
+    const hairParts=regions(p,(r,g,b,i)=>!toolPixel(i)&&warm(r,g,b)&&g<150&&r<225);
     // The hair mass identifies the head even when a raised sleeve sits above it,
     // or the whole character lies sideways. Thin wooden handles are excluded.
     const candidates=hairParts.filter(r=>r.width>=4*unit&&r.height>=2*unit&&r.width>r.height*.3&&(!pants||lying||r.y+r.height/2<pants.y-9*unit));
     if(!lying&&pants)candidates.sort((a,b)=>Math.hypot(a.x+a.width/2-pants.x-pants.width/2,a.y+a.height/2-(pants.y-26*unit))-Math.hypot(b.x+b.width/2-pants.x-pants.width/2,b.y+b.height/2-(pants.y-26*unit)));
-    const head=candidates[0];
+    // This authored back-facing roll frame hides the head behind the torso.
+    // A boot is not a substitute head / hat anchor.
+    const hiddenHead=appearance.body==='male'&&frame==='dodge-up-3';
+    const head=hiddenHead&&shirt?{points:[],x:shirt.x+shirt.width/2-11*unit,y:shirt.y+shirt.height-8*unit,width:22*unit,height:12*unit}:candidates[0];
     if(head){
-        masks.hair=hairParts.filter(r=>r===head||r.points.length>=3&&r.x+r.width>head!.x-2*unit&&r.x<head!.x+head!.width+2*unit&&r.y+r.height>head!.y&&r.y<head!.y+head!.height).flatMap(r=>r.points);
+        masks.hair=hiddenHead?[]:hairParts.filter(r=>r===head||r.points.length>=3&&r.x+r.width>head!.x-2*unit&&r.x<head!.x+head!.width+2*unit&&r.y+r.height>head!.y&&r.y<head!.y+head!.height||lying&&r.points.length>=12&&r.width>=6*unit&&r.height>3*unit&&Math.hypot(Math.max(0,head.x-r.x-r.width,r.x-head.x-head.width),Math.max(0,head.y-r.y-r.height,r.y-head.y-head.height))<8*unit).flatMap(r=>r.points);
         const skins=regions(p,(r,g,b,i)=>!toolPixel(i)&&r>175&&g>115&&b>65&&r>=g*.99&&g>=b*.96&&r-b>15&&!(r-g>55&&g-b>50));
         const hx=head.x+head.width/2,hy=head.y+head.height/2;
-        face=skins.filter(r=>Math.hypot(r.x+r.width/2-hx,r.y+r.height/2-hy)<22*unit&&r.points.length>=8).sort((a,b)=>Math.hypot(a.x+a.width/2-hx,a.y+a.height/2-hy)-Math.hypot(b.x+b.width/2-hx,b.y+b.height/2-hy))[0];
+        // The face is the substantial skin patch beside the hair, not the
+        // nearest tiny warm highlight inside the hair itself.
+        face=hiddenHead?undefined:skins.filter(r=>Math.hypot(r.x+r.width/2-hx,r.y+r.height/2-hy)<22*unit&&r.points.length>=8).sort((a,b)=>b.points.length-a.points.length)[0];
         masks.skin=skins.filter(r=>r===face||r.points.length>=4&&r.width<14*unit&&r.height<14*unit).flatMap(r=>r.points);
         masks.eyes=[];
         if(face&&!frame?.includes('-up-'))for(let y=Math.ceil(face.y+face.height*.12);y<face.y+face.height*.72;y++)for(let x=face.x;x<face.x+face.width;x++){
@@ -103,9 +159,9 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
         masks.hair=masks.hair.filter(i=>!masks.eyes!.includes(i));
         if(pants){
             const px=pants.x+pants.width/2,py=pants.y+pants.height/2,dx=px-hx,dy=py-hy,len=Math.hypot(dx,dy)||1;
-            masks.shoes=regions(p,(r,g,b)=>warm(r,g,b)).filter(r=>r.points.length>=4&&((r.x+r.width/2-px)*dx+(r.y+r.height/2-py)*dy)/len>2*unit&&Math.hypot(r.x+r.width/2-px,r.y+r.height/2-py)<24*unit).flatMap(r=>r.points);
+            masks.shoes=regions(p,(r,g,b,i)=>!toolPixel(i)&&warm(r,g,b)).filter(r=>r.points.length>=4&&(upright?r.y+r.height/2>=86*unit:((r.x+r.width/2-px)*dx+(r.y+r.height/2-py)*dy)/len>2*unit)&&Math.hypot(r.x+r.width/2-px,r.y+r.height/2-py)<24*unit).flatMap(r=>r.points);
         }
-        if(shirt)masks.trim=regions(p,(r,g,b,i)=>{const x=i%w,y=Math.floor(i/w);return warm(r,g,b)&&pants&&x>=pants.x-2*unit&&x<pants.x+pants.width+2*unit&&y>=pants.y-4*unit&&y<pants.y+2*unit;}).filter(r=>r.width>r.height*1.8).flatMap(r=>r.points);
+        if(shirt)masks.trim=regions(p,(r,g,b,i)=>{const x=i%w,y=Math.floor(i/w);return !toolPixel(i)&&warm(r,g,b)&&pants&&x>=pants.x-2*unit&&x<pants.x+pants.width+2*unit&&y>=pants.y-4*unit&&y<pants.y+2*unit;}).filter(r=>r.width>r.height*1.8).flatMap(r=>r.points);
     }
     if(head){
         const rawHands=regions(p,(r,g,b,i)=>!toolPixel(i)&&r>175&&g>115&&b>65&&r>=g*.99&&g>=b*.96&&r-b>15);
@@ -113,13 +169,33 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
         masks.skin=[...new Set([...(masks.skin??[]),...added])];
         const skinSet=new Set(masks.skin),hairSet=new Set(masks.hair??[]),queue=[...hairSet];
         for(let q=0;q<queue.length;q++)for(const n of [queue[q]-1,queue[q]+1,queue[q]-w,queue[q]+w]){
-            const x=n%w,y=Math.floor(n/w);if(n<0||n>=w*p.height||hairSet.has(n)||skinSet.has(n)||x<head.x-1||x>=head.x+head.width+1||y<head.y||y>=head.y+head.height)continue;
+            const x=n%w,y=Math.floor(n/w);if(n<0||n>=w*p.height||hairSet.has(n)||skinSet.has(n)||toolPixel(n)||x<head.x-1||x>=head.x+head.width+1||y<head.y||y>=head.y+head.height)continue;
             if(face&&x>=face.x-1&&x<=face.x+face.width&&y>=face.y-1&&y<=face.y+face.height)continue;
             const[r,g,b,a]=p.data.subarray(n*4,n*4+4);if(a>=128&&r>g*1.06&&g>b*1.04){hairSet.add(n);queue.push(n);}
         }
         masks.hair=[...hairSet].filter(i=>!skinSet.has(i)&&!masks.eyes?.includes(i));
     }
     if(head&&appearance.body==='female')masks.trim=[...(masks.trim??[]),...regions(p,(r,g,b,i)=>r>140&&r>g*1.2&&b>g*1.1&&i%w>=head.x&&i%w<head.x+head.width&&Math.floor(i/w)>=head.y&&Math.floor(i/w)<head.y+head.height).flatMap(r=>r.points)];
+    const bootBounds=foldedBoots[appearance.body+':'+frame];
+    if(bootBounds)masks.shoes=regions(p,(r,g,b,i)=>warm(r,g,b)&&bootBounds.some(([x0,y0,x1,y1])=>i%w>=x0*unit&&i%w<x1*unit&&Math.floor(i/w)>=y0*unit&&Math.floor(i/w)<y1*unit)).flatMap(r=>r.points);
+    let pelvis:{x:number;y:number}|undefined;
+    if(appearance.body==='male'&&frame==='dodge-up-4'&&shirt){
+        // The trousers are completely occluded. The two remaining blue pixels
+        // are a cuff, not a hip joint at the far left of the character.
+        pelvis={x:shirt.x+shirt.width/2,y:shirt.y+4*unit};
+        masks.shirt=[...new Set([...(masks.shirt??[]),...(masks.pants??[])])];masks.pants=[];
+        const upperHair=hairParts.filter(r=>r.y<70*unit&&r.width>20*unit).flatMap(r=>r.points);
+        masks.hair=[...new Set([...(masks.hair??[]),...upperHair])];
+        const upper=new Set(upperHair);masks.skin=masks.skin?.filter(i=>!upper.has(i));
+    }
+    // Every material owns its pixels once. In folded poses a warm boot can sit
+    // in the belt band, and light leather can otherwise be mistaken for skin.
+    const eyes=new Set(masks.eyes??[]),shoes=new Set(masks.shoes??[]);
+    masks.skin=(masks.skin??[]).filter(i=>!shoes.has(i)&&!eyes.has(i)&&!toolPixel(i));
+    const skin=new Set(masks.skin);
+    masks.hair=(masks.hair??[]).filter(i=>!skin.has(i)&&!shoes.has(i)&&!eyes.has(i)&&!toolPixel(i));
+    const hair=new Set(masks.hair);
+    masks.trim=(masks.trim??[]).filter(i=>!skin.has(i)&&!hair.has(i)&&!shoes.has(i)&&!eyes.has(i)&&!toolPixel(i));
     function paint(i:number,color:ClothingColor,base:number){
         const hex=colorHex(color),target=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)),k=i*4,d=p.data;
         const shade=Math.max(.4,Math.min(1.3,(d[k]*.22+d[k+1]*.55+d[k+2]*.23)/base));
@@ -127,7 +203,8 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     }
     const bases={shirt:168,pants:153,hair:100,skin:205,eyes:80,shoes:110,trim:125};
     for(const part of Object.keys(bases) as (keyof typeof bases)[]){const color=appearance[part];if(!color||color==='original')continue;for(const i of masks[part]??[])paint(i,color,bases[part]);}
-    return {masks,shirt,pants,head,face};
+    const protectedPixels=Array.from({length:p.width*p.height},(_,i)=>i).filter(i=>p.data[i*4+3]>=128&&toolPixel(i));
+    return {masks,shirt,pants,head,face,pelvis,headVisible:!hiddenHead,protectedPixels};
 }
 const caches=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
 /** Female and male bodies each have complete independently authored animation atlases. */

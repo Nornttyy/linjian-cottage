@@ -1,4 +1,5 @@
 import {WARDROBE_ART_FILES} from './wardrobe';
+import {removeBakedFishingLine} from './hero-fishing-art';
 import {FEMALE_SHEETS,FEMALE_BODY_HEIGHTS,femaleDyeRegistrations,type FemaleSheet} from './female-art-layout';
 import {drawConnectedWall} from './connected-wall';
 import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
@@ -332,6 +333,10 @@ async function loadAll():Promise<Atlas>{
             const order=spec.base?heroLayouts[spec.base]?.order?.[row]?.[pose]??pose:pose;
             art[`female-${spec.action}-${dir}-${f}`]=female[i][row*8+order];
         }
+    }
+    for(const body of ['male','female'] as const)for(const dir of ['down','up','right'] as const)for(let f=0;f<8;f++){
+        const key=frameKey('fish',dir,f),source=art[body==='female'?`female-${key}` as Sprite:key],ctx=source.getContext('2d')!;
+        const pixels=ctx.getImageData(0,0,source.width,source.height);removeBakedFishingLine(pixels,key,body);ctx.putImageData(pixels,0,0);
     }
     const wardrobe=await loadAssetBatches(WARDROBE_ART_FILES.map(file=>()=>load('/art/'+file)));
     for(const [sheetIndex,img]of wardrobe.slice(0,2).entries()){

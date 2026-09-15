@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {inflateSync} from 'node:zlib';
 import {compileProject} from './test-support.mjs';
 const project=compileProject({name:'appearance'});let checks=0;
 const original=new Map(['window','localStorage'].map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
 try{
- const [appearance,hero,chars,sim]=await Promise.all(['appearance','hero-appearance','characters','simulation'].map(n=>import(project.module(n))));
+ const [appearance,hero,chars,sim,wardrobe,fishingArt]=await Promise.all(['appearance','hero-appearance','characters','simulation','wardrobe-render','hero-fishing-art'].map(n=>import(project.module(n))));
  const test=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  test('old profiles keep the original male body and colors; corrupt appearance is normalized',()=>{
   assert.deepEqual(appearance.normalizeAppearance(null),{body:'male',shirt:'original',pants:'original'});
@@ -59,6 +61,107 @@ try{
   const custom={body:'female',shirt:'#A1B2C3',pants:'#1100aa',hair:'#CC1188',skin:'#A97751',eyes:'#18AA22',shoes:'#F0A819',trim:'#65EEAA'};
   const a=appearance.normalizeAppearance(custom);for(const key of Object.keys(custom).filter(key=>key!=='body'))assert.equal(a[key],custom[key].toLowerCase());
   assert.equal(appearance.normalizeAppearance({...custom,skin:'url(secret)'}).skin,undefined);
+ });
+ const real=JSON.parse(readFileSync(new URL('./fixtures/hero-dye-actions.json',import.meta.url),'utf8'));
+ const framePixels=key=>({width:real.width,height:real.height,data:new Uint8ClampedArray(inflateSync(Buffer.from(real.frames[key],'base64')))});
+ const rgba=(p,x,y)=>p.data.slice((y*p.width+x)*4,(y*p.width+x)*4+4);
+ test('real pick frames keep the face independent from hair dye',()=>{
+  const p=framePixels('pick-down-0'),before=p.data.slice();
+  hero.recolorClothes(p,{body:'male',shirt:'original',pants:'original',hair:'#9c42cf'},'pick-down-0');
+  for(const[x,y]of [[64,55],[63,56],[65,57]])assert.deepEqual(rgba(p,x,y),rgba({...p,data:before},x,y));
+  const skin=framePixels('pick-down-0');hero.recolorClothes(skin,{body:'male',shirt:'original',pants:'original',skin:'#a97751'},'pick-down-0');
+  assert.notDeepEqual(rgba(skin,64,55),rgba({...p,data:before},64,55));
+ });
+ test('real impact frames dye both trouser legs while preserving the pick blade',()=>{
+  const checks=[['pick-down-4',66,95],['pick-down-5',64,94],['female-pick-down-5',64,97]];
+  for(const[key,x,y]of checks){
+   const p=framePixels(key),before=p.data.slice(),body=key.startsWith('female-')?'female':'male';
+   hero.recolorClothes(p,{body,shirt:'#e9447d',pants:'#8155bf',hair:'#9c42cf',skin:'#b68058',shoes:'#eebd3e',trim:'#23ded8'},key.replace(/^female-/,''));
+   assert.deepEqual(rgba(p,x,y),rgba({...p,data:before},x,y),key+' blade');
+   if(body==='male')for(const lx of [56,72])assert.notDeepEqual(rgba(p,lx,84),rgba({...p,data:before},lx,84),key+' leg');
+  }
+ });
+ test('both boots are recolored in the real female impact pose',()=>{
+  const p=framePixels('female-pick-down-5'),before=p.data.slice();
+  const parts=hero.recolorClothes(p,{body:'female',shirt:'original',pants:'original',shoes:'#eebd3e'},'pick-down-5');
+  for(const x of [56,70]){assert(parts.masks.shoes.includes(93*128+x));assert.notDeepEqual(rgba(p,x,93),rgba({...p,data:before},x,93));}
+ });
+ test('the pelvis stays registered through the full pick swing and impact',()=>{
+  const poses=[0,3,4,5,7].map(f=>{const p=framePixels('pick-down-'+f),parts=hero.recolorClothes(p,appearance.DEFAULT_APPEARANCE,'pick-down-'+f);return wardrobe.wardrobePose('pick-down-'+f,parts,p.width);});
+  assert(Math.max(...poses.map(p=>p.hip.y))-Math.min(...poses.map(p=>p.hip.y))<=4);
+  assert(Math.max(...poses.map(p=>p.hip.x))-Math.min(...poses.map(p=>p.hip.x))<=4);
+  for(const p of poses)assert.equal(p.angle,0);
+ });
+ test('the occluded head in the back roll is not replaced by a boot',()=>{
+  const p=framePixels('dodge-up-3'),before=p.data.slice(),parts=hero.recolorClothes(p,{...appearance.DEFAULT_APPEARANCE,hair:'#9c42cf'},'dodge-up-3');
+  assert.equal(parts.headVisible,false);assert.equal(parts.masks.hair.length,0);assert.deepEqual(p.data,before);
+  const pose=wardrobe.wardrobePose('dodge-up-3',parts,p.width);assert(Math.cos(pose.angle)<-.8);
+ });
+ test('real rolling and sleeping cuffs have no undyed blue cloth islands',()=>{
+  for(const key of ['dodge-down-3','dodge-right-4','female-dodge-up-3','female-sleep-down-3']){
+   const p=framePixels(key),parts=hero.recolorClothes(p,{body:key.startsWith('female-')?'female':'male',shirt:'original',pants:'original'},key.replace(/^female-/,''));
+   const covered=new Set([...parts.masks.shirt,...parts.masks.pants]);
+   for(let i=0;i<p.width*p.height;i++){const[r,g,b,a]=p.data.slice(i*4,i*4+4);if(a>=128&&g>r*1.22&&b>r*1.3&&g>60&&b-g>-35)assert(covered.has(i),key+' pixel '+i);}
+  }
+ });
+ test('all real regression frames preserve transparency and protected tool pixels under every dye',()=>{
+  for(const key of Object.keys(real.frames)){
+   const p=framePixels(key),before=p.data.slice(),parts=hero.recolorClothes(p,{body:key.startsWith('female-')?'female':'male',shirt:'#e9447d',pants:'#8155bf',hair:'#9c42cf',skin:'#b68058',shoes:'#eebd3e',trim:'#23ded8',eyes:'#23ff44'},key.replace(/^female-/,''));
+   for(let k=3;k<p.data.length;k+=4)assert.equal(p.data[k],before[k]);
+   for(const i of parts.protectedPixels)assert.deepEqual(p.data.slice(i*4,i*4+4),before.slice(i*4,i*4+4),key+' protected '+i);
+  }
+ });
+ test('all real fishing poses keep the rod out of the hair and headwear anchor',()=>{
+  for(const key of Object.keys(real.frames).filter(k=>k.includes('fish-'))){
+   const p=framePixels(key),before=p.data.slice(),body=key.startsWith('female-')?'female':'male',frame=key.replace(/^female-/,'');
+   const parts=hero.recolorClothes(p,{body,shirt:'original',pants:'original',hair:'#9145dd'},frame);
+   assert(parts.head.width<=34&&parts.head.height<=35,key+' head includes rod');
+   const rod=fishingArt.fishingRod(frame,body);assert(rod);
+   for(let i=0;i<p.width*p.height;i++)if(fishingArt.fishingRodPixel({...p,data:before},i,rod))assert.deepEqual(p.data.slice(i*4,i*4+4),before.slice(i*4,i*4+4),key+' dyed rod '+i);
+  }
+ });
+ test('the clipped baked fishing lines are removed without moving either body',()=>{
+  for(const key of ['female-fish-up-3','female-fish-right-3']){
+   const p=framePixels(key),before=p.data.slice();fishingArt.removeBakedFishingLine(p,key.replace('female-',''),'female');
+   for(let y=25;y<100;y++)for(let x=35;x<95;x++)assert.deepEqual(rgba(p,x,y),rgba({...p,data:before},x,y));
+   for(let y=0;y<128;y++)assert.equal(rgba(p,127,y)[3],0);
+   assert.notDeepEqual(p.data,before);
+  }
+ });
+ test('live fishing lines follow each body and mirrored rod tip, not the chest',()=>{
+  for(const body of ['male','female'])for(const direction of ['down','up','right'])for(let f=0;f<8;f++){
+   const frame=`fish-${direction}-${f}`,rod=fishingArt.fishingRod(frame,body),right=fishingArt.fishingLineOrigin(frame,body),left=fishingArt.fishingLineOrigin(frame,body,true);
+   assert.equal(32+right.x,rod[0]/2);assert.equal(48+right.y,rod[1]/2);assert.equal(left.x,-right.x);assert.equal(left.y,right.y);
+  }
+  assert.notDeepEqual(fishingArt.fishingLineOrigin('fish-down-3','female'),fishingArt.fishingLineOrigin('fish-down-3','male'));
+ });
+ test('skin and belt dyes never repaint boots or each other in folded action poses',()=>{
+  for(const key of Object.keys(real.frames)){
+   const body=key.startsWith('female-')?'female':'male',frame=key.replace(/^female-/,''),base=framePixels(key),parts=hero.recolorClothes(base,{body,shirt:'original',pants:'original'},frame);
+   const used=new Set();for(const part of ['skin','hair','eyes','shoes','trim'])for(const i of parts.masks[part]??[]){assert(!used.has(i),key+' overlapping '+part);used.add(i);}
+   for(const part of ['skin','trim']){
+    const p=framePixels(key);hero.recolorClothes(p,{body,shirt:'original',pants:'original',[part]:'#00ff44'},frame);
+    for(const i of parts.masks.shoes??[])assert.deepEqual(p.data.slice(i*4,i*4+4),base.data.slice(i*4,i*4+4),key+' boots repainted by '+part);
+   }
+  }
+ });
+ test('raised boots dye fully without recoloring touching palms in real roll frames',()=>{
+  const cases=[
+   ['dodge-right-3',[[71,63]],[[61,80]]],
+   ['female-dodge-right-3',[[71,63]],[[61,79]]],
+   ['dodge-up-2',[[61,92],[74,92]],[[51,90],[82,90]]],
+   ['dodge-up-5',[[52,91],[66,90]],[[76,90]]],
+   ['female-dodge-up-5',[[54,91],[67,89]],[[77,89]]]
+  ];
+  for(const[key,boots,palms]of cases){
+   const p=framePixels(key),before=p.data.slice(),parts=hero.recolorClothes(p,{body:key.startsWith('female-')?'female':'male',shirt:'original',pants:'original',shoes:'#00ff44'},key.replace(/^female-/,''));
+   for(const[x,y]of boots){assert(parts.masks.shoes.includes(y*128+x),key+' missing boot');assert.notDeepEqual(rgba(p,x,y),rgba({...p,data:before},x,y));}
+   for(const[x,y]of palms)assert.deepEqual(rgba(p,x,y),rgba({...p,data:before},x,y),key+' shoe dye on palm');
+  }
+ });
+ test('the fully occluded trousers do not pull the rolling outfit onto a cuff',()=>{
+  const p=framePixels('dodge-up-4'),parts=hero.recolorClothes(p,appearance.DEFAULT_APPEARANCE,'dodge-up-4'),pose=wardrobe.wardrobePose('dodge-up-4',parts,128);
+  assert.equal(parts.masks.pants.length,0);assert(Math.abs(pose.hip.x-65)<2);assert(Math.cos(pose.angle)<-.95);assert(pose.hip.y>=69&&pose.hip.y<=73);
  });
  console.log(`${checks} appearance checks; 0 failures`);
 }finally{for(const [k,value]of original){if(value)Object.defineProperty(globalThis,k,value);else delete globalThis[k];}project.cleanup();}

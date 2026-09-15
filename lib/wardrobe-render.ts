@@ -2,21 +2,31 @@ import {colorHex,type Appearance,type DyePart} from './appearance';
 import type {Atlas,Direction,Sprite} from './art';
 import type {Pixels,Region} from './hero-appearance';
 import {WEARABLES} from './wardrobe';
-type Masks={masks:Partial<Record<DyePart,number[]>>;shirt?:Region;pants?:Region;head?:Region;face?:Region};
+type Masks={masks:Partial<Record<DyePart,number[]>>;shirt?:Region;pants?:Region;head?:Region;face?:Region;pelvis?:{x:number;y:number};headVisible?:boolean;protectedPixels?:number[]};
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
 const box=(points:number[],w:number)=>{let x=Infinity,y=Infinity,right=0,bottom=0;for(const i of points){x=Math.min(x,i%w);y=Math.min(y,Math.floor(i/w));right=Math.max(right,i%w);bottom=Math.max(bottom,Math.floor(i/w));}return{x,y,width:right-x+1,height:bottom-y+1};};
 function tint(data:Uint8ClampedArray,k:number,color:string,base=170){const shade=Math.max(.45,Math.min(1.3,(data[k]*.22+data[k+1]*.55+data[k+2]*.23)/base));for(let c=0;c<3;c++)data[k+c]=Math.round(Math.min(255,parseInt(color.slice(1+c*2,3+c*2),16)*shade));}
+export function wardrobePose(frame:Sprite,parts:Masks,w:number){
+    const {head,pants}=parts;if(!head||!pants)return;
+    const u=w/128,quantile=(v:number[],q:number)=>v[Math.floor((v.length-1)*q)];
+    const xs=pants.points.map(i=>i%w).sort((a,b)=>a-b),ys=pants.points.map(i=>Math.floor(i/w)).sort((a,b)=>a-b);
+    // Centre between the two legs; a median x would jump to the visible leg
+    // whenever a hand or tool covers the other one.
+    const pc=parts.pelvis??{x:(quantile(xs,.1)+quantile(xs,.9))/2,y:quantile(ys,.5)};
+    const hc={x:head.x+head.width/2,y:head.y+Math.min(11*u,head.height*.4)};
+    let angle=0;
+    if(frame.startsWith('sleep-')||frame.startsWith('dodge-'))angle=Math.atan2(pc.y-hc.y,pc.x-hc.x)-Math.PI/2;
+    // Attach at the pelvis mass. The topmost blue pixel may be a cuff, an
+    // outline or a tool crossing the waist and is not a stable joint.
+    const hip={x:pc.x+Math.sin(angle)*4*u,y:pc.y-Math.cos(angle)*4*u};
+    return {hip,hc,angle};
+}
 /** Generated body and garments are fitted to the existing skeleton, never to a tool's bounds. */
 export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:Pixels,a:Appearance,frame:Sprite,parts:Masks){
     const {masks,shirt,pants,head}=parts;if(!shirt||!pants||!head)return;
     const direction=(frame.match(/-(down|up|right)-/)?.[1]??'down') as Direction;
     const w=original.width,h=original.height,u=w/128;
-    const hip={x:pants.x+pants.width/2,y:pants.y+Math.min(3*u,pants.height*.2)};
-    const hc={x:head.x+head.width/2,y:head.y+Math.min(11*u,head.height*.4)};
-    // Only lying / rolling poses turn the attachment axis. Raised-tool frames
-    // keep their original torso scale and head placement.
-    let angle=0;
-    if(frame.startsWith('sleep-')||frame.startsWith('dodge-'))angle=Math.atan2(hip.y-hc.y,hip.x-hc.x)-Math.PI/2;
+    const {hip,hc,angle}=wardrobePose(frame,parts,w)!;
     const ca=Math.cos(angle),sa=Math.sin(angle),project=(x:number,y:number)=>({x:(x-hip.x)*ca+(y-hip.y)*sa,y:-(x-hip.x)*sa+(y-hip.y)*ca});
     const dressed=ctx.getImageData(0,0,w,h),d=dressed.data,src=original.data;
     const garment=new Set([...(masks.shirt??[]),...(masks.pants??[])]),skin=new Set(masks.skin??[]),hair=new Set(masks.hair??[]);
@@ -73,6 +83,7 @@ export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:
             const width=(direction==='right'?26:34)*u,height=31*u;
             lc.drawImage(source,-width/2,-19*u,width,height);
             const cp=lc.getImageData(0,0,w,h),colors=['#d55258','#30b3a7','#e0e4cf','#67a744'],baseColor=colors[item.row];
+            for(let k=3;k<cp.data.length;k+=4)cp.data[k]=cp.data[k]>=128?255:0;
             for(let i=0;i<w*h;i++){
                 const k=i*4;if(cp.data[k+3]<128)continue;
                 const[r,g,b]=cp.data.subarray(k,k+3),accent=r>g*1.08&&g>b*1.15;
@@ -87,7 +98,7 @@ export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:
             ctx.save();ctx.globalCompositeOperation='destination-over';ctx.drawImage(layer,0,0);ctx.restore();
         }
     }
-    if(a.headwear){
+    if(a.headwear&&parts.headVisible!==false){
         const item=WEARABLES.find(item=>item.id===a.headwear&&item.slot==='headwear');if(!item)return;
         const hat=art[`wardrobe-headwear-${item.row}-${direction}`];
         const layer=canvas(w,h),lc=layer.getContext('2d')!;lc.imageSmoothingEnabled=false;
@@ -96,6 +107,7 @@ export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:
         const y=[-19,-29,0,-17][item.row]*u;
         lc.drawImage(hat,-width/2,y,width,height);
         const pixels=lc.getImageData(0,0,w,h);
+        for(let k=3;k<pixels.data.length;k+=4)pixels.data[k]=pixels.data[k]>=128?255:0;
         if(a.headwearColor)for(let k=0;k<pixels.data.length;k+=4){const[r,g,b,alpha]=pixels.data.subarray(k,k+4);if(alpha>=128&&Math.max(r,g,b)-Math.min(r,g,b)>25)tint(pixels.data,k,colorHex(a.headwearColor),160);}
         if(item.row===0){
             // Hood surrounds the existing head; its opaque lining cannot cover
@@ -110,6 +122,7 @@ export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:
             const k=i*4,[r,g,b,alpha]=src.subarray(k,k+4);
             if(alpha>=128&&!garment.has(i)&&!skin.has(i)&&!hair.has(i)&&r>100&&b>=g&&b>r*1.05&&b-r<130)final.data.set(src.subarray(k,k+4),k);
         }
+        for(const i of parts.protectedPixels??[])final.data.set(src.subarray(i*4,i*4+4),i*4);
         ctx.putImageData(final,0,0);
     }
 }
