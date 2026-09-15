@@ -163,5 +163,32 @@ try{
   const p=framePixels('dodge-up-4'),parts=hero.recolorClothes(p,appearance.DEFAULT_APPEARANCE,'dodge-up-4'),pose=wardrobe.wardrobePose('dodge-up-4',parts,128);
   assert.equal(parts.masks.pants.length,0);assert(Math.abs(pose.hip.x-65)<2);assert(Math.cos(pose.angle)<-.95);assert(pose.hip.y>=69&&pose.hip.y<=73);
  });
+ test('real metal blades and wooden tools keep their colors under independent body dyes',()=>{
+  for(const[key,x,y]of [['sword-down-4',90,85],['pick-up-1',44,44],['hammer-down-3',64,83]]){
+   const p=framePixels(key),before=p.data.slice(),parts=hero.recolorClothes(p,{body:'male',shirt:'#ff00aa',pants:'#00ff00',hair:'#8844ff',skin:'#44aaff',shoes:'#ffff00',trim:'#ff4444'},key);
+   assert(parts.protectedPixels.includes(y*128+x),key+' missing tool');assert.deepEqual(rgba(p,x,y),rgba({...p,data:before},x,y),key+' dyed tool');
+   assert(parts.head.width<=34);assert(parts.pants.width<=30);
+  }
+ });
+ test('trouser highlights follow trousers without taking the shirt color during a raised pick',()=>{
+  const key='female-pick-down-2',shirt=framePixels(key),pants=framePixels(key),before=shirt.data.slice();
+  hero.recolorClothes(shirt,{body:'female',shirt:'#ff00aa',pants:'original'},'pick-down-2');
+  hero.recolorClothes(pants,{body:'female',shirt:'original',pants:'#00ff44'},'pick-down-2');
+  assert.deepEqual(rgba(shirt,70,82),rgba({...shirt,data:before},70,82));assert.notDeepEqual(rgba(pants,70,82),rgba({...pants,data:before},70,82));
+ });
+ test('harvesting dyes both boots while keeping the held carrot separate from shoes and skin',()=>{
+  const key='female-harvest-right-4';for(const part of ['shoes','skin']){
+   const p=framePixels(key),before=p.data.slice();hero.recolorClothes(p,{body:'female',shirt:'original',pants:'original',[part]:'#00ff44'},'harvest-right-4');
+   assert.deepEqual(rgba(p,80,84),rgba({...p,data:before},80,84),'dyed carrot');
+   for(const[x,y]of [[65,92],[73,91]])if(part==='shoes')assert.notDeepEqual(rgba(p,x,y),rgba({...p,data:before},x,y));else assert.deepEqual(rgba(p,x,y),rgba({...p,data:before},x,y));
+  }
+ });
+ test('crouched feet above the standing baseline still dye independently from the hammer',()=>{
+  for(const key of ['hammer-down-4','female-hammer-down-4']){
+   const p=framePixels(key),before=p.data.slice();hero.recolorClothes(p,{body:key.startsWith('female-')?'female':'male',shirt:'original',pants:'original',shoes:'#00ff44'},'hammer-down-4');
+   for(const x of [50,75])assert.notDeepEqual(rgba(p,x,85),rgba({...p,data:before},x,85),key+' boot');
+   assert.deepEqual(rgba(p,61,93),rgba({...p,data:before},61,93),key+' wooden hammer');
+  }
+ });
  console.log(`${checks} appearance checks; 0 failures`);
 }finally{for(const [k,value]of original){if(value)Object.defineProperty(globalThis,k,value);else delete globalThis[k];}project.cleanup();}

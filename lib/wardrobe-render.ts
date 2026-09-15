@@ -116,7 +116,7 @@ export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:
         }
         lc.setTransform(1,0,0,1,0,0);lc.putImageData(pixels,0,0);ctx.drawImage(layer,0,0);
     }
-    if(/^(axe|pick|sword|hammer|hoe|water|fish|cook)-/.test(frame)){
+    if(parts.protectedPixels?.length||/^(axe|pick|sword|hammer|hoe|water|fish|cook)-/.test(frame)){
         const final=ctx.getImageData(0,0,w,h);
         for(let i=0;i<w*h;i++){
             const k=i*4,[r,g,b,alpha]=src.subarray(k,k+4);
