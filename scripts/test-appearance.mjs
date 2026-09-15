@@ -5,7 +5,7 @@ import {compileProject} from './test-support.mjs';
 const project=compileProject({name:'appearance'});let checks=0;
 const original=new Map(['window','localStorage'].map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
 try{
- const [appearance,hero,chars,sim,wardrobe,fishingArt]=await Promise.all(['appearance','hero-appearance','characters','simulation','wardrobe-render','hero-fishing-art'].map(n=>import(project.module(n))));
+ const [appearance,hero,chars,sim,wardrobe,fishingArt,registration]=await Promise.all(['appearance','hero-appearance','characters','simulation','wardrobe-render','hero-fishing-art','hero-registration'].map(n=>import(project.module(n))));
  const test=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  test('old profiles keep the original male body and colors; corrupt appearance is normalized',()=>{
   assert.deepEqual(appearance.normalizeAppearance(null),{body:'male',shirt:'original',pants:'original'});
@@ -131,7 +131,8 @@ try{
  test('live fishing lines follow each body and mirrored rod tip, not the chest',()=>{
   for(const body of ['male','female'])for(const direction of ['down','up','right'])for(let f=0;f<8;f++){
    const frame=`fish-${direction}-${f}`,rod=fishingArt.fishingRod(frame,body),right=fishingArt.fishingLineOrigin(frame,body),left=fishingArt.fishingLineOrigin(frame,body,true);
-   assert.equal(32+right.x,rod[0]/2);assert.equal(48+right.y,rod[1]/2);assert.equal(left.x,-right.x);assert.equal(left.y,right.y);
+   const [dx,dy]=registration.heroFrameOffset(frame,body);
+   assert.equal(32+right.x,(rod[0]+dx)/2);assert.equal(48+right.y,(rod[1]+dy)/2);assert.equal(left.x,-right.x);assert.equal(left.y,right.y);
   }
   assert.notDeepEqual(fishingArt.fishingLineOrigin('fish-down-3','female'),fishingArt.fishingLineOrigin('fish-down-3','male'));
  });

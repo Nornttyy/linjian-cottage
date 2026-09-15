@@ -4,7 +4,6 @@ import type {Pixels,Region} from './hero-appearance';
 import {WEARABLES} from './wardrobe';
 type Masks={masks:Partial<Record<DyePart,number[]>>;shirt?:Region;pants?:Region;head?:Region;face?:Region;pelvis?:{x:number;y:number};headVisible?:boolean;protectedPixels?:number[]};
 const canvas=(w:number,h:number)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
-const box=(points:number[],w:number)=>{let x=Infinity,y=Infinity,right=0,bottom=0;for(const i of points){x=Math.min(x,i%w);y=Math.min(y,Math.floor(i/w));right=Math.max(right,i%w);bottom=Math.max(bottom,Math.floor(i/w));}return{x,y,width:right-x+1,height:bottom-y+1};};
 function tint(data:Uint8ClampedArray,k:number,color:string,base=170){const shade=Math.max(.45,Math.min(1.3,(data[k]*.22+data[k+1]*.55+data[k+2]*.23)/base));for(let c=0;c<3;c++)data[k+c]=Math.round(Math.min(255,parseInt(color.slice(1+c*2,3+c*2),16)*shade));}
 export function wardrobePose(frame:Sprite,parts:Masks,w:number){
     const {head,pants}=parts;if(!head||!pants)return;
@@ -35,43 +34,77 @@ export function composeWardrobe(ctx:CanvasRenderingContext2D,art:Atlas,original:
         const donor=art[`swim-${a.body}-${direction}`],dp=donor.getContext('2d')!.getImageData(0,0,donor.width,donor.height).data;
         const swimColor=a.outfit==='coral-swim'?'#f07d89':'#19bbce';
         const sample=(x:number,y:number)=>{const xx=Math.max(0,Math.min(127,Math.round(x))),yy=Math.max(0,Math.min(127,Math.round(y)));return (yy*128+xx)*4;};
-        const skinSamples=Array.from({length:20},(_,n)=>sample(54+n,88)).filter(j=>dp[j+3]>=128&&dp[j]>175&&dp[j+1]>110&&dp[j+2]>70&&dp[j]>dp[j+1]*1.1).sort((a,b)=>dp[a+1]-dp[b+1]);
-        const skinIndex=skinSamples[Math.floor(skinSamples.length*.6)]??sample(59,88);
-        const skinColor=a.skin&&a.skin!=='original'?colorHex(a.skin):'#f2bd88';
-        const sole=box(masks.shoes??[],w),bottom=Number.isFinite(sole.y)?sole.y+sole.height:pants.y+pants.height+6*u;
+        // Use the same skin as the animated face. A separately generated donor
+        // has a different complexion; tinting it twice leaves a visible seam.
+        // Median complexion of each original idle face. Sampling a moving
+        // face can select a cheek highlight or a pink hair tie on back views.
+        const skinBase=a.body==='female'?[254,232,207]:[253,214,156];
+        const skinLight=(skinBase[0]*.22+skinBase[1]*.55+skinBase[2]*.23)/205;
+        const skinColor=a.skin&&a.skin!=='original'?colorHex(a.skin):undefined;
+        const skinPalette=skinColor?[1,3,5].map(n=>parseInt(skinColor.slice(n,n+2),16)*skinLight):skinBase;
+        const paintSkin=(k:number,shade:number)=>{for(let ch=0;ch<3;ch++)d[k+ch]=Math.round(Math.min(255,skinPalette[ch]*Math.pow(shade,skinColor?1:[1,1.15,1.4][ch])));d[k+3]=255;};
         // Expand by one source pixel only into dark clothing seams; keep every
         // original hand, face, wooden tool and metal pixel intact.
-        const replace=new Set([...garment,...(masks.shoes??[]),...(masks.trim??[])]);
+        const shoes=new Set(masks.shoes??[]),protectedPixels=new Set([...(parts.protectedPixels??[]),...(masks.eyes??[]),...skin,...hair]);
+        // Hair ties share the trim dye with the belt, but are not swimwear.
+        const bodyTrim=(masks.trim??[]).filter(i=>{const q=project(i%w,Math.floor(i/w));return q.y>=-6*u&&q.y<=4*u&&[i-1,i+1,i-w,i+w].some(n=>garment.has(n));});
+        const replace=new Set([...garment,...shoes,...bodyTrim]);
         for(const i of [...replace])for(const n of [i-1,i+1,i-w,i+w]){
-            if(n<0||n>=w*h||skin.has(n)||hair.has(n)||src[n*4+3]<128)continue;
+            if(n<0||n>=w*h||protectedPixels.has(n)||src[n*4+3]<128)continue;
             const [r,g,b]=src.subarray(n*4,n*4+3);if((b>r*1.08&&g>r*1.05)||(r<115&&g<100&&b<100))replace.add(n);
         }
         const torsoWidth=(direction==='right'?15:a.body==='female'?19:21)*u;
+        // Compress the torso with the neck-to-hip distance during crouches.
+        // Keep the original limb paths; a standing torso cannot fit every pose.
+        const torsoTop=Math.max(-22*u,Math.min(-8*u,project(hc.x,hc.y).y+13*u));
         for(const i of replace){
+            if(protectedPixels.has(i))continue;
             const k=i*4,x=i%w,y=Math.floor(i/w),q=project(x,y);
-            const inTorso=Math.abs(q.x)<=torsoWidth/2&&q.y>=-18*u&&q.y<=7*u;
+            const inTorso=Math.abs(q.x)<=torsoWidth/2&&q.y>=torsoTop&&q.y<=7*u;
             if(inTorso){
-                const donorX=64+q.x/u,donorY=76+q.y/u,j=sample(donorX,donorY);
-                if(dp[j+3]>=128){d.set(dp.subarray(j,j+4),k);const[r,g,b]=dp.subarray(j,j+3);
+                const donorX=64+q.x/u,donorY=76+(q.y<0?q.y/(-torsoTop)*18:q.y/u),j=sample(donorX,donorY);
+                if(dp[j+3]>=128){const[r,g,b]=dp.subarray(j,j+3);
+                    d.set(dp.subarray(j,j+4),k);
                     if(g>r*1.15&&b>r*1.2)tint(d,k,(q.y<0?a.shirt:a.pants)==='original'?swimColor:colorHex(q.y<0?a.shirt:a.pants),150);
-                    else if(a.skin)tint(d,k,skinColor,205);
-                }else d[k+3]=0;
+                    else paintSkin(k,Math.max(.78,Math.min(1.05,(r*.22+g*.55+b*.23)/205)));
+                }else paintSkin(k,.9);
             }else{
-                // Generated skin palette replaces sleeves and trouser legs.
-                // Preserve the animated limb path, while trimming garment bulk.
-                const isLeg=q.y>7*u,edge=!replace.has(i-1)||!replace.has(i+1);
-                const shoe=(masks.shoes??[]).includes(i);
-                if((isLeg&&edge)||(shoe&&y<bottom-4*u&&edge)){d[k+3]=0;continue;}
-                if(shoe&&Math.abs(angle)<.15){
-                    let left=x,right=x;while(left>0&&replace.has(y*w+left-1))left--;while(right<w-1&&replace.has(y*w+right+1))right++;
-                    const maxWidth=(y<bottom-4*u?5:8)*u;
-                    if(Math.abs(x-(left+right)/2)>maxWidth/2){d[k+3]=0;continue;}
-                }
-                const base=shoe?110:isLeg?153:168,shade=Math.max(.4,Math.min(1.2,(src[k]*.22+src[k+1]*.55+src[k+2]*.23)/base));
-                for(let channel=0;channel<3;channel++)d[k+channel]=Math.round(Math.min(255,dp[skinIndex+channel]*shade));d[k+3]=255;
-                if(a.skin&&d[k+3])tint(d,k,skinColor,205);
+                // Do not erode every row boundary: clothing seams and occluded
+                // knees split rows, so that operation punched holes in limbs.
+                // A short skin ramp removes denim folds and leather highlights.
+                const isLeg=q.y>7*u,base=shoes.has(i)?110:isLeg?153:168;
+                const light=(src[k]*.22+src[k+1]*.55+src[k+2]*.23)/base;
+                paintSkin(k,light<.58?.78:light<.82?.90:light>1.12?1.04:1);
                 const shoulderDistance=Math.min(Math.hypot(q.x-8*u,q.y+15*u),Math.hypot(q.x+8*u,q.y+15*u));
                 if(a.body==='male'&&!isLeg&&shoulderDistance<7*u)tint(d,k,a.shirt==='original'?swimColor:colorHex(a.shirt),180);
+            }
+        }
+        // Replace the boot silhouette with the generated bare foot, anchored
+        // at the original sole. The knee and leg animation stay intact.
+        if(!/^(dodge|sleep)-/.test(frame)&&shoes.size){
+            const feet=[...shoes].map(i=>({i,...project(i%w,Math.floor(i/w))}));
+            const spread=Math.max(...feet.map(p=>p.x))-Math.min(...feet.map(p=>p.x));
+            const two=direction!=='right'||spread>15*u;
+            const split=direction==='right'?(Math.min(...feet.map(p=>p.x))+Math.max(...feet.map(p=>p.x)))/2:0;
+            const groups=two?[feet.filter(p=>p.x<split),feet.filter(p=>p.x>=split)]:[feet];
+            for(const [index,points]of groups.entries()){
+                if(!points.length)continue;
+                const xs=points.map(p=>p.x).sort((a,b)=>a-b),footX=(xs[Math.floor(xs.length*.2)]+xs[Math.floor(xs.length*.8)])/2;
+                const bottom=Math.max(...points.map(p=>p.y))+1*u,top=bottom-6*u;
+                const sourceX=direction==='right'?63.5:index===0?(a.body==='male'&&direction==='down'?58:59):68.5;
+                const sourceWidth=direction==='right'?12:10;
+                const left=Math.min(...points.map(p=>p.x))-u,right=Math.max(...points.map(p=>p.x))+u;
+                for(let i=0;i<w*h;i++){const q=project(i%w,Math.floor(i/w));if(q.y>=top&&q.y<=bottom&&q.x>=left&&q.x<=right&&!protectedPixels.has(i))d[i*4+3]=0;}
+                for(let i=0;i<w*h;i++){
+                    if(protectedPixels.has(i))continue;
+                    const q=project(i%w,Math.floor(i/w));if(q.y<top||q.y>=bottom)continue;
+                    const dx=(q.x-footX)/u;if(Math.abs(dx)>sourceWidth/2)continue;
+                    const donorX=sourceX+dx;
+                    if(direction!=='right'&&(index===0?Math.round(donorX)>=64:Math.round(donorX)<64))continue;
+                    const j=sample(donorX,90+(q.y-top)/u),[r,g,b,alpha]=dp.subarray(j,j+4);
+                    if(alpha<128)continue;
+                    paintSkin(i*4,Math.max(.38,Math.min(1.08,(r*.22+g*.55+b*.23)/205)));
+                }
             }
         }
         ctx.putImageData(dressed,0,0);

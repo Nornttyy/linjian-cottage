@@ -4,6 +4,7 @@ import {composeWardrobe} from './wardrobe-render';
 import {femaleDyeRegistrations,type DyeRegistration} from './female-art-layout';
 import {fishingRod,fishingRodPixel} from './hero-fishing-art';
 import {toolDyeExclusion} from './hero-tool-masks';
+import {alignHeroFrame} from './hero-registration';
 export type Pixels={data:Uint8ClampedArray;width:number;height:number};
 export type Region={points:number[];x:number;y:number;width:number;height:number};
 function regions(p:Pixels,accept:(r:number,g:number,b:number,i:number)=>boolean):Region[]{
@@ -39,7 +40,7 @@ const reviewedBoots:Record<string,number[][]>={
     'male:dodge-up-5':[[47,85,58,95],[60,82,71,97]],
     'female:dodge-up-5':[[49,87,59,95],[62,82,72,97]],
     'female:harvest-right-4':[[57,88,68,97],[67,87,78,96]],
-    'female:hammer-down-4':[[47,82,58,91],[69,82,81,92]]
+    'female:hammer-down-4':[[45,82,59,92],[69,82,83,92]]
 };
 export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,registration?:DyeRegistration){
     const reviewedTools=toolDyeExclusion(frame,appearance.body,p.width,p.height);
@@ -224,7 +225,7 @@ const caches=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
 export function dressedHero(art:Atlas,frame:Sprite,value?:Appearance):HTMLCanvasElement{
     const a=normalizeAppearance(value),source=art[a.body==='female'?`female-${frame}` as Sprite:frame];
     if(!source)throw Error('角色动作素材缺失：'+a.body+' '+frame);
-    if(a.shirt==='original'&&a.pants==='original'&&!a.hair&&!a.skin&&!a.eyes&&!a.shoes&&!a.trim&&!a.headwear&&!a.outfit)return source;
+    if(a.shirt==='original'&&a.pants==='original'&&!a.hair&&!a.skin&&!a.eyes&&!a.shoes&&!a.trim&&!a.headwear&&!a.outfit)return alignHeroFrame(source,frame,a.body);
     let cache=caches.get(art);if(!cache){cache=new Map();caches.set(art,cache);}
     const key=frame+':'+appearanceKey(a),found=cache.get(key);if(found)return found;
     const out=document.createElement('canvas');out.width=source.width;out.height=source.height;
@@ -234,5 +235,6 @@ export function dressedHero(art:Atlas,frame:Sprite,value?:Appearance):HTMLCanvas
     const regions=recolorClothes(pixels,a,frame,femaleDyeRegistrations.get(source));ctx.putImageData(pixels,0,0);
     if(a.headwear||a.outfit)composeWardrobe(ctx,art,original,a,frame,regions);
     // Bound memory when a user previews many different outfits in one session.
-    if(cache.size>=768)cache.delete(cache.keys().next().value!);cache.set(key,out);return out;
+    const registered=alignHeroFrame(out,frame,a.body);
+    if(cache.size>=768)cache.delete(cache.keys().next().value!);cache.set(key,registered);return registered;
 }

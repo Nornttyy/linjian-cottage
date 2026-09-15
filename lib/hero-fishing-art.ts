@@ -1,5 +1,6 @@
 import type {Sprite} from './art';
 import type {Pixels} from './hero-appearance';
+import {heroFrameOffset} from './hero-registration';
 
 type Segment=readonly [number,number,number,number];
 // Reviewed rod tips and grips in the existing 128px action buffers.
@@ -32,7 +33,8 @@ export function fishingRodPixel(p:Pixels,i:number,rod:Segment|undefined){
 /** The live line runs from this tip to the actual bobber, including left mirroring. */
 export function fishingLineOrigin(frame:Sprite,body:'male'|'female',left=false){
     const rod=fishingRod(frame,body);if(!rod)return {x:0,y:-24};
-    return {x:(rod[0]/2-32)*(left?-1:1),y:rod[1]/2-48};
+    const [dx,dy]=heroFrameOffset(frame,body);
+    return {x:((rod[0]+dx)/2-32)*(left?-1:1),y:(rod[1]+dy)/2-48};
 }
 export function removeBakedFishingLine(p:Pixels,frame:Sprite,body:'male'|'female'){
     const rod=fishingRod(frame,body),pose=Number(frame.split('-').at(-1));if(!rod||pose<2||pose>6)return;
