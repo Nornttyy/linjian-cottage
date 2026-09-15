@@ -2,9 +2,11 @@ import {colorHex,appearanceKey,normalizeAppearance,type Appearance,type Clothing
 import type {Atlas,Sprite} from './art';
 import {composeWardrobe} from './wardrobe-render';
 import {femaleDyeRegistrations,type DyeRegistration} from './female-art-layout';
-import {fishingRod,fishingRodPixel} from './hero-fishing-art';
+import {fishingRod,fishingRodPixel,fishingLineOrigin} from './hero-fishing-art';
 import {toolDyeExclusion} from './hero-tool-masks';
-import {alignHeroFrame} from './hero-registration';
+import {alignHeroFrame,heroFrameOffset} from './hero-registration';
+import {bodyFamily,fullBodyKey} from './full-body-layout';
+import {completeBodies,dyeCompleteBody} from './full-body-art';
 export type Pixels={data:Uint8ClampedArray;width:number;height:number};
 export type Region={points:number[];x:number;y:number;width:number;height:number};
 function regions(p:Pixels,accept:(r:number,g:number,b:number,i:number)=>boolean):Region[]{
@@ -221,19 +223,31 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     return {masks,shirt,pants,head,face,pelvis,headVisible:!hiddenHead,protectedPixels};
 }
 const caches=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
+export function dressedFishingLineOrigin(art:Atlas,frame:Sprite,value?:Appearance,left=false){
+    const a=normalizeAppearance(value),family=bodyFamily(a.outfit);
+    const tip=family?completeBodies.get(art[fullBodyKey(family,a.body,frame)])?.rodTip:undefined;
+    if(!tip)return fishingLineOrigin(frame,a.body,left);
+    const [dx,dy]=heroFrameOffset(frame,a.body);
+    return {x:((tip[0]+dx)/2-32)*(left?-1:1),y:(tip[1]+dy)/2-48};
+}
 /** Female and male bodies each have complete independently authored animation atlases. */
 export function dressedHero(art:Atlas,frame:Sprite,value?:Appearance):HTMLCanvasElement{
-    const a=normalizeAppearance(value),source=art[a.body==='female'?`female-${frame}` as Sprite:frame];
-    if(!source)throw Error('角色动作素材缺失：'+a.body+' '+frame);
-    if(a.shirt==='original'&&a.pants==='original'&&!a.hair&&!a.skin&&!a.eyes&&!a.shoes&&!a.trim&&!a.headwear&&!a.outfit)return alignHeroFrame(source,frame,a.body);
+    const a=normalizeAppearance(value),family=bodyFamily(a.outfit);
     let cache=caches.get(art);if(!cache){cache=new Map();caches.set(art,cache);}
     const key=frame+':'+appearanceKey(a),found=cache.get(key);if(found)return found;
+    const source=family?art[fullBodyKey(family,a.body,frame)]:art[a.body==='female'?`female-${frame}` as Sprite:frame];
+    if(!source)throw Error('角色动作素材缺失：'+a.body+' '+frame);
+    if(a.shirt==='original'&&a.pants==='original'&&!a.hair&&!a.skin&&!a.eyes&&!a.shoes&&!a.trim&&!a.headwear&&!a.outfit)return alignHeroFrame(source,frame,a.body);
     const out=document.createElement('canvas');out.width=source.width;out.height=source.height;
     const ctx=out.getContext('2d')!;ctx.imageSmoothingEnabled=false;ctx.drawImage(source,0,0);
     const pixels=ctx.getImageData(0,0,out.width,out.height);
     const original=ctx.getImageData(0,0,out.width,out.height);
-    const regions=recolorClothes(pixels,a,frame,femaleDyeRegistrations.get(source));ctx.putImageData(pixels,0,0);
-    if(a.headwear||a.outfit)composeWardrobe(ctx,art,original,a,frame,regions);
+    const complete=completeBodies.get(source);
+    if(family&&!complete)throw Error('完整角色动作信息缺失：'+a.outfit+' '+frame);
+    const regions=complete?complete.parts:recolorClothes(pixels,a,frame,femaleDyeRegistrations.get(source));
+    if(complete)dyeCompleteBody(pixels,a,complete);
+    ctx.putImageData(pixels,0,0);
+    if(a.headwear)composeWardrobe(ctx,art,original,{...a,outfit:undefined},frame,regions);
     // Bound memory when a user previews many different outfits in one session.
     const registered=alignHeroFrame(out,frame,a.body);
     if(cache.size>=768)cache.delete(cache.keys().next().value!);cache.set(key,registered);return registered;

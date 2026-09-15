@@ -1,4 +1,6 @@
 import {WARDROBE_ART_FILES} from './wardrobe';
+import {FULL_BODY_SHEETS,type FullBodySprite} from './full-body-layout';
+import {loadCompleteBodySheet} from './full-body-art';
 import {removeBakedFishingLine} from './hero-fishing-art';
 import {FEMALE_SHEETS,FEMALE_BODY_HEIGHTS,femaleDyeRegistrations,type FemaleSheet} from './female-art-layout';
 import {drawConnectedWall} from './connected-wall';
@@ -16,7 +18,7 @@ export type Direction='down'|'up'|'right';
 export type HeroAction='harvest'|'pickup'|'eat'|'fish'|'cook'|'sleep'|'idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
 type BaseSprite=`female-${HeroAction}-${Direction}-${number}`|'hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Sprite=`swim-${'male'|'female'}-${Direction}`|`wardrobe-${'headwear'|'outfit'}-${number}-${Direction}`|BaseSprite|IngredientId|DishId|'rod'|'fish'|'meal'|'bed'|'campfire'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
-export type Atlas=Record<Sprite,HTMLCanvasElement>;
+export type Atlas=Record<Sprite|FullBodySprite,HTMLCanvasElement>;
 export const ART_DENSITY=2;
 export const HERO_FRAME_COUNT=8;
 export const HERO_IDLE_FRAME_COUNT=32;
@@ -351,17 +353,7 @@ async function loadAll():Promise<Atlas>{
             art[`wardrobe-${sheetIndex===0?'headwear':'outfit'}-${row}-${(['down','up','right'] as const)[col]}`]=out;
         }
     }
-    for(let row=0;row<2;row++)for(let col=0;col<3;col++){
-        const swim=wardrobe[row===0?3:2];
-        const cell=canvas(swim.width/3,swim.height/(row===0?1:2)),cc=cell.getContext('2d')!;
-        cc.drawImage(swim,col*cell.width,row*cell.height,cell.width,cell.height,0,0,cell.width,cell.height);
-        const pixels=cc.getImageData(0,0,cell.width,cell.height);
-        for(let i=3;i<pixels.data.length;i+=4)pixels.data[i]=pixels.data[i]>=128?255:0;
-        cc.putImageData(pixels,0,0);cleanFragments(cell,true);
-        const cut=cropped(cell),out=canvas(128,128),ctx=out.getContext('2d')!,scale=62/cut.height;
-        ctx.imageSmoothingEnabled=false;ctx.drawImage(cut,Math.round(64-cut.width*scale/2),34,Math.round(cut.width*scale),62);
-        art[`swim-${row===0?'male':'female'}-${(['down','up','right'] as const)[col]}`]=out;
-    }
+    await loadAssetBatches(FULL_BODY_SHEETS.map(spec=>async()=>loadCompleteBodySheet(art,spec,await load('/art/'+spec.file))));
     art.campfire=art.fire0;
     return art;
 }

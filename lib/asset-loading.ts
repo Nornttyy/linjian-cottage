@@ -1,6 +1,7 @@
 import {WARDROBE_ART_FILES} from './wardrobe';
 import {FEMALE_SHEETS} from './female-art-layout';
 import {FOOD_SHEETS} from './food-art-layout';
+import {FULL_BODY_SHEETS} from './full-body-layout';
 
 export const ART_FILES = [
     'surfaces-final.png','objects-final.png','icons-final.png','hero-walk-v2.png','hero-walk.png','hero-motion.png',
@@ -11,6 +12,7 @@ export const ART_FILES = [
     'hero-fish.png','hero-cook.png','hero-sleep.png','hero-roll.png','bed-horizontal.png',
     'landscape-terrain-v3.png','landscape-props-v3.png','landscape-landmarks-v3.png',
     ...WARDROBE_ART_FILES,
+    ...FULL_BODY_SHEETS.map(sheet=>sheet.file),
     ...FEMALE_SHEETS.map(sheet=>sheet.file),
     ...FOOD_SHEETS.map(sheet=>sheet.file)
 ] as const;

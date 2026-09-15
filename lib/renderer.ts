@@ -3,8 +3,7 @@ import {BEACON} from './story';
 import {drawEffect,eventEffect} from './particles';
 import {deathPose} from './death';
 import {WEARABLES,hasWearable,canSwim} from './wardrobe';
-import {dressedHero} from './hero-appearance';
-import {fishingLineOrigin} from './hero-fishing-art';
+import {dressedHero,dressedFishingLineOrigin} from './hero-appearance';
 import type {Appearance} from './appearance';
 import { COLORS, resourcesInRect, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { distance, type WorldState, type Player, type Part, type Tool } from './simulation';
@@ -311,7 +310,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             drawables.push({y:fishing.target.y+.5,draw:()=>{
                 const cast=Math.max(0,Math.min(1,(t-fishing.startedAt)/(fishing.castUntil-fishing.startedAt)));
                 const face=p.swingFace??p.face,frame=fishingFrame(fishing,face,t)!,appearance=local?(view.localAppearance??p.appearance):p.appearance;
-                const tip=fishingLineOrigin(frame,appearance?.body==='female'?'female':'male',face==='left');
+                const tip=dressedFishingLineOrigin(art,frame,appearance,face==='left');
                 const startX=Math.round(point.x*TILE+ox)+tip.x,startY=Math.round(point.y*TILE+oy)+tip.y;
                 const bob=fishing.phase==='bite'?Math.round(Math.sin(t/60)*2):Math.round(Math.sin(t/240));
                 const endX=Math.round(startX+((fishing.target.x+.5)*TILE+ox-startX)*cast),endY=Math.round(startY+((fishing.target.y+.5)*TILE+oy-startY)*cast)+bob;

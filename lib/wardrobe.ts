@@ -24,7 +24,7 @@ export function safeAppearance(value:unknown,owner:WardrobeOwner&{appearance?:Ap
     if(owner.x!==undefined&&owner.y!==undefined&&terrainAt(Math.floor(owner.x),Math.floor(owner.y))==='water'&&canSwim(owner))next.outfit=owner.appearance?.outfit;
     return next;
 }
-export const WARDROBE_ART_FILES=['wardrobe-heads-v3.png','wardrobe-cloaks-v2.png','swim-body-v1.png','swim-male-shirt-v1.png'] as const;
+export const WARDROBE_ART_FILES=['wardrobe-heads-v3.png'] as const;
 export function wearing(owner:WardrobeOwner&{appearance?:Appearance},id:string){return hasWearable(owner,id)&&(owner.appearance?.headwear===id||owner.appearance?.outfit===id);}
 export function canSwim(owner:WardrobeOwner&{appearance?:Appearance}){return wearing(owner,'river-swim')||wearing(owner,'coral-swim');}
 export function wearableReady(owner:WardrobeOwner&{journal?:{fish?:number}},id:string){const item=WEARABLES.find(item=>item.id===id);return !!item&&(!('requires'in item)||item.requires.every(key=>hasWearable(owner,key)))&&(!('fish'in item)||(owner.journal?.fish??0)>=item.fish);}

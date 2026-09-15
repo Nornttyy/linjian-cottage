@@ -17,10 +17,6 @@ try{
  const pixel=(p,i)=>Array.from(p.data.subarray(i*4,i*4+4));
  const test=(name,fn)=>{fn();console.log('PASS',name);};
  const partsFor=(name,a)=>{const p=read(name),body=name.startsWith('female-')?'female':'male',frame=name.replace(/^female-/,'');return {p,body,frame,parts:hero.recolorClothes(p,a??{body,shirt:'original',pants:'original'},frame)};};
- const compose=(name,extras={})=>{
-  const body=name.startsWith('female-')?'female':'male',a={body,shirt:'original',pants:'original',outfit:'river-swim',...extras},original=read(name),{p,frame,parts}=partsFor(name,a),c=new Canvas(p);
-  wardrobe.composeWardrobe(c.getContext(),art,original,a,frame,parts);return {c,p,parts,original};
- };
  test('female cooking and fishing keep planted feet at the same position through every pose',()=>{
   for(const action of ['cook','fish'])for(const dir of ['down','up','right'])for(let f=0;f<8;f++){
    const name=`female-${action}-${dir}-${f}`,{parts,frame}=partsFor(name),[dx,dy]=registration.heroFrameOffset(frame,'female');
@@ -40,25 +36,6 @@ try{
   for(const dir of ['down','up','right'])for(let f=0;f<8;f++){
    const frame=`fish-${dir}-${f}`,rod=fishing.fishingRod(frame,'female'),[dx,dy]=registration.heroFrameOffset(frame,'female'),a=fishing.fishingLineOrigin(frame,'female'),b=fishing.fishingLineOrigin(frame,'female',true);
    assert.equal(a.x+32,(rod[0]+dx)/2);assert.equal(a.y+48,(rod[1]+dy)/2);assert.equal(b.x,-a.x);assert.equal(b.y,a.y);
-  }
- });
- test('swimwear preserves eyes, hair, face and held tools across standing, raised-arm and folded poses',()=>{
-  for(const name of Object.keys(art).filter(n=>!n.startsWith('swim-'))){
-   const {c,p,parts}=compose(name,{skin:'#ac7859',hair:'#7941ab',eyes:'#18bb99'});
-   const head=[...(parts.masks.hair??[]),...(parts.masks.eyes??[]),...(parts.face?.points??[]).filter(i=>!(parts.masks.shirt??[]).includes(i)&&!(parts.masks.pants??[]).includes(i)&&!(parts.masks.shoes??[]).includes(i))];
-   for(const i of head)assert.deepEqual(pixel(c,i),pixel(p,i),name+' head '+i);
-   for(const i of parts.protectedPixels)assert.deepEqual(pixel(c,i),pixel(read(name),i),name+' held object');
-  }
- });
- test('swimwear no longer punches transparent holes through raised sleeves or the torso',()=>{
-  for(const name of ['pick-down-3','female-pick-down-3','idle-down-0','female-idle-down-0','female-hammer-down-4']){
-   const {c,parts}=compose(name);for(const i of parts.masks.shirt)assert(c.data[i*4+3]>=128,name+' missing limb pixel '+i);
-  }
- });
- test('back-facing swimwear keeps the ponytail tie and its chosen trim colour',()=>{
-  for(const name of ['female-idle-up-0','female-pick-up-3','female-walk-up-4']){
-   const {c,p,parts}=compose(name,{trim:'#b735b0'}),head=parts.head;
-   for(const i of parts.masks.trim.filter(i=>(i/128|0)<head.y+head.height))assert.deepEqual(pixel(c,i),pixel(p,i),name+' hair tie');
   }
  });
 }finally{if(saved)Object.defineProperty(globalThis,'document',saved);else delete globalThis.document;project.cleanup();}
