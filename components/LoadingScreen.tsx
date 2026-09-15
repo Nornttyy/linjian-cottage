@@ -12,12 +12,12 @@ export default function LoadingScreen({loading,onRetry,onExit}:{loading?:Loading
     const title=failed?(loading.error||'连接失败'):loading?.phase==='world'?'正在连接世界…':'正在准备小筑…';
     return <section className={'loading-screen'+(ready?' loading-ready':'')+(failed?' loading-failed':'')} role="dialog" aria-modal={!ready} aria-label="加载游戏" inert={ready}>
       <div className="loading-panel">
-        <div className="entry-lantern" aria-hidden="true"/><span className="loading-eyebrow">林间小筑 / 旅途手记</span>
-        <h2>把灯点亮，等你回来。</h2>
+        <div className="entry-lantern" aria-hidden="true"/>
+        <h2>林间小筑</h2>
         <p role={failed?'alert':'status'}>{title}</p>
         <div className="loading-track" role="progressbar" aria-label="游戏加载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><i style={{width:percent+'%'}}/></div>
         <span className="loading-percent">{percent}%</span>
-        <p className="loading-note">木头可以搭起小屋，一顿热饭可以恢复力气。</p>
+
         <div className="loading-actions">{failed&&<button autoFocus onClick={onRetry}>重试加载</button>}<button onClick={onExit}>返回主菜单</button></div>
       </div>
     </section>;

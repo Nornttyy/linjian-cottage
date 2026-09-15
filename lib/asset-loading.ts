@@ -1,3 +1,4 @@
+import {WARDROBE_ART_FILES} from './wardrobe';
 import {FEMALE_SHEETS} from './female-art-layout';
 import {FOOD_SHEETS} from './food-art-layout';
 
@@ -9,6 +10,7 @@ export const ART_FILES = [
     'boar-directions.png','mushroom-directions.png','activity-items.png','hero-harvest.png','hero-pickup.png','hero-eat.png',
     'hero-fish.png','hero-cook.png','hero-sleep.png','hero-roll.png','bed-horizontal.png',
     'landscape-terrain-v3.png','landscape-props-v3.png','landscape-landmarks-v3.png',
+    ...WARDROBE_ART_FILES,
     ...FEMALE_SHEETS.map(sheet=>sheet.file),
     ...FOOD_SHEETS.map(sheet=>sheet.file)
 ] as const;

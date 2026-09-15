@@ -1,6 +1,11 @@
+import {campfireNear} from './activities';
+import {BEACON} from './story';
+import {drawEffect,eventEffect} from './particles';
+import {deathPose} from './death';
+import {WEARABLES,hasWearable,canSwim} from './wardrobe';
 import {dressedHero} from './hero-appearance';
 import type {Appearance} from './appearance';
-import { COLORS, resourcesInRect, resourceAt, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
+import { COLORS, resourcesInRect, SPAWN, WORLD_SIZE, terrainAt, regionAt, LANDMARKS, type Resource, sceneAt, MINE, CAVE_ENTRANCE, MINE_TORCHES } from './world';
 import { distance, type WorldState, type Player, type Part, type Tool } from './simulation';
 import { ART_DENSITY, HERO_SIZE, FIRE_SIZE, FIRE_FRAME_COUNT, FIRE_FRAME_MS, SLIME_SIZE, CROP_SIZE, type Atlas, type Sprite } from './art';
 import {material,terrainTile} from './tiles';
@@ -299,6 +304,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
         if (!visible(point.x, point.y))
             continue;
         const work=local?view.localWork:p.workAction&&p.workStart!==undefined&&p.workUntil?{action:p.workAction,start:p.workStart,until:p.workUntil,face:p.swingFace??p.face}:null;
+        if(!p.death&&work?.action==='cook'&&t<work.until){const fire=campfireNear(p,s.buildings);if(fire)drawables.push({y:fire.y+.1,draw:()=>drawEffect(ctx,'steam',fire.x*TILE+ox,fire.y*TILE+oy-18,(t-work.start)%900,p.id)});}
         if(fishingActive(p.fishing)){
             const fishing=p.fishing!;
             drawables.push({y:fishing.target.y+.5,draw:()=>{
@@ -308,25 +314,36 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
                 const endX=Math.round(startX+((fishing.target.x+.5)*TILE+ox-startX)*cast),endY=Math.round(startY+((fishing.target.y+.5)*TILE+oy-startY)*cast)+bob;
                 ctx.save();ctx.lineWidth=1;ctx.strokeStyle='#f0e8c5bb';ctx.beginPath();ctx.moveTo(Math.round(startX),Math.round(startY));ctx.lineTo(endX,endY);ctx.stroke();
                 ctx.fillStyle='#eee7c4';ctx.fillRect(endX-1,endY-4,3,3);ctx.fillStyle='#c87658';ctx.fillRect(endX-1,endY-1,3,3);
-                if(cast===1){ctx.strokeStyle='#d5efdf88';ctx.beginPath();ctx.ellipse(endX,endY+2,5+Math.sin(t/180),2,0,0,Math.PI*2);ctx.stroke();}
+                if(cast===1){const splashAge=t-fishing.castUntil;if(splashAge<720)drawEffect(ctx,'splash',endX,endY,splashAge,fishing.id);if(fishing.phase==='reeling')drawEffect(ctx,'water',endX,endY,t%560,fishing.id);ctx.strokeStyle='#d5efdf88';ctx.beginPath();ctx.ellipse(endX,endY+2,5+Math.sin(t/180),2,0,0,Math.PI*2);ctx.stroke();}
                 ctx.restore();
             }});
         }
         drawables.push({ y: point.y+(work?.action==='sleep'&&t<work.until ? .2 : 0), draw: () => {
                 const moving=local?pos.moving:(p.movingUntil??0)>s.tick,swing=local?view.localSwing:undefined;
                 const face=fishingFrame(p.fishing,p.swingFace??p.face,t)?p.swingFace??p.face:work&&t<work.until?work.face:heroFacing(p,local?pos.face:p.face,t,swing);
-                const frame=fishingFrame(p.fishing,p.swingFace??face,t)??(work?workFrame(work,t):null)??heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
-                const trail=fishingActive(p.fishing)||work&&t<work.until?null:toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
+                const frame=p.death?`hurt-${p.death.face==='left'?'right':p.death.face}-${deathPose(p.death,t).frame}` as Sprite:fishingFrame(p.fishing,p.swingFace??face,t)??(work?workFrame(work,t):null)??heroFrame(p,face,moving,t,local?view.tool:p.equipped??'axe',swing,local?view.motionElapsed:undefined);
+                const trail=p.death||fishingActive(p.fishing)||work&&t<work.until?null:toolTrailFrame(p,t,swing),px=Math.round(point.x*TILE+ox),py=Math.round(point.y*TILE+oy);
                 const drawTrail=()=>{if(!trail||!art[trail])return;const size=trail.startsWith('trail-sword')?56:44;
                     ctx.save();ctx.translate(px,py-12);ctx.rotate(face==='down'?Math.PI/2:face==='up'?-Math.PI/2:face==='left'?Math.PI:0);
                     ctx.globalAlpha=.8;ctx.drawImage(art[trail],-size/2,-size/2,size,size);ctx.restore();};
                 ctx.fillStyle='#48615730';ctx.fillRect(point.x*TILE+ox-6,point.y*TILE+oy-2,12,3);
                 if(face==='up')drawTrail();
                 ctx.save();ctx.translate(px,py);
+                if(p.death){const fall=deathPose(p.death,t);ctx.translate(0,-7+fall.sink);ctx.rotate(fall.angle);ctx.translate(0,7);}
+                const swimming=!p.death&&floorLevel(p)===0&&canSwim(p)&&terrainAt(Math.floor(point.x),Math.floor(point.y))==='water';
+                if(swimming){ctx.beginPath();ctx.rect(-32,-64,64,53);ctx.clip();ctx.translate(0,9);}
                 if(face==='left')ctx.scale(-1,1);ctx.drawImage(dressedHero(art,frame,p.id===id?(view.localAppearance??p.appearance):p.appearance),-HERO_SIZE.anchorX,-HERO_SIZE.anchorY,HERO_SIZE.width,HERO_SIZE.height);ctx.restore();
+                if(swimming)drawEffect(ctx,'water',px,py,260+Math.floor(t/100)%3*70,p.id);
                 if(face!=='up')drawTrail();
                 if(!local){ctx.fillStyle=['#ffe7a1','#f8a77d','#7cc9e2','#c8a0e8'][p.color%4];ctx.fillRect(point.x*TILE+ox-3,point.y*TILE+oy-37,6,2);}
             } });
+    }
+    if(s.beaconLit&&level===0&&sceneAt(pos.x)==='surface'&&visible(BEACON.x,BEACON.y))drawables.push({y:BEACON.y,draw:()=>sprite('lantern',BEACON.x,BEACON.y,22,32)});
+    const owner=s.players[id];
+    const finds=new Set<string>();
+    if(owner)for(const item of WEARABLES){if(!('x'in item)||hasWearable(owner,item.id)||sceneAt(item.x)!==sceneAt(pos.x)||level!==0||!visible(item.x,item.y))continue;
+        const key=`${item.x}:${item.y}`;if(finds.has(key))continue;finds.add(key);
+        drawables.push({y:item.y,draw:()=>{sprite('chest',item.x,item.y,17,15);if(Math.hypot(pos.x-item.x,pos.y-item.y)<2.5){ctx.font='8px monospace';ctx.fillStyle='#fff1b3';ctx.fillText('行囊 · F',item.x*TILE+ox-17,item.y*TILE+oy-22);}}});
     }
     if(view.tool==='build')drawBuildGrid(ctx,ox,oy,w,h);
     drawables.sort((a, b) => a.y - b.y).forEach(d => d.draw());
@@ -376,18 +393,7 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             ctx.font = 'bold 8px monospace';
             if (e.amount > 1&&!('predicted' in e&&e.predicted))
                 ctx.fillText(String(e.amount), x - 4, y);
-            if(age<340){
-                const progress=age/340,resource=e.kind==='hit'&&e.amount===1?resourceAt(Math.floor(e.x),Math.floor(e.y)):undefined;
-                const particle=resource?(resource.kind==='tree'||resource.kind==='pine'?art.wood:resource.kind==='berry'?art.berry:resource.kind==='copper'?art['copper-icon']:art['stone-icon']):art.spark;
-                ctx.globalAlpha=1-progress;
-                for(let i=0;i<4;i++){
-                    const angle=i*1.7,dx=Math.round(e.x*TILE+ox+Math.cos(angle)*progress*16),dy=Math.round(e.y*TILE+oy-12+Math.sin(angle)*progress*9-8*Math.sin(progress*Math.PI));
-                    ctx.drawImage(particle,dx-2,dy-2,resource?4:6,resource?4:6);
-                }
-            }
         }
-        else if(e.kind==='spore'){ctx.globalAlpha=(1-f)*.65;for(let i=0;i<8;i++){const a=i*Math.PI/4,r=8+f*34;ctx.drawImage(art.mushrooms,x+Math.cos(a)*r-3,y+20+Math.sin(a)*r*.65-3,7,7);}}
-        else if(e.kind==='water'){ctx.globalAlpha=(1-f)*.7;for(let i=0;i<5;i++)ctx.drawImage(art['water-drop'],x-8+i*4,y+12+f*8-(i%2)*5,3,5);}
         else if (e.amount) {
             const type = e.item??(e.kind==='harvest'?e.crop:e.kind==='eat'||e.kind==='sleep'?'heart':e.kind);
             const icon = art[type as Sprite];
@@ -397,12 +403,8 @@ export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos
             ctx.font = 'bold 8px monospace';
             ctx.fillText('+' + e.amount, x, y);
         }
-        else {
-            ctx.fillStyle = '#e2d4a4';
-            for (let i = 0; i < 5; i++)
-                ctx.fillRect(x + (i - 2) * f * 8, y + 10 - Math.sin(f * Math.PI) * 9, 2, 2);
-        }
         ctx.globalAlpha = 1;
+        const effect=eventEffect(e,s);if(effect)drawEffect(ctx,effect,e.x*TILE+ox,e.y*TILE+oy,age,e.commandId??e.id);
     }
     if(view.fadeUntil&&t<view.fadeUntil){ctx.fillStyle=`rgba(42,52,64,${Math.max(0,(view.fadeUntil-t)/500)})`;ctx.fillRect(0,0,w,h);}
 }

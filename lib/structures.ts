@@ -1,5 +1,5 @@
 export type Part='floor'|'wall'|'window'|'door'|'roof'|'stairs'|'planter'|'fence'|'lantern'|'sign'|'bed'|'campfire';
-export type Building={id:string;x:number;y:number;kind:Part;open?:boolean;level?:number;text?:string};
+export type Building={ownerId?:string;id:string;x:number;y:number;kind:Part;open?:boolean;level?:number;text?:string};
 export const MAX_LEVEL=2;
 export const floorLevel=(value:{level?:number})=>Math.max(0,Math.min(MAX_LEVEL,value.level??0));
 export const layer=(part:Part)=>part==='floor'?'floor':part==='roof'?'roof':['wall','window','door'].includes(part)?'wall':'fixture';

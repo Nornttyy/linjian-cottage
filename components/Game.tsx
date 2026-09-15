@@ -11,6 +11,10 @@ import LoadingScreen from './LoadingScreen';
 import TouchControls from './TouchControls';
 import CookingPanel from './CookingPanel';
 import FishingGame from './FishingGame';
+import Wardrobe from './Wardrobe';
+import DeathScreen from './DeathScreen';
+import StoryPanel from './StoryPanel';
+import {storyObjective} from '@/lib/story';
 import {fishingActive} from '@/lib/fishing';
 import {nearCampfire} from '@/lib/activities';
 import type {StartMode} from './MainMenu';
@@ -29,6 +33,9 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const [buildPreview,setBuildPreview]=useState<{x:number;y:number;level:number;removing:boolean}|null>(null);
     const [menu,setMenu]=useState(false);
     const [tutorialStoppedAt,setTutorialStoppedAt]=useState(0);
+    const [wardrobe,setWardrobe]=useState(false);
+    const [story,setStory]=useState(false);
+    const dead=!!(state?.session&&state.world.players[state.session.playerId]?.death);
     const loading=state?.loading,loaded=loading?.phase==='ready';
     const cooking=state?.cookingOpen??false;
     const showNotice = (text: string) => { setNotice(text); if (noticeTimer.current)
@@ -36,10 +43,10 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     useEffect(() => { const game = new GameClient(canvas.current!, setState, showNotice, () => {setMap(v => !v);setRoom(false);setBackpack(false);setSignId(null);}, apiUrl, () => {setBackpack(v=>!v);setMap(false);setRoom(false);setSignId(null);}, id=>{setSignId(id);if(id){setMap(false);setRoom(false);setBackpack(false);}},characterId,characterName,appearance); client.current = game; game.connect(startMode,initialRoom); return () => { game.destroy(); if (noticeTimer.current)
         clearTimeout(noticeTimer.current); }; }, [apiUrl,startMode,initialRoom,characterId,characterName,appearance]);
     useEffect(() => { if (client.current) {
-        client.current.paused = map || room || backpack || signId!==null || menu || cooking;
+        client.current.paused = dead || wardrobe || story || map || room || backpack || signId!==null || menu || cooking;
         client.current.pauseControls();
-        if(map||room||backpack||signId!==null||menu)client.current.cancelFishing();
-    } }, [map, room, backpack,signId,menu,cooking]);
+        if(map||room||backpack||signId!==null||menu||wardrobe||story)client.current.cancelFishing();
+    } }, [map, room, backpack,signId,menu,cooking,dead,wardrobe,story]);
     useEffect(() => { if (map && mapCanvas.current && state?.session)
         paintMap(mapCanvas.current, state.world, state.session.playerId,state.art); }, [map, state]);
     useEffect(() => { const close = (e: KeyboardEvent) => { if(e.key==='Escape'){setMenu(false);setMap(false);setRoom(false);setBackpack(false);setSignId(null);client.current?.closeSign();client.current?.closeCooking();} }; window.addEventListener('keydown',close); return () => window.removeEventListener('keydown',close); }, []);
@@ -77,16 +84,17 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     const localWorld=state?.session?.local===true;
     const fishing=fishingActive(player?.fishing);
     const showConnectionError=Boolean(loaded&&state?.error&&!room&&!backpack&&signId===null&&!menu&&!cooking);
-    return <main className="game-shell"><div className={'game-view'+(state?.tool==='build'?' is-building':'')+(showConnectionError?' has-error':'')} inert={!loaded||map||room||backpack||signId!==null||menu||cooking} aria-hidden={!loaded}>
+    return <main className="game-shell"><div className={'game-view'+(state?.tool==='build'?' is-building':'')+(showConnectionError?' has-error':'')} inert={dead||wardrobe||story||!loaded||map||room||backpack||signId!==null||menu||cooking} aria-hidden={!loaded}>
   <canvas ref={canvas} className="world-canvas" aria-label="游戏场景：使用方向控制移动，选择快捷栏物品后点击场景或按使用键操作"/>
   <header className="hud-top"><div className="identity"><h1>林间小筑</h1><span className={'connection-dot ' + (state?.connected ? 'online' : '')} title={state?.connected ? localWorld?(state.localSaved?'本机保存':'本机游玩，无法保存'):'已连接并保存' : '连接中'}/></div>
    <div className="region-label"><span className="region-name">{player ? regionAt(player.x, player.y) : '林间营地'}{level>0&&<> · {level+1}层</>}</span>{clock&&<time className="world-clock" dateTime={clockDateTime(clock)} title={phaseName(clock.phase)}>{formatWorldClock(clock)}</time>}</div>
    <div className="top-actions"><button onClick={openMenu} title="游戏菜单">菜单</button><button onClick={openBackpack} title="背包 · E">背包 <kbd>E</kbd></button><button onClick={() => setMap(true)} title="世界地图 · M">地图 <kbd>M</kbd></button><button onClick={() => setRoom(true)} title="多人房间">联机 <span>{localWorld?'单机':count+'/4'}</span></button></div>
   </header>
   {trackCave&&player&&sceneAt(player.x)!=='mine'&&<button className="cave-bearing" onClick={()=>setTrackCave(false)} title="取消矿洞标记"><i style={{transform:`rotate(${Math.atan2(CAVE_ENTRANCE.y-player.y,CAVE_ENTRANCE.x-player.x)+Math.PI/2}rad)`}}/>矿洞 · {caveDistance}格</button>}
+  {player?.storyTracked&&!dead&&tutorialRun<=tutorialStoppedAt&&<div className="story-tracker"><button onClick={()=>setStory(true)}>{storyObjective(player,state!.world)}</button><button aria-label="停止追踪主线" onClick={()=>client.current?.command({type:'story',target:'track'})}>×</button></div>}
   <section className="vitals" aria-label="角色状态"><div className="health-row"><Icon name="heart" size={16}/><div className="meter health-meter" role="progressbar" aria-label="生命" aria-valuenow={Math.round(player?.hp || 0)} aria-valuemax={100}><i style={{ width: (player?.hp || 0) + '%' }}/></div><span>{Math.round(player?.hp || 0)}</span></div><div className="stamina-row"><Icon name="stamina" size={14}/><div className="meter stamina-meter" role="progressbar" aria-label="体力" aria-valuenow={Math.round(player?.stamina || 0)} aria-valuemax={100}><i style={{ width: (player?.stamina || 0) + '%' }}/></div></div></section>
-  {tutorialRun>tutorialStoppedAt&&state?.session&&<Tutorial key={state.session.room+':'+state.session.playerId} state={state} restart={tutorialRun} hidden={!loaded||map||room||backpack||signId!==null||menu||cooking||fishing} onDismiss={()=>setTutorialStoppedAt(tutorialRun)}/>}
-  {loaded&&state?.connected&&<Minimap client={client} hidden={map||room||backpack||signId!==null||menu||cooking||fishing} onOpen={()=>{client.current?.pauseControls();setMap(true);}}/>}
+  {tutorialRun>tutorialStoppedAt&&state?.session&&<Tutorial key={state.session.room+':'+state.session.playerId} state={state} restart={tutorialRun} hidden={dead||wardrobe||story||!loaded||map||room||backpack||signId!==null||menu||cooking||fishing} onDismiss={()=>setTutorialStoppedAt(tutorialRun)}/>}
+  {loaded&&state?.connected&&<Minimap client={client} hidden={dead||wardrobe||story||map||room||backpack||signId!==null||menu||cooking||fishing} onOpen={()=>{client.current?.pauseControls();setMap(true);}}/>}
   {loaded&&<FishingGame client={client} hidden={map||room||backpack||signId!==null||menu||cooking}/>}
   {loaded&&player&&nearCampfire(player,state?.world.buildings)&&!fishing&&<button className="camp-kitchen-button" onClick={()=>client.current?.tryActivity()}>营地厨房 <kbd>F</kbd></button>}
   <div className="bottom-controls">
@@ -125,7 +133,7 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
   {menu&&<div className="modal-backdrop" onClick={()=>setMenu(false)}><section className="room-panel pause-panel" role="dialog" aria-modal="true" aria-label="游戏菜单" onClick={event=>event.stopPropagation()} onKeyDown={event=>{
       event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setMenu(false);}
       if(event.key==='Tab'){const fields=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button')),first=fields[0],last=fields[fields.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
-  }}><header><h2>游戏菜单</h2><button className="close" onClick={()=>setMenu(false)} aria-label="关闭游戏菜单">×</button></header><div className="pause-actions"><button autoFocus onClick={()=>setMenu(false)}>继续游戏</button><button onClick={()=>client.current?.toggleSound()} aria-pressed={state?.sound??true}>声音 {state?.sound===false?'关':'开'}</button>{onTutorial&&<button onClick={()=>{setMenu(false);onTutorial();}}>重看新手引导</button>}{onExit&&<button onClick={leave}>返回主菜单</button>}</div></section></div>}
+  }}><header><h2>游戏菜单</h2><button className="close" onClick={()=>setMenu(false)} aria-label="关闭游戏菜单">×</button></header><div className="pause-actions"><button autoFocus onClick={()=>setMenu(false)}>继续游戏</button><button onClick={()=>{setMenu(false);setWardrobe(true);}}>换装</button><button onClick={()=>{setMenu(false);setStory(true);}}>可选主线</button><button onClick={()=>client.current?.toggleSound()} aria-pressed={state?.sound??true}>声音 {state?.sound===false?'关':'开'}</button>{onTutorial&&<button onClick={()=>{setMenu(false);onTutorial();}}>重看新手引导</button>}{onExit&&<button onClick={leave}>返回主菜单</button>}</div></section></div>}
   {map && <div className="modal-backdrop" onClick={() => setMap(false)}><section className="map-panel" role="dialog" aria-modal="true" aria-label="世界地图" onClick={e => e.stopPropagation()}><header><h2>世界地图</h2><button className="close" onClick={() => setMap(false)} aria-label="关闭地图">×</button></header><canvas ref={mapCanvas} className="map-canvas"/><footer>{player&&sceneAt(player.x)!=='mine'&&<button onClick={()=>{setTrackCave(true);setMap(false);}}>标记矿洞</button>}<span>{player && sceneAt(player.x) === 'mine' ? '矿洞 · 96 × 96' : '512 × 512'}</span><span>固定世界</span></footer></section></div>}
   {room && <div className="modal-backdrop" onClick={() => setRoom(false)}><section className="room-panel" role="dialog" aria-modal="true" aria-label="多人房间" onClick={e => e.stopPropagation()}><header><h2>多人房间</h2><button className="close" onClick={() => setRoom(false)} aria-label="关闭房间菜单">×</button></header><div className="room-number"><span>{localWorld?'状态':'房间号'}</span><strong>{localWorld?'本机世界':state?.session?.room || '—'}</strong>{!localWorld&&<button onClick={async () => { if (state?.session) {
         try {
@@ -138,6 +146,9 @@ export default function Game({ apiUrl = '/api/game',startMode='resume',initialRo
     } }}>复制</button>}</div><form onSubmit={async (e) => { e.preventDefault(); setTutorialStoppedAt(tutorialRun); await client.current?.connect('join', roomCode); if (client.current?.connected)
         setRoom(false); }}><input autoFocus aria-label="房间号" placeholder="输入房间号" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} maxLength={8}/><button type="submit" disabled={roomCode.length !== 8}>加入</button></form>{state?.error && <p className="room-error">{state.error}</p>}<div className="room-footer"><span>{localWorld?(state.localSaved?'仅保存在此设备':'此设备无法保存'):count+' / 4'}</span><button onClick={async () => { setTutorialStoppedAt(tutorialRun); await client.current?.connect('create'); if (client.current?.connected)
         setRoom(false); }}>新建世界</button></div></section></div>}
+ {story&&player&&!dead&&<StoryPanel player={player} world={state!.world} status={notice} onTrack={()=>client.current?.command({type:'story',target:'track'})} onAction={()=>client.current?.command({type:'story'})} onClose={()=>setStory(false)}/>}
+ {wardrobe&&player&&!dead&&<Wardrobe player={player} onApply={value=>client.current?.setAppearance(value)} onClose={()=>setWardrobe(false)}/>}
+ {loaded&&player&&dead&&<DeathScreen player={player} time={state!.world.tick} connected={state!.connected} onRespawn={()=>{setWardrobe(false);setStory(false);setMenu(false);setMap(false);setRoom(false);setBackpack(false);setSignId(null);client.current?.closeCooking();client.current?.command({type:'respawn'});}} onExit={leave}/>}
  <LoadingScreen loading={loading} onRetry={()=>{void client.current?.retryConnection();}} onExit={leave}/>
  </main>;
 }

@@ -1,4 +1,5 @@
-import {normalizeAppearance,appearanceKey,type Appearance} from './appearance';
+import {safeAppearance} from './wardrobe';
+import {appearanceKey,type Appearance} from './appearance';
 import {applyInput,tickWorld,publicWorld,type Input,type WorldState} from './simulation';
 import {worldDelta,type WorldDelta} from './world-delta';
 type Database={prepare(sql:string):{bind(...values:unknown[]):{first<T>():Promise<T|null>;run():Promise<{meta:{changes?:number}}>}}};
@@ -30,8 +31,9 @@ async function commit(db:Database,room:string,secret:string,options:Options):Pro
         const playerId=Object.keys(state.players).find(id=>state.players[id].secret===secret);
         if(!playerId)return{status:403,error:'连接已失效'};
         const now=Math.max(Date.now(),state.tick),accepted=!options.poll||!!options.input&&options.input.seq>state.players[playerId].seq;
-        const changedAppearance=options.appearance!==undefined&&appearanceKey(state.players[playerId].appearance)!==appearanceKey(options.appearance);
-        if(changedAppearance)state.players[playerId].appearance=normalizeAppearance(options.appearance);
+        const nextAppearance=options.appearance===undefined?undefined:safeAppearance(options.appearance,state.players[playerId]);
+        const changedAppearance=options.appearance!==undefined&&appearanceKey(state.players[playerId].appearance)!==appearanceKey(nextAppearance);
+        if(changedAppearance)state.players[playerId].appearance=nextAppearance;
         const needsTick=now-state.tick>=100||Object.values(state.players).some(p=>p.pendingStrike&&p.pendingStrike.at<=now);
         if(!accepted&&!needsTick&&!changedAppearance)return response(room,playerId,state,row.version,entry,null,attempt);
         tickWorld(state,now);

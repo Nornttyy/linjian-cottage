@@ -1,3 +1,4 @@
+import {BEACON} from './story';
 import {CAVE_ENTRANCE,MINE_TORCHES,resourcesInRect,SPAWN,sceneAt,terrainAt} from './world';
 import type {Atlas} from './art';
 import {resourceSprite} from './landscape';
@@ -34,7 +35,7 @@ export function atmosphere(ctx:CanvasRenderingContext2D,s:WorldState,pos:Camera,
     const underground=sceneAt(pos.x)==='mine';
     const clock=worldClock(s.dayStartedAt??s.created,time);
     const region=terrainAt(Math.floor(pos.x),Math.floor(pos.y));
-    const lights=[...(underground?mineLights:surfaceLights.map(l=>({...l,y:l.y+floorLevel(pos)}))),...Object.values(s.buildings).filter(b=>(b.kind==='lantern'||b.kind==='campfire')&&floorLevel(b)===floorLevel(pos)).map(b=>({x:b.x+.5,y:b.y+.35,r:b.kind==='campfire'?88:72}))];
+    const lights=[...(s.beaconLit&&!underground&&floorLevel(pos)===0?[{...BEACON,r:100}]:[]),...(underground?mineLights:surfaceLights.map(l=>({...l,y:l.y+floorLevel(pos)}))),...Object.values(s.buildings).filter(b=>(b.kind==='lantern'||b.kind==='campfire')&&floorLevel(b)===floorLevel(pos)).map(b=>({x:b.x+.5,y:b.y+.35,r:b.kind==='campfire'?88:72}))];
     if(underground){
         lightLayer??=document.createElement('canvas');
         if(lightLayer.width!==w)lightLayer.width=w;if(lightLayer.height!==h)lightLayer.height=h;

@@ -47,5 +47,18 @@ try{
   for(let y=68;y<85;y++)for(let x=48;x<62;x++){const i=(y*128+x)*4;assert.deepEqual(p.data.slice(i,i+4),before.slice(i,i+4));}
   const trouser=(88*128+43)*4;assert.notDeepEqual(p.data.slice(trouser,trouser+3),before.slice(trouser,trouser+3));
  });
+ test('raised blue sleeve shadows and pale seams follow the upper garment dye',()=>{
+  const width=128,height=128,data=new Uint8ClampedArray(width*height*4);
+  const rect=(x,y,w,h,rgb)=>{for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)data.set([...rgb,255],(yy*width+xx)*4);};
+  rect(55,58,18,17,[30,190,200]);rect(50,46,5,20,[30,140,220]);rect(55,78,18,14,[40,145,210]);rect(56,60,2,8,[194,245,250]);rect(49,48,1,15,[12,37,69]);
+  const before=data.slice();hero.recolorClothes({width,height,data},{body:'female',shirt:'#de427c',pants:'original'},'pick-down-3');
+  for(const[x,y]of [[52,50],[56,62],[49,52]]){const i=(y*width+x)*4;assert.notDeepEqual(data.slice(i,i+3),before.slice(i,i+3));assert(data[i]>data[i+1]);}
+  for(let y=78;y<92;y++)for(let x=55;x<73;x++){const i=(y*width+x)*4;assert.deepEqual(data.slice(i,i+4),before.slice(i,i+4));}
+ });
+ test('arbitrary colors persist on all seven parts without accepting malformed CSS',()=>{
+  const custom={body:'female',shirt:'#A1B2C3',pants:'#1100aa',hair:'#CC1188',skin:'#A97751',eyes:'#18AA22',shoes:'#F0A819',trim:'#65EEAA'};
+  const a=appearance.normalizeAppearance(custom);for(const key of Object.keys(custom).filter(key=>key!=='body'))assert.equal(a[key],custom[key].toLowerCase());
+  assert.equal(appearance.normalizeAppearance({...custom,skin:'url(secret)'}).skin,undefined);
+ });
  console.log(`${checks} appearance checks; 0 failures`);
 }finally{for(const [k,value]of original){if(value)Object.defineProperty(globalThis,k,value);else delete globalThis[k];}project.cleanup();}

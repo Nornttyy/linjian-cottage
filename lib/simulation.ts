@@ -1,6 +1,10 @@
+import {BEACON} from './story';
 import {normalizeAppearance,type Appearance} from './appearance';
+import {WEARABLES,wearing,canSwim,unlockWearable,wearableReady,type WardrobeOwner} from './wardrobe';
+import {addJournal,rememberJournal,type JourneyJournal} from './journey-journal';
+import {RESPAWN_DELAY_MS,type DeathState} from './death';
 import {ACTIVITY_TIMING,campfireNear,nearCampfire,canCast,type FoodKind,type CookingRecipe} from './activities';
-import {INGREDIENT_IDS,DISH_IDS,foodHeal,mealRecovery,consumeMeal,rememberCooking,migrateCooking,type CookingJournal,resolveRecipe,validateSelection,type IngredientId,type DishId,type CookMethod,type ResolvedRecipe} from './cooking';
+import {INGREDIENT_IDS,DISH_IDS,ODD_DISH_IDS,foodHeal,mealRecovery,consumeMeal,rememberCooking,migrateCooking,type CookingJournal,resolveRecipe,validateSelection,type IngredientId,type DishId,type CookMethod,type ResolvedRecipe} from './cooking';
 import {startFishing,advanceFishing,hookFishing,setFishingHeld,cancelFishing,fishingActive,type FishingState,type FishingUpdate} from './fishing';
 import {pantryOffer} from './pantry';
 import { SPAWN, WORLD_SIZE, RESOURCE_MAP, resourceAt, terrainAt, sceneAt, MINE, CAVE_ENTRANCE } from './world';
@@ -28,7 +32,8 @@ export type Inventory = Partial<Record<IngredientId|DishId,number>> & {
     carrotSeed:number;tomatoSeed:number;wheatSeed:number;carrot:number;tomato:number;wheat:number;fish:number;meal:number;
 };
 export type PendingActivity={action:'fish'|'cook'|'sleep'|'pickup'|'eat';start:number;at:number;until:number;x:number;y:number;level:number;fromX:number;fromY:number;target?:string;recipe?:CookingRecipe;cooking?:ResolvedRecipe;food?:FoodKind;commandId?:string};
-export type Player = CookingJournal & {
+export type Player = CookingJournal & WardrobeOwner & {
+    journal?:JourneyJournal;death?:DeathState;storyStage?:number;storyTracked?:boolean;
     id: string;
     name: string;
     appearance?:Appearance;
@@ -82,6 +87,7 @@ export type Mob = {
     movingUntil?: number;
 };
 export type WorldState = {
+    beaconLit?:boolean;
     players: Record<string, Player>;
     buildings: Record<string, Building>;
     depleted: Record<string, boolean>;
@@ -105,11 +111,11 @@ export type GameEvent = {
     x: number;
     y: number;
     kind: 'hit' | 'wood' | 'stone' | 'copper' | 'essence' | 'build' | 'hurt' | 'dodge' | 'door' | 'till' | 'plant' | 'water' | 'harvest' | 'spore' | 'fish' | 'meal' | 'eat' | 'sleep';
-    level?:number;actorId?:string;commandId?:string;targetId?:string;crop?:CropKind;item?:IngredientId|DishId;
+    removed?:boolean;part?:Part;level?:number;actorId?:string;commandId?:string;targetId?:string;crop?:CropKind;item?:IngredientId|DishId;
     amount: number;
 };
 export type Command = {
-    type: 'attack' | 'build' | 'remove' | 'interact' | 'dodge' | 'heal' | 'ascend' | 'descend' | 'till' | 'plant' | 'water' | 'harvest' | 'eat' | 'fish' | 'fishHook' | 'fishControl' | 'fishCancel' | 'cook' | 'pantry' | 'sleep' | 'collect' | 'wake' | 'writeSign';
+    type: 'story' | 'respawn' | 'findWearable' | 'attack' | 'build' | 'remove' | 'interact' | 'dodge' | 'heal' | 'ascend' | 'descend' | 'till' | 'plant' | 'water' | 'harvest' | 'eat' | 'fish' | 'fishHook' | 'fishControl' | 'fishCancel' | 'cook' | 'pantry' | 'sleep' | 'collect' | 'wake' | 'writeSign';
     id?:string;issuedAt?:number;crop?:CropKind;food?:FoodKind;
     x?: number;
     y?: number;
@@ -184,13 +190,13 @@ export function normalizeWorld(s:WorldState,now:number){
         s.creatureVersion=1;
     }
 }
-export function isBlocked(s: WorldState, x: number, y: number, level=0) {
+export function isBlocked(s: WorldState, x: number, y: number, level=0,swimming=false) {
     if(level>0){
         if(!atLevel(s.buildings,Math.floor(x),Math.floor(y),'floor',level))return true;
         return wallOccupies(s.buildings,x,y,level,s.structureVersion??0);
     }
     const t=terrainAt(Math.floor(x),Math.floor(y));
-    if ((sceneAt(x)==='surface'&&(x<1||y<1||x>WORLD_SIZE-2||y>WORLD_SIZE-2)) || t==='water'||t==='cave-wall')
+    if ((sceneAt(x)==='surface'&&(x<1||y<1||x>WORLD_SIZE-2||y>WORLD_SIZE-2)) || t==='water'&&!swimming||t==='cave-wall')
         return true;
     if(sceneAt(x)==='surface'&&Math.abs(x-CAVE_ENTRANCE.x)<2.6&&y<CAVE_ENTRANCE.y-1.4&&y>CAVE_ENTRANCE.y-4.7)return true;
     const r = resourceAt(x, y);
@@ -211,10 +217,10 @@ export function move(s: WorldState, p: {
     level?:number;
     x: number;
     y: number;
-}, dx: number, dy: number) {
+}, dx: number, dy: number,swimming=false) {
     const level=floorLevel(p);
     const free = (x: number, y: number) => {
-        if(isBlocked(s,x-.2,y-.2,level)||isBlocked(s,x+.2,y-.2,level)||isBlocked(s,x-.2,y+.2,level)||isBlocked(s,x+.2,y+.2,level))return false;
+        if(isBlocked(s,x-.2,y-.2,level,swimming)||isBlocked(s,x+.2,y-.2,level,swimming)||isBlocked(s,x-.2,y+.2,level,swimming)||isBlocked(s,x+.2,y+.2,level,swimming))return false;
         // Thin walls can fit between a body's corners: intersect the full footprint.
         for(let ty=Math.floor(y-.2);ty<=Math.floor(y+.2);ty++)for(let tx=Math.floor(x-.2);tx<=Math.floor(x+.2);tx++){
             if(!atLevel(s.buildings,tx,ty,'wall',level)&&atLevel(s.buildings,tx,ty,'fence',level)?.kind!=='fence')continue;
@@ -237,7 +243,25 @@ export function move(s: WorldState, p: {
     };
     for (let i = 0; i < steps; i++) {axis(dx/steps,true);axis(dy/steps,false);}
 }
-function emit(s:WorldState,kind:GameEvent['kind'],x:number,y:number,amount:number,now:number,extra:Partial<GameEvent>={}){s.events.push({id:`${now}-${s.events.length}`,time:now,x,y,kind,amount,...extra});}
+function emit(s:WorldState,kind:GameEvent['kind'],x:number,y:number,amount:number,now:number,extra:Partial<GameEvent>={}){
+    s.events.push({id:`${now}-${s.events.length}`,time:now,x,y,kind,amount,...extra});
+    const p=extra.actorId?s.players[extra.actorId]:undefined;if(!p)return;
+    if(kind==='wood'||kind==='stone'||kind==='copper'||kind==='fish'||kind==='harvest')addJournal(p,kind,amount);
+    if(kind==='copper'&&sceneAt(x)==='mine')addJournal(p,'mineCopper',amount);
+    if(kind==='plant'||kind==='water'&&s.plots?.[`${Math.floor(x)}:${Math.floor(y)}`]?.crop)rememberJournal(p,kind==='plant'?'planted':'watered',`${Math.floor(x)}:${Math.floor(y)}`);
+    if(kind==='meal'&&extra.item)rememberJournal(p,'cooked',extra.item);
+    if(kind==='sleep')addJournal(p,'slept');
+    if(kind==='harvest'&&(p.journal?.harvest??0)>=12)unlockWearable(p,'leaf-crown');
+}
+export function beginDeath(p:Player,now:number,cause='冒险受伤'){
+    if(p.death)return;p.death={at:now,x:p.x,y:p.y,level:floorLevel(p),face:p.face,cause};p.hp=0;
+    p.pendingStrike=undefined;p.pendingActivity=undefined;p.fishing=p.fishing&&fishingActive(p.fishing)?cancelFishing(p.fishing,now,'hurt').state:undefined;p.fishingOrigin=undefined;p.attackQueue=[];
+    p.workAction=undefined;p.workUntil=now;p.swingUntil=now;p.actionAt=now;p.dodgeUntil=0;p.moveCredit=0;p.movingUntil=0;
+}
+export function respawnPlayer(s:WorldState,p:Player,now:number){
+    if(!p.death||now-p.death.at<RESPAWN_DELAY_MS)return false;
+    p.death=undefined;p.fishing=undefined;p.level=0;p.x=SPAWN.x;p.y=SPAWN.y;p.hp=75;p.stamina=100;p.hurtAt=undefined;p.hitUntil=now+3000;p.portalUntil=now+800;p.moveCredit=0;return true;
+}
 export function tickWorld(s: WorldState, now: number) {
     normalizeWorld(s,now);
     const dt = Math.max(0, Math.min(.5, (now - s.tick) / 1000));
@@ -248,8 +272,8 @@ export function tickWorld(s: WorldState, now: number) {
         plot.drySince??=Math.max(plot.updated,plot.wetUntil);
         if(soilRecovery(plot,now)>=1)delete s.plots![key];
     }
-    for(const p of Object.values(s.players)){resolveFishing(s,p,now);resolveActivity(s,p,now);}
-    const players = Object.values(s.players).filter(p => now - p.seen < 8000);
+    for(const p of Object.values(s.players)){if(p.hp<=0)beginDeath(p,now);if(!p.death){resolveFishing(s,p,now);resolveActivity(s,p,now);}}
+    const players = Object.values(s.players).filter(p => now - p.seen < 8000&&!p.death&&p.hp>0);
     for (const p of players) {
         p.stamina = Math.min(100, p.stamina + dt * 17);
         if(p.pendingStrike && now>=p.pendingStrike.at){const strike=p.pendingStrike;p.pendingStrike=undefined;resolveAttack(s,p,strike.command,now);}
@@ -284,9 +308,11 @@ export function tickWorld(s: WorldState, now: number) {
             }
         }
         const hurt=(p:Player,amount:number)=>{
-            if(now<p.dodgeUntil||now<p.hitUntil||floorLevel(p)!==0)return;
+            if(p.death||now<p.dodgeUntil||now<p.hitUntil||floorLevel(p)!==0)return;
+            amount=Math.max(1,Math.round(amount*(wearing(p,'snow-cloak')?.85:1)*(kind==='mushroom'?(wearing(p,'mushroom-cap')?.75:1)*(wearing(p,'mushroom-cloak')?.65:1):1)));
             wakePlayer(p,now);p.hp-=amount;p.hurtAt=now;p.hitUntil=now+650;
-            emit(s,'hurt',p.x,p.y,amount,now,{actorId:mob.id,level:0});
+            emit(s,'hurt',p.x,p.y,amount,now,{actorId:mob.id,targetId:p.id,level:0});
+            if(p.hp<=0){beginDeath(p,now,CREATURES[kind].name);return;}
             const d=distance(p,mob)||1;move(s,p,(p.x-mob.x)/d*.4,(p.y-mob.y)/d*.4);
         };
         if(kind==='boar'&&(mob.chargeUntil??0)>now){
@@ -333,14 +359,7 @@ export function tickWorld(s: WorldState, now: number) {
             if(!target){const dx=mob.x-beforeX,dy=mob.y-beforeY;mob.face=Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up';}
         }
     }
-    for (const p of players)
-        if (p.hp <= 0) {
-            p.level=0;
-            p.x = SPAWN.x;
-            p.y = SPAWN.y;
-            p.hp = 75;
-            p.hitUntil = now + 3000;
-        }
+
 }
 export function buildCost(s:WorldState,x:number,y:number,part:Part,level=0){
     if(part!=='stairs')return COSTS[part];
@@ -428,8 +447,8 @@ function farmCommand(s:WorldState,p:Player,c:Command,now:number):string|null{
             if(!plot.crop)plot.drySince=plot.wetUntil;
         }else if(c.type==='harvest'){
             if(!plot.crop||cropProgress(plot,now)<CROPS[plot.crop].seconds)return null;
-            const crop=plot.crop,info=CROPS[crop];p.inventory[crop]+=info.yield;p.inventory[info.seed]+=2;
-            emit(s,'harvest',x+.5,y+.5,info.yield,now,{...details,crop});
+            const crop=plot.crop,info=CROPS[crop],yieldCount=info.yield+(wearing(p,'leaf-crown')?1:0);p.inventory[crop]+=yieldCount;p.inventory[info.seed]+=2;
+            emit(s,'harvest',x+.5,y+.5,yieldCount,now,{...details,crop});
             plot.crop=undefined;plot.progress=0;plot.updated=now;plot.wetUntil=now;plot.drySince=now;workStart(p,'harvest',c,now);
             return null;
         }
@@ -495,7 +514,7 @@ function resolveActivity(s:WorldState,p:Player,now:number){
     }else if(activity.action==='eat'){
         const food=activity.food,recovery=mealRecovery(p,food);
         if(!food||!recovery||(p.inventory[food]??0)<=0||p.hp>=100&&p.stamina>=100){stop();return;}
-        consumeMeal(p,food);p.inventory[food]=(p.inventory[food]??0)-1;const amount=Math.min(100-p.hp,recovery.hp);p.hp+=amount;p.stamina=Math.min(100,p.stamina+recovery.stamina);emit(s,'eat',p.x,p.y,amount,now,details);
+        consumeMeal(p,food);p.inventory[food]=(p.inventory[food]??0)-1;const amount=Math.min(100-p.hp,Math.round(recovery.hp*(wearing(p,'moon-antlers')?1.15:1)));p.hp+=amount;p.stamina=Math.min(100,p.stamina+recovery.stamina);emit(s,'eat',p.x,p.y,amount,now,details);
     }else if(activity.action==='pickup'){
         const resource=activity.target?RESOURCE_MAP.get(activity.target):undefined;
         if(!resource||resource.kind!=='berry'||s.depleted[resource.id]||distance(p,{x:resource.x+.5,y:resource.y+.5})>2.5){stop();return;}
@@ -548,6 +567,34 @@ function activityCommand(s:WorldState,p:Player,c:Command,now:number):string|null
 }
 
 function runCommand(s: WorldState, p: Player, c: Command, now: number): string | null {
+    if(p.death||p.hp<=0){if(!p.death)beginDeath(p,now);if(c.type==='respawn')respawnPlayer(s,p,now);return null;}
+    if(c.type==='respawn')return null;
+    if(c.type==='story'){
+        const stage=p.storyStage??0;
+        if(stage===0){p.storyStage=1;p.storyTracked=true;return null;}
+        if(c.target==='track'){p.storyTracked=!p.storyTracked;return null;}
+        if(stage===1){
+            if(floorLevel(p)!==0||sceneAt(p.x)!=='surface'||distance(p,SPAWN)>3)return '回营地留下料理';
+            const meals=DISH_IDS.filter(id=>!(ODD_DISH_IDS as readonly string[]).includes(id));
+            if(meals.reduce((n,id)=>n+(p.inventory[id]??0),0)<2)return '准备 2 份正常料理';
+            let remaining=2;for(const id of meals)while(remaining&&(p.inventory[id]??0)>0){consumeMeal(p,id);p.inventory[id]!--;remaining--;}
+            p.storyStage=2;return null;
+        }
+        if(stage===2){if(!p.journal?.oak||!p.journal?.mine)return '路线笔记还少一处';p.storyStage=3;return null;}
+        if(stage===3){
+            if(floorLevel(p)!==0||distance(p,BEACON)>3)return '到日光石环修复旧灯';
+            if(!s.beaconLit){if(p.inventory.wood<20||p.inventory.stone<12||p.inventory.copper<6)return '需要 20 木材、12 石材、6 铜';p.inventory.wood-=20;p.inventory.stone-=12;p.inventory.copper-=6;s.beaconLit=true;}
+            p.storyStage=4;p.storyTracked=false;return '驿站的灯亮了';
+        }
+        return null;
+    }
+    if(c.type==='findWearable'){
+        const item=WEARABLES.find(item=>item.id===c.target);
+        if(!item||!('x'in item)||floorLevel(p)!==0||sceneAt(p.x)!==sceneAt(item.x)||distance(p,item)>2.5||!clearLine(s,p,item))return '请靠近遗失的行囊';
+        if(!wearableReady(p,item.id))return item.hint;
+        return unlockWearable(p,item.id)?'获得：'+item.name:null;
+    }
+    if(terrainAt(Math.floor(p.x),Math.floor(p.y))==='water'&&floorLevel(p)===0)return '游到岸边再使用';
     if(['fishHook','fishControl','fishCancel'].includes(c.type))return fishingControl(s,p,c,now);
     if(fishingActive(p.fishing))return null;
     if(c.type==='pantry'){
@@ -580,13 +627,13 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
     }
     if (c.type === 'dodge') {
         if(now<p.swingUntil)return null;
-        if (now < p.dodgeUntil + 450 || p.stamina < 28)
+        if (now < p.dodgeUntil + 450 || p.stamina < (wearing(p,'moth-cloak')?22:28))
             return null;
-        p.stamina -= 28;
+        p.stamina -= wearing(p,'moth-cloak')?22:28;
         p.dodgeUntil = now + 330;
         p.dodgeMoveCredit = .33;
         p.dodgeMoveUntil = p.dodgeUntil + 1000;
-        emit(s, 'dodge', p.x, p.y, 0, now);
+        emit(s, 'dodge', p.x, p.y, 0, now,{actorId:p.id,level:floorLevel(p)});
         return null;
     }
     if (c.type === 'interact') {
@@ -613,11 +660,11 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         for (const [key, count] of Object.entries(buildCost(s,x,y,part,floorLevel(p))))
             p.inventory[key as keyof Inventory] -= count || 0;
         const level=floorLevel(p),id=buildingKey(x,y,part,level);
-        s.buildings[id]={id,x,y,kind:part,open:part==='door',level};
+        s.buildings[id]={id,x,y,kind:part,open:part==='door',level,ownerId:p.id};
         if(part==='stairs')for(const [dx,dy]of[[0,0],[1,0],[0,1],[1,1]]){const key=buildingKey(x+dx,y+dy,'floor',level+1);s.buildings[key]??={id:key,x:x+dx,y:y+dy,kind:'floor',level:level+1};}
         const start=Number.isFinite(c.issuedAt)?Math.max(now-2000,Math.min(now,c.issuedAt!)):now;
         p.workAction='hammer';p.workStart=start;p.workUntil=start+WORK_TIMING.hammer.duration;p.swingUntil=p.workUntil;p.swingFace=c.face??p.face;p.moveCredit=Math.max(0,(now-p.swingUntil)/1000);
-        emit(s,'build',x+.5,y+.5,0,now,{actorId:p.id,commandId:c.id,targetId:id,level});
+        emit(s,'build',x+.5,y+.5,0,now,{actorId:p.id,commandId:c.id,targetId:id,part,level});
         return null;
     }
     if (c.type === 'remove') {
@@ -640,7 +687,7 @@ function runCommand(s: WorldState, p: Player, c: Command, now: number): string |
         for (const [key, count] of Object.entries(b.kind==='stairs'?{wood:12,stone:4}:COSTS[b.kind]))
             p.inventory[key as keyof Inventory] += count || 0;
         delete s.buildings[b.id];
-        emit(s,'build',x+.5,y+.5,0,now,{actorId:p.id,commandId:c.id,level});
+        emit(s,'build',x+.5,y+.5,0,now,{actorId:p.id,commandId:c.id,removed:true,level});
         return null;
     }
     if (c.type === 'attack') {
@@ -712,7 +759,7 @@ function resolveAttack(s:WorldState,p:Player,c:Command,now:number):string|null{
             s.depleted[r.id] = true;
             delete s.resourceHp[r.id];
             const item = r.kind === 'tree' || r.kind === 'pine' ? 'wood' : r.kind === 'copper' ? 'copper' : r.kind === 'berry' ? 'essence' : 'stone';
-            const count = item === 'wood' ? 6 : item === 'stone' ? 5 : item === 'copper' ? 3 : 1;
+            const count = item === 'wood' ? 6+(wearing(p,'moss-cloak')?2:0) : item === 'stone' ? 5 : item === 'copper' ? 3+(wearing(p,'copper-goggles')?1:0) : 1;
             p.inventory[item] += count;
             if (item === 'wood')
                 p.woodGathered += count;
@@ -731,6 +778,7 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
     const dt = Math.max(0, Math.min(INPUT_HISTORY_SECONDS, (now - previousSeen) / 1000));
     p.seen = now;
     p.seq = input.seq;
+    if(p.death||p.hp<=0){if(!p.death)beginDeath(p,now);if(input.commands?.some(c=>c.type==='respawn'))respawnPlayer(s,p,now);return null;}
     let message: string | null = null,movementApplied=false;
     const applyMovement=()=>{
         if(movementApplied)return;movementApplied=true;
@@ -753,8 +801,8 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
             const dodgeCredit=dodgeValid?p.dodgeMoveCredit??Math.min(.33,Math.max(0,(p.dodgeUntil-now)/1000)):0;
             const fastSeconds=rolling?Math.min(seconds,Math.max(0,dodgeCredit)):0;
             const x=p.x,y=p.y;
-            if(fastSeconds>0){move(s,p,dx/length*9*fastSeconds,dy/length*9*fastSeconds);p.dodgeMoveCredit=dodgeCredit-fastSeconds;}
-            if(seconds>fastSeconds)move(s,p,dx/length*4.2*(seconds-fastSeconds),dy/length*4.2*(seconds-fastSeconds));
+            if(fastSeconds>0){move(s,p,dx/length*9*fastSeconds,dy/length*9*fastSeconds,canSwim(p));p.dodgeMoveCredit=dodgeCredit-fastSeconds;}
+            if(seconds>fastSeconds){const speed=terrainAt(Math.floor(p.x),Math.floor(p.y))==='water'?(wearing(p,'coral-swim')?3:2.6):4.2;move(s,p,dx/length*speed*(seconds-fastSeconds),dy/length*speed*(seconds-fastSeconds),canSwim(p));}
             credit-=seconds;
             if(Math.hypot(p.x-x,p.y-y)>.00001)p.movingUntil=now+220;
         }
@@ -769,15 +817,17 @@ export function applyInput(s: WorldState, id: string, input: Input, now: number)
     }
     applyMovement();
     transitionScene(p,now,.78);
+    if(floorLevel(p)===0&&Math.hypot(p.x-143,p.y-206.5)<6)(p.journal??={}).oak=true;
     if (input.face && ['up', 'down', 'left', 'right'].includes(input.face))
         p.face = input.face;
     return message;
 }
 export function transitionScene(p:Player,now:number,radius:number){
-    if(floorLevel(p)>0||now<p.swingUntil||now<(p.portalUntil??0))return false;
+    if(p.death||floorLevel(p)>0||now<p.swingUntil||now<(p.portalUntil??0))return false;
     const underground=sceneAt(p.x)==='mine',portal=underground?MINE.exit:CAVE_ENTRANCE;
     if(distance(p,portal)>radius)return false;
     const destination=underground?{x:CAVE_ENTRANCE.x,y:CAVE_ENTRANCE.y+2}:MINE.spawn;
+    if(!underground)(p.journal??={}).mine=true;
     p.x=destination.x;p.y=destination.y;p.level=0;p.portalUntil=now+1800;p.face='down';p.attackQueue=[];p.pendingStrike=undefined;p.moveCredit=0;
     return true;
 }

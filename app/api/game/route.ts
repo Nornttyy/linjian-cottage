@@ -1,4 +1,5 @@
 import {normalizeAppearance} from '@/lib/appearance';
+import {safeAppearance} from '@/lib/wardrobe';
 import {syncRoom} from '@/lib/room-sync';
 import { getStore } from '@/lib/store';
 import { applyInput, createPlayer, createWorld, publicWorld, tickWorld, normalizeWorld, type Input, type WorldState } from '@/lib/simulation';
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
             const id = crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase(), token = crypto.randomUUID(), playerId = crypto.randomUUID().slice(0, 8), secret = await hash(token);
             const state = createWorld(now);
             state.players[playerId] = createPlayer(playerId, secret, name||'旅人', 0, now);
-            state.players[playerId].appearance=normalizeAppearance(body.appearance);
+            state.players[playerId].appearance=safeAppearance(body.appearance,state.players[playerId]);
             await db.prepare('INSERT INTO worlds (id,state,version,updated_at) VALUES (?,?,0,?)').bind(id, JSON.stringify(state), now).run();
             return reply({ room: id, token, playerId, state: publicWorld(state) });
         }
@@ -75,14 +76,14 @@ export async function POST(req: Request) {
                     return reply({ error: '房间已满' }, 409);
                 playerId = newId;
                 s.players[playerId] = createPlayer(playerId, secret, name||'旅人 ' + (Object.keys(s.players).length + 1), Object.keys(s.players).length, now);
-                s.players[playerId].appearance=normalizeAppearance(body.appearance);
+                s.players[playerId].appearance=safeAppearance(body.appearance,s.players[playerId]);
             }
             else {
                 if (!playerId)
                     return reply({ error: '连接已失效' }, 403);
                 tickWorld(s, now);
                 const input = body.input as Input;
-                if(body.appearance!==undefined)s.players[playerId].appearance=normalizeAppearance(body.appearance);
+                if(body.appearance!==undefined)s.players[playerId].appearance=safeAppearance(body.appearance,s.players[playerId]);
                 if (input)
                     message = applyInput(s, playerId, input, now);
                 else

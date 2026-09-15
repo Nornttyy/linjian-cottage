@@ -1,5 +1,7 @@
-import {normalizeAppearance,type Appearance} from './appearance';
-import {characterSession,saveCharacterSession} from './characters';
+import {terrainAt} from './world';
+import {WEARABLES,wearableReady,hasWearable,canSwim,wearing,safeAppearance} from './wardrobe';
+import {type Appearance} from './appearance';
+import {characterSession,saveCharacterSession,renameCharacter} from './characters';
 import {campfireNear,nearCampfire,canCast,type FoodKind} from './activities';
 import {foodHeal,resolveRecipe,validateSelection,type IngredientId,type CookMethod} from './cooking';
 import {advanceFishing,hookFishing,setFishingHeld,fishingActive,type FishingState} from './fishing';
@@ -228,6 +230,8 @@ export class GameClient {
         const command:Command={type:'pantry',offer};if(!this.command(command))return false;
         this.pantryPending=command;this.notify();return true;
     }
+    get dead(){return !!(this.session&&this.world.players[this.session.playerId]?.death);}
+    setAppearance(value:Appearance){const p=this.session?this.world.players[this.session.playerId]:undefined;if(!p)return;const next=safeAppearance(value,p);this.characterAppearance=next;if(this.localMode)p.appearance=next;try{if(this.characterId)renameCharacter(this.characterId,this.characterName??p.name,next);}catch{}this.saveLocalWorld(true);this.notify();void this.sync();}
     get playable(){return this.ready&&this.connected&&!this.disposed;}
     get loading():LoadingState{
         const assets=getAssetLoading(),total=assets.total+4;
@@ -396,7 +400,7 @@ export class GameClient {
 
             const p = this.world.players[this.session.playerId];
             if(this.localMode&&this.characterName)p.name=this.characterName;
-            if(this.characterAppearance)p.appearance=normalizeAppearance(this.characterAppearance);
+            if(this.characterAppearance){this.characterAppearance=safeAppearance(this.characterAppearance,p);p.appearance=this.characterAppearance;}
             this.pos = { x: p.x, y: p.y,level:floorLevel(p), face: p.face, moving: false };
             this.seq = p.seq;
             this.loadLayout();
@@ -522,6 +526,9 @@ export class GameClient {
     interact(){
         if(this.paused||!this.playable||!this.session)return false;
         const now=Date.now(),p=this.world.players[this.session.playerId];if(!p)return false;
+        const finds=WEARABLES.filter(item=>'x'in item&&!hasWearable(p,item.id)&&sceneAt(item.x)===sceneAt(this.pos.x)&&Math.hypot(item.x-this.pos.x,item.y-this.pos.y)<2.5);
+        const find=finds.find(item=>wearableReady(p,item.id))??finds[0];
+        if(find&&floorLevel(this.pos)===0)return this.command({type:'findWearable',target:find.id});
         const level=floorLevel(this.pos),near=(b:{x:number;y:number},range:number)=>distance(this.pos,{x:b.x+.5,y:b.y+.5})<range;
         if(level===0&&distance(this.pos,sceneAt(this.pos.x)==='mine'?MINE.exit:CAVE_ENTRANCE)<=2)return this.command({type:'interact'});
         const stairs=Object.values(this.world.buildings).filter(b=>b.kind==='stairs'&&(floorLevel(b)===level||floorLevel(b)===level-1)&&near(b,2.3)).sort((a,b)=>Math.abs(floorLevel(a)-level)-Math.abs(floorLevel(b)-level)||distance(this.pos,a)-distance(this.pos,b))[0];
@@ -599,16 +606,17 @@ export class GameClient {
         // Before dispatch, movement must stay out of the attack's pre-action movement batch.
         // Once sent, the bounded server timestamp lets local recovery finish before its acknowledgement.
         const awaitingDispatch=!!this.unconfirmedSwing&&(this.networkVersion<2||this.commands.includes(this.unconfirmedSwing));
-        return this.fishingBusy||awaitingDispatch||!!this.workCommand&&this.commands.includes(this.workCommand)||now<this.toolLockUntil();
+        return this.dead||this.fishingBusy||awaitingDispatch||!!this.workCommand&&this.commands.includes(this.workCommand)||now<this.toolLockUntil();
     }
     private dodgePending() {
         return this.commands.some(c=>c.type==='dodge') || !!this.pending?.commands.some(c=>c.type==='dodge');
     }
     command(command: Command) {
         const localNow=Date.now(),player=this.session?this.world.players[this.session.playerId]:undefined;
+        if(this.dead&&command.type!=='respawn')return false;
         if(command.type==='dodge'&&(this.toolLocked()||this.dodgePending()||!!player&&this.serverNow(localNow)<player.dodgeUntil+450))return false;
         if(command.type==='interact'&&(localNow-this.lastInteractAt<250||this.commands.some(c=>c.type==='interact')||this.pending?.commands.some(c=>c.type==='interact')))return false;
-        const modalAction=this.cookingOpen&&['cook','pantry'].includes(command.type)||command.type==='fishCancel'||command.type==='fishControl'&&command.held===false;
+        const modalAction=command.type==='story'||command.type==='respawn'||this.cookingOpen&&['cook','pantry'].includes(command.type)||command.type==='fishCancel'||command.type==='fishControl'&&command.held===false;
         if(this.paused&&command!==this.signSave?.command&&!modalAction || !this.playable || this.commands.length>=5)return false;
         if(command.type!=='wake'&&command.type!=='sleep')this.wakeSleep();
         if(this.commands.length>=5)return false;
@@ -618,7 +626,7 @@ export class GameClient {
         return true;
     }
     private movement(){
-        if(this.paused||!this.playable)return{x:0,y:0};
+        if(this.dead||this.paused||!this.playable)return{x:0,y:0};
         const x=Number(this.keys.has('d')||this.keys.has('arrowright'))-Number(this.keys.has('a')||this.keys.has('arrowleft')),y=Number(this.keys.has('s')||this.keys.has('arrowdown'))-Number(this.keys.has('w')||this.keys.has('arrowup'));
         if(x||y)this.wakeSleep();
         if(this.toolLocked())return{x:0,y:0};
@@ -761,8 +769,8 @@ export class GameClient {
         if (this.pos.moving) {
             this.pos.face = Math.abs(d.x) > Math.abs(d.y) ? d.x > 0 ? 'right' : 'left' : d.y > 0 ? 'down' : 'up';
             const player = this.session ? this.world.players[this.session.playerId] : undefined;
-            const speed = player && Date.now()+this.serverOffset < player.dodgeUntil ? 9 : 4.2;
-            move(this.world, this.pos, d.x * speed * dt, d.y * speed * dt);
+            const speed = player && Date.now()+this.serverOffset < player.dodgeUntil ? 9 : terrainAt(Math.floor(this.pos.x),Math.floor(this.pos.y))==='water'?(player&&wearing(player,'coral-swim')?3:2.6):4.2;
+            move(this.world, this.pos, d.x * speed * dt, d.y * speed * dt,!!player&&canSwim(player));
             const last=this.movements[this.movements.length-1];
             if(last && last.dx===d.x && last.dy===d.y && last.speed===speed && last.seconds<.3)last.seconds+=dt;
             else this.movements.push({dx:d.x,dy:d.y,seconds:dt,speed});
@@ -779,7 +787,7 @@ export class GameClient {
     };
     private draw(now:number){
         if (this.art)
-            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room,localAppearance:this.characterAppearance, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
+            render(this.canvas, this.world, this.session?.playerId || '', this.pos, { tool: this.tool, part: this.part, remove: this.remove||this.heldButton===2, pointer: this.pointer, time: now+this.serverOffset, roomKey: this.session?.room,localAppearance:this.session?safeAppearance(this.characterAppearance??this.world.players[this.session.playerId]?.appearance,this.world.players[this.session.playerId]??{}):this.characterAppearance, fadeUntil:this.fadeUntil+this.serverOffset, localSwing:this.localSwing?{...this.localSwing,start:this.localSwing.start+this.serverOffset,until:this.localSwing.until+this.serverOffset}:null, motionElapsed:now-this.poseStarted,localWork:this.localWork?{...this.localWork,start:this.localWork.start+this.serverOffset,until:this.localWork.until+this.serverOffset}:null,predictedEvents:this.predictedEvents,suppressedHits:this.suppressedHits,settledCommands:new Set(this.feedbackSeen.keys()) }, this.art);
     }
     private pointerMove = (e: PointerEvent) => {
         if(this.held&&this.heldPointerId!==null&&e.pointerId!==this.heldPointerId)return;

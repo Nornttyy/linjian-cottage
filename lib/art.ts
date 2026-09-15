@@ -1,3 +1,4 @@
+import {WARDROBE_ART_FILES} from './wardrobe';
 import {FEMALE_SHEETS,FEMALE_BODY_HEIGHTS,femaleDyeRegistrations,type FemaleSheet} from './female-art-layout';
 import {drawConnectedWall} from './connected-wall';
 import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
@@ -13,7 +14,7 @@ Object.assign(heroLayouts,workHeroLayouts);
 export type Direction='down'|'up'|'right';
 export type HeroAction='harvest'|'pickup'|'eat'|'fish'|'cook'|'sleep'|'idle'|'walk'|'hurt'|'dodge'|'axe'|'pick'|'sword'|'hammer'|'hoe'|'water'|'plant';
 type BaseSprite=`female-${HeroAction}-${Direction}-${number}`|'hammer'|'hoe'|'water'|'seed-bag'|'stairs'|'stairs-down'|'ascend'|'descend'|'planter'|'fence'|'lantern'|'sign'|'carrot-seed'|'tomato-seed'|'wheat-seed'|'water-drop'|'carrot'|'tomato'|'wheat'|'wall-face'|'wall-cap'|'roof-ridge'|'soil-dry'|'soil-wet'|'mine-exit'|`crop-${'carrot'|'tomato'|'wheat'}-${number}`|`${'bat'|'boar'|'mushroom'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`|'tree'|'pine'|'stone'|'copper'|'berry'|'stump'|'daisies'|'wildflowers'|'reeds'|'wall'|'window'|'door'|'door-open'|`fire${number}`|'chest'|'floor'|'roof'|'plaster'|'beam'|'bridge'|'foundation'|'cave-entrance'|'axe'|'pick'|'sword'|'remove'|'wood'|'stone-icon'|'copper-icon'|'essence'|'heart'|'stamina'|'map'|'room'|'torch'|'tuft'|'mushrooms'|'spark'|'down'|'up'|'right'|'slime'|`trail-${'axe'|'pick'|'sword'}-${number}`|`ground-${Terrain}`|`${HeroAction}-${Direction}-${number}`|`slime-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
-export type Sprite=BaseSprite|IngredientId|DishId|'rod'|'fish'|'meal'|'bed'|'campfire'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
+export type Sprite=`swim-${'male'|'female'}-${Direction}`|`wardrobe-${'headwear'|'outfit'}-${number}-${Direction}`|BaseSprite|IngredientId|DishId|'rod'|'fish'|'meal'|'bed'|'campfire'|'ground-meadow'|'ground-moss'|'region-oak'|'region-birch'|'region-maple'|'region-snowpine'|'region-berry'|'region-stone'|'flowers-white'|'flowers-pink'|'ancient-oak'|'frost-cairn'|'sunstone-circle'|'firefly-meadow'|`${'boar'|'mushroom'}-${'right'|'up'}-${'idle'|'move'|'attack'|'hurt'|'death'}-${number}`;
 export type Atlas=Record<Sprite,HTMLCanvasElement>;
 export const ART_DENSITY=2;
 export const HERO_FRAME_COUNT=8;
@@ -331,6 +332,30 @@ async function loadAll():Promise<Atlas>{
             const order=spec.base?heroLayouts[spec.base]?.order?.[row]?.[pose]??pose:pose;
             art[`female-${spec.action}-${dir}-${f}`]=female[i][row*8+order];
         }
+    }
+    const wardrobe=await loadAssetBatches(WARDROBE_ART_FILES.map(file=>()=>load('/art/'+file)));
+    for(const [sheetIndex,img]of wardrobe.slice(0,2).entries()){
+        const sourceSize=sheetIndex===0?[1230,1278]:[1086,1448];
+        const xs=sheetIndex===0?[0,433,839,1230]:[0,382,758,1086],ys=sheetIndex===0?[0,379,686,931,1278]:[0,341,688,1023,1448];
+        for(let row=0;row<4;row++)for(let col=0;col<3;col++){
+            const x=Math.round(xs[col]*img.width/sourceSize[0]),y=Math.round(ys[row]*img.height/sourceSize[1]),w=Math.round((xs[col+1]-xs[col])*img.width/sourceSize[0]),h=Math.round((ys[row+1]-ys[row])*img.height/sourceSize[1]);
+            const raw=canvas(w,h),rc=raw.getContext('2d')!;rc.drawImage(img,x,y,w,h,0,0,w,h);
+            const rgba=rc.getImageData(0,0,w,h);for(let i=3;i<rgba.data.length;i+=4)rgba.data[i]=rgba.data[i]>=128?255:0;rc.putImageData(rgba,0,0);cleanFragments(raw,true);
+            const cut=cropped(raw),ratio=28/Math.max(cut.width,cut.height),out=canvas(Math.max(1,Math.round(cut.width*ratio))+4,Math.max(1,Math.round(cut.height*ratio))+4),ctx=out.getContext('2d')!;
+            ctx.imageSmoothingEnabled=false;ctx.drawImage(cut,2,2,out.width-4,out.height-4);
+            art[`wardrobe-${sheetIndex===0?'headwear':'outfit'}-${row}-${(['down','up','right'] as const)[col]}`]=out;
+        }
+    }
+    for(let row=0;row<2;row++)for(let col=0;col<3;col++){
+        const swim=wardrobe[row===0?3:2];
+        const cell=canvas(swim.width/3,swim.height/(row===0?1:2)),cc=cell.getContext('2d')!;
+        cc.drawImage(swim,col*cell.width,row*cell.height,cell.width,cell.height,0,0,cell.width,cell.height);
+        const pixels=cc.getImageData(0,0,cell.width,cell.height);
+        for(let i=3;i<pixels.data.length;i+=4)pixels.data[i]=pixels.data[i]>=128?255:0;
+        cc.putImageData(pixels,0,0);cleanFragments(cell,true);
+        const cut=cropped(cell),out=canvas(128,128),ctx=out.getContext('2d')!,scale=62/cut.height;
+        ctx.imageSmoothingEnabled=false;ctx.drawImage(cut,Math.round(64-cut.width*scale/2),34,Math.round(cut.width*scale),62);
+        art[`swim-${row===0?'male':'female'}-${(['down','up','right'] as const)[col]}`]=out;
     }
     art.campfire=art.fire0;
     return art;
