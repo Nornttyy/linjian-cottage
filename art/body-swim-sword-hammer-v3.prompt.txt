@@ -1,0 +1,11 @@
+Use case: identity-preserve.
+Asset type: production pixel-art game animation sprite sheet.
+Input image 1 is the exact edit target; input image 2 is the new approved costume design reference, front/back/right. Edit image 1 only, preserving its canvas layout.
+Primary request: Replace every adult female character's old turquoise swimsuit with the clearer smaller-coverage turquoise two-piece bikini in image 2: narrow shoulder straps, compact opaque triangular cups, thin underbust and back straps, narrow hip-side bands and higher-cut briefs. Keep modest complete opaque coverage of intimate areas in every pose. This is ordinary adult swimwear game fashion.
+Preserve every original pose, hand positions, tool shapes and exact tool positions, brown ponytail, face, feet positions, body proportions and slim silhouette. No enlargement, extra characters, missing frames, recentering, or new actions. All 48 cells must remain aligned exactly.
+Art style: crisp square pixel clusters; restrained 3-tone skin and 3-tone cyan fabric. Clearly separated skin/cloth edges. No glossy spherical white highlights, no blurred or smooth gradients, glow, antialiasing or microtexture. Match reference pixel style rather than the target's old glossy shading. Keep metal/white tool parts complete.
+Canvas: exact 1024x768, 8 equal columns by 6 equal rows; transparent PNG with genuine alpha, no colored background or fake checkerboard, no grid, no text, no cell labels or outlines.
+Action row order: sword down/front, sword up/back, sword right; hammer down/front, hammer up/back, hammer right. Eight successive frames per row. Preserve sword blade white/pale-blue metal, blade silhouette and hammer silhouette, all exact original poses and tool angles.
+
+
+Production export: preserve the original male rows exactly from public/art/body-swim-sword-hammer-v2.png. Insert generated female rows with nearest-neighbor sampling and binary alpha. All artwork was edited using the built-in image generator.
