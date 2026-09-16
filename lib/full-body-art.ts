@@ -4,6 +4,7 @@ import {recolorClothes,type Pixels,type Region} from './hero-appearance';
 import {femaleDyeRegistrations} from './female-art-layout';
 import {BODY_IDLE_POSES,bodyIdlePose,fullBodyKey,type FULL_BODY_SHEETS,type BodyFamily} from './full-body-layout';
 import {fishingRod,authoredFishingRod,fishingRodPixel} from './hero-fishing-art';
+import {SWIM_CAN_LEFT,SWIM_HAMMER_TOOLS} from './swim-tool-layout';
 
 type Parts=ReturnType<typeof recolorClothes>;
 export type CompleteBody={family:BodyFamily;parts:Parts;rodTip?:readonly [number,number]};
@@ -97,9 +98,14 @@ export function completeBodyParts(p:Pixels,reference:Parts,family:BodyFamily,fra
     const d=p.data,w=p.width,masks:Partial<Record<DyePart,number[]>>={},protectedPixels:number[]=[];
     const rod=authoredFishingRod(p,frame,body);
     const distance=Object.fromEntries(['hair','skin','eyes','shirt','pants','shoes','trim'].map(k=>[k,distances(reference.masks[k as DyePart])])) as Record<string,Uint8Array>;
-    const tool=distances(reference.protectedPixels),head=hairRegion(p,reference.head,tool,family)??reference.head;
+    // The new bikini exposes skin where the original clothed tool poses had
+    // sleeves or implements. Identify its head and tools from this artwork.
+    const femaleSwim=family==='swim'&&body==='female';
+    const hammer=femaleSwim?SWIM_HAMMER_TOOLS[frame]:undefined;
+    const reliableHead=femaleSwim&&reference.face&&(!reference.head||reference.head.width<14||reference.head.height<12)?{points:[],x:reference.face.x-5,y:reference.face.y-11,width:reference.face.width+10,height:reference.face.height+14}:reference.head;
+    const tool=distances(reference.protectedPixels),head=hairRegion(p,reliableHead,femaleSwim?distances([]):tool,family)??reliableHead;
     const skinRegions=regions(p,i=>{const k=i*4,r=d[k],g=d[k+1],b=d[k+2];return d[k+3]>=128&&r>195&&g>135&&b>65&&r>=g*.985&&g>=b*.98&&r-g<65;});
-    const anchor=reference.face&&reference.head&&reference.face.y>=reference.head.y?reference.face:reference.head;
+    const anchor=femaleSwim&&reference.face?reference.face:reference.face&&reference.head&&reference.face.y>=reference.head.y?reference.face:reference.head;
     const stableHead=head&&reference.head&&reference.head.width>=18;
     const fx=(anchor?anchor.x+anchor.width/2:64)+(stableHead?head.x+head.width/2-reference.head!.x-reference.head!.width/2:0),fy=(anchor?anchor.y+anchor.height/2:54)+(stableHead?Math.max(-3,Math.min(3,head.y-reference.head!.y)):0);
     // A pale collar or resting hand may touch the face. Limit the search to
@@ -165,29 +171,48 @@ export function completeBodyParts(p:Pixels,reference:Parts,family:BodyFamily,fra
     const coolTools:number[]=[];
     for(let i=0;i<w*p.height;i++){
         const k=i*4,r=d[k],g=d[k+1],b=d[k+2],y=i/w|0;
-        if(d[k+3]<128||b<=r*1.08||b<g)continue;
+        if(d[k+3]<128||b<=r*1.08||(femaleSwim?b<=g+20:b<g))continue;
         if(tool[i]<=12&&tool[i]<Math.min(distance.shirt[i],distance.pants[i])+2||head&&y<head.y+2&&/^(axe|pick|sword|hammer|hoe)-/.test(frame))coolTools.push(i);
     }
     if(head&&/^(axe|pick|hammer|hoe)-/.test(frame))for(const blade of regions(p,i=>{
-        const k=i*4;return d[k+3]>=128&&(i/w|0)<head.y+10&&d[k+2]>d[k]*1.08&&d[k+2]>=d[k+1];
+        const k=i*4;return d[k+3]>=128&&(i/w|0)<head.y+10&&d[k+2]>d[k]*1.08&&(femaleSwim?d[k+2]>d[k+1]+20:d[k+2]>=d[k+1]);
     }).filter(r=>r.width>=7&&r.height<r.width*.8))coolTools.push(...blade.points);
     const toolSeeds=new Set(coolTools);
     for(const blade of regions(p,i=>{const k=i*4;return d[k+3]>=128&&d[k+2]>d[k]*1.12&&d[k+2]>d[k+1]+20;})){
         if(blade.points.some(i=>toolSeeds.has(i)))coolTools.push(...blade.points);
     }
+    if(femaleSwim&&head){
+        const authored:number[]=[];
+        for(const component of regions(p,i=>{const k=i*4;return d[k+3]>=128&&d[k+2]>d[k]*1.12&&d[k+2]>=d[k+1]*.8;})){
+            const seed=component.points.some(i=>{const k=i*4,x=i%w,y=i/w|0;return d[k+2]>d[k+1]+20&&(y<head.y+2||x<head.x-1||x>head.x+head.width+1)&&(tool[i]<=16||/^(axe|pick|sword|hammer|hoe)-/.test(frame));});
+            if(seed)authored.push(...component.points);
+        }
+        coolTools.splice(0,coolTools.length,...authored);
+    }
+    const canLeft=femaleSwim?SWIM_CAN_LEFT[frame]:undefined;
+    if(canLeft!==undefined)coolTools.splice(0,coolTools.length,...coolTools.filter(i=>i%w>=canLeft));
     const coolToolDistance=distances(coolTools);
     const eyeMarks=new Set<number>();
     if(face&&!frame.includes('-up-'))for(const mark of regions(p,i=>{
         const x=i%w,y=i/w|0,k=i*4;
         return x>=face.x&&x<face.x+face.width&&y>=face.y&&y<face.y+face.height&&d[k+3]>=128&&d[k]<130&&d[k+1]<105&&d[k+2]<100;
     }).filter(r=>r.width<=6&&r.height<=7&&r.points.some(i=>[i-1,i+1,i-w,i+w].filter(n=>d[n*4]>215&&d[n*4+1]>165&&d[n*4+2]>90).length>=2)))for(const i of mark.points)eyeMarks.add(i);
+    let swimPantsY:number|undefined;
+    if(femaleSwim&&head&&!/^(dodge|sleep)-/.test(frame)){
+        const garments=regions(p,i=>{const k=i*4;return d[k+3]>=128&&coolToolDistance[i]>0&&d[k+1]>d[k]*1.12&&d[k+2]>d[k]*1.18;}).filter(r=>r.points.length>=3&&r.y+r.height/2>=head.y+head.height/2+20&&Math.abs(r.x+r.width/2-head.x-head.width/2)<18);
+        garments.sort((a,b)=>b.y+b.height/2-a.y-a.height/2);swimPantsY=garments[0]?.y;
+    }
     const assign=(part:DyePart,i:number)=>(masks[part]??=[]).push(i);
     for(let i=0;i<w*p.height;i++){
         const k=i*4,[r,g,b,a]=d.subarray(k,k+4);if(a<128)continue;
         if(fishingRodPixel(p,i,rod,true)){protectedPixels.push(i);continue;}
         const x=i%w,y=i/w|0,inHead=isHead(x,y),warm=r>g*1.06&&g>b*1.08;
+        if(hammer?.some(([left,top,width,height])=>x>=left&&x<left+width&&y>=top&&y<top+height)){protectedPixels.push(i);continue;}
         const cyan=g>r*1.12&&b>r*1.18,blue=b>g*1.1&&b>r*1.22;
         const paleSkin=r>170&&g>100&&b>55&&r>=g&&g>b*1.025&&r-g<105;
+        // The raised hammer palm touches the ponytail. Its warm skin shades
+        // remain skin after the authored wood regions above have been removed.
+        if(hammer&&paleSkin&&r>195&&g>135&&b>65){assign('skin',i);continue;}
         const metal=coolToolDistance[i]===0||coolToolDistance[i]<=2&&r>165&&Math.max(r,g,b)-Math.min(r,g,b)<24;
         if(/^(plant|cook|eat|pickup|harvest)-/.test(frame)&&tool[i]<=3&&heldColour(frame,r,g,b)){protectedPixels.push(i);continue;}
         const inFace=faceShape?faceShape.has(i):face&&x>=face.x&&x<face.x+face.width&&y>=face.y&&y<face.y+face.height;
@@ -197,7 +222,9 @@ export function completeBodyParts(p:Pixels,reference:Parts,family:BodyFamily,fra
             if(paleSkin||r>225&&g>210&&b>170){assign('skin',i);continue;}
             if(Math.max(r,g,b)<105)continue;
         }
-        if(metal||(cyan||blue)&&tool[i]<=8&&tool[i]<Math.min(distance.shirt[i],distance.pants[i])+2||tool[i]<=4&&warm&&tool[i]<Math.min(distance.hair[i],distance.skin[i],distance.shirt[i],distance.pants[i])){protectedPixels.push(i);continue;}
+        const legacyCool=!femaleSwim&&(cyan||blue)&&tool[i]<=8&&tool[i]<Math.min(distance.shirt[i],distance.pants[i])+2;
+        const woodLane=!femaleSwim||!inHead&&!paleSkin&&coolToolDistance[i]<=24&&(!head||x<head.x-2||x>head.x+head.width+2||y<head.y);
+        if(metal||legacyCool||woodLane&&tool[i]<=4&&warm&&tool[i]<Math.min(distance.hair[i],distance.skin[i],distance.shirt[i],distance.pants[i])){protectedPixels.push(i);continue;}
         if(inHead){
             if(r>140&&r>g*1.35&&b>g*1.15){assign('trim',i);continue;}
             const backNeck=family==='swim'&&frame.includes('-up-')&&head&&y>=head.y+head.height*.65&&y<head.y+head.height&&r>215&&g>165&&r<g*1.5&&g>b*1.08;
@@ -205,7 +232,7 @@ export function completeBodyParts(p:Pixels,reference:Parts,family:BodyFamily,fra
             if(!(family==='mushroom'&&r>160&&r>g*3)&&(hairColour(r,g,b)||Math.max(r,g,b)<105)&&(hairPixels.has(i)||hairDistance[i]<=2)){assign('hair',i);continue;}
         }
         if(family==='swim'){
-            if(cyan||blue){assign(distance.shirt[i]<=distance.pants[i]?'shirt':'pants',i);continue;}
+            if(cyan||blue){assign(swimPantsY!==undefined?(y>=swimPantsY?'pants':'shirt'):distance.shirt[i]<=distance.pants[i]?'shirt':'pants',i);continue;}
             if(warm||paleSkin||r>200&&g>185&&b>155&&r>=g&&g>=b||Math.min(r,g,b)>185&&Math.max(r,g,b)-Math.min(r,g,b)<45){assign('skin',i);continue;}
             if(r>110&&r>g*1.3&&b>g*1.15){assign('trim',i);continue;}
         }else{

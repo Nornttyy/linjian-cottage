@@ -1,0 +1,8 @@
+Use case: identity-preserve. Asset type: production pixel-game animation sprite sheet.
+Image 1 is the exact edit target: a 1024x768 sheet with 8 columns and 6 rows (48 isolated adult female game sprites), plant action in the top three rows (front, back, right) and harvest action in the bottom three rows (front, back, right). Image 2 is the approved new swimwear design reference ONLY.
+Edit image 1, keeping its exact canvas aspect, 8x6 cell layout, pose and tool/hand/feet registration in every cell. Replace the turquoise swimwear in EVERY sprite with the narrower opaque two-piece bikini seen in image 2: slimmer shoulder straps and hip-side straps, smaller triangular cloth panels and clearer bare midriff. All private areas remain completely covered. Keep the existing adult body silhouette, face, brown ponytail, eye placement, and every pose and handheld item from image 1. Do not replace action poses with standing poses.
+Render as crisp square-pixel farming-game art like image 2: a small consistent palette, flat color clusters, clean hard stepped silhouette, visible fabric-skin color boundaries, no smooth gradients, blur, glow or white spherical highlights. Turquoise cloth, warm natural skin, brown hair, preserved colorful held objects. Ordinary neutral gameplay animation, no seductive expression or suggestive pose. Preserve harvest crouches and planting hands.
+Output true transparent PNG, no background color, no checkerboard, no grid, no text. One edited 8x6 sheet only.
+
+
+Production export: preserve the original male rows exactly from public/art/body-swim-plant-harvest-v2.png. Insert generated female rows with nearest-neighbor sampling and binary alpha. All artwork was edited using the built-in image generator.

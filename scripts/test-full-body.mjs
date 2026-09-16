@@ -16,7 +16,7 @@ try{
  for(const[file,hash]of Object.entries(fixture.sources))assert.equal(createHash('sha256').update(readFileSync(new URL('../public/art/'+file,import.meta.url))).digest('hex'),hash,'real sprite fixture is stale: '+file);
  console.log('PASS real body fixtures match the authored assets');
  for(const f of fixture.frames){
-  const p=decode(f),info={family:f.family,parts:completeBodyParts(p,reference(f),f.family,f.frame)},source=new Canvas(p),base=new Canvas();base.data.set([255,0,0,255],0);
+  const p=decode(f),info={family:f.family,parts:completeBodyParts(p,reference(f),f.family,f.frame,f.body)},source=new Canvas(p),base=new Canvas();base.data.set([255,0,0,255],0);
   completeBodies.set(source,info);const art={[f.body==='female'?'female-'+f.frame:f.frame]:base,[fullBodyKey(f.family,f.body,f.frame)]:source};
   const a={body:f.body,...original,outfit:outfit(f)},result=dressedHero(art,f.frame,a);
   assert.deepEqual(result.data,p.data,f.family+' '+f.frame+' must use the complete authored body, including its transparent silhouette');
@@ -25,7 +25,26 @@ try{
   Object.defineProperty(art,fullBodyKey(f.family,f.body,f.frame),{get(){throw Error('cached pose was unnecessarily decoded again');}});
   assert.equal(dressedHero(art,f.frame,{...a,...dyes}),dyed);
  }
- console.log('PASS 60 real male/female poses retain authored silhouettes and leave their source atlas intact');
+ console.log(`PASS ${fixture.frames.length} real male/female poses retain authored silhouettes and leave their source atlas intact`);
+ for(const[frame,part,x,y]of [['axe-up-3','hair',62,37],['water-down-1','pants',64,77],['water-down-3','skin',62,82],['water-down-3','pants',62,76],['water-down-3','shirt',62,67],['water-down-6','pants',64,77],['hammer-down-2','skin',44,55],['hammer-down-3','skin',58,82],['hammer-down-3','pants',62,76],['hammer-down-3','hair',62,40]]){
+  const f=fixture.frames.find(f=>f.family==='swim'&&f.body==='female'&&f.frame===frame),p=decode(f),info={family:'swim',parts:completeBodyParts(p,reference(f),'swim',frame,'female')};
+  assert.equal(p.data[(y*128+x)*4+3],255);
+  assert(info.parts.masks[part]?.includes(y*128+x),`${frame} ${part} must own reviewed pixel ${x},${y}`);
+  for(const other of Object.keys(dyes)){
+   // Outfit color intentionally supplies the default for undyed swimwear.
+   if(other==='outfitColor'&&(part==='shirt'||part==='pants'))continue;
+   const changed=decode(f);dyeCompleteBody(changed,{body:'female',...original,[other]:dyes[other]},info);
+   if(other===part)assert.notDeepEqual(rgba(changed,x,y),rgba(p,x,y),`${frame} ${part} must recolor`);else assert.deepEqual(rgba(changed,x,y),rgba(p,x,y),`${frame} ${other} must not bleed into ${part}`);
+  }
+ }
+ console.log('PASS narrow swimwear keeps the crown, exposed legs and separate bikini pieces in their own dye channels');
+ for(const[frame,x,y]of [['pick-up-3',59,31],['water-down-1',81,75],['water-down-3',83,76],['water-down-6',80,75],['hammer-down-2',44,40],['hammer-up-2',76,32],['hammer-right-3',82,72]]){
+  const f=fixture.frames.find(f=>f.family==='swim'&&f.body==='female'&&f.frame===frame),p=decode(f),info={family:'swim',parts:completeBodyParts(p,reference(f),'swim',f.frame,'female')},changed=decode(f);
+  dyeCompleteBody(changed,{body:'female',...original,...dyes},info);
+  assert.equal(p.data[(y*128+x)*4+3],255);
+  assert.deepEqual(rgba(changed,x,y),rgba(p,x,y),`${frame} must keep the reviewed tool pixel at ${x},${y} in its authored color`);
+ }
+ console.log('PASS swimwear preserves the actual pick handle, watering can and wooden hammer');
  const f=fixture.frames.find(f=>f.family==='mushroom'&&f.body==='female'&&f.frame==='pick-down-3'),p=decode(f),info={family:f.family,parts:completeBodyParts(p,reference(f),f.family,f.frame)};
  for(const[part,x,y]of [['skin',64,60],['skin',58,60],['skin',61,61],['eyes',66,60],['skin',69,61],['hair',68,46],['outfitColor',55,56],['shoes',59,92]]){
   assert(info.parts.masks[part]?.includes(y*128+x),part+' must own the reviewed pixel '+x+','+y);
