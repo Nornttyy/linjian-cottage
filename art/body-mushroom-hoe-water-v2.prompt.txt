@@ -1,0 +1,10 @@
+Edit image 1 IN PLACE. It is an existing full sprite sheet, not a reference to redesign. Image 2 is ONLY a reference for adult female BODY PROPORTIONS.
+Retain all 96 frames and their exact original cell positions, poses, tools, height, hair, eyes and faces. Copy every male frame unchanged. Do NOT move a row, replace a row, duplicate a row, or change direction. Preserve original canvas dimensions and layout.
+EXACT rows 1–12: hoe male front; hoe male back; hoe male right; hoe female front; hoe female back; hoe female right; water male front; water male back; water male right; water female front; water female back; water female right.
+Edit ONLY female rows 4,5,6,10,11,12: make the adult women's waist and arms/legs about 20% slimmer; chest about 25% fuller, prominently but completely covered by their red mushroom clothing. Follow image 2's slender adult body with full bust, including side profile, consistently in every action frame. Preserve the same total character height and foot/hand/tool positions. Do not use the cyan clothes from image 2.
+Keep the original red mushroom cape design, cream spots and pale hem. Redraw the whole clothing naturally to follow the new body's slim waist and covered chest; no pasted overlay. Keep recognizable ponytail, face, eyes and outfit colors.
+Crisp square stepped pixels, flat pixel clusters, only 3–4 shade levels per material; avoid fine speckles, tiny white edge glitter, smooth gradients, realistic shading, blur and antialiasing.
+Exactly 1024 x 1536 pixels, 8 columns x 12 rows. 8 distinct frames per row. Keep generous gutters and no touching or cut-off tools.
+TRANSPARENT PNG background, NOT BLACK. Show transparency as the usual light neutral gray/white transparency pattern if needed, never paint solid black. No text, border, labels, watermark, shadows or additional objects.
+
+Production export: keep the original male action rows from body-mushroom-hoe-water-v1.png. Insert the approved female full-body rows; nearest-neighbor sampling, transparent PNG. No clothing overlays.
