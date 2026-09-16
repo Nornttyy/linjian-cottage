@@ -13,7 +13,7 @@ try {
   const sim = await import(project.module('simulation'));
   const world = await import(project.module('world'));
   const { GameClient } = await import(project.module('client'));
-  const { render } = await import(project.module('renderer'));
+  const { render,resizeWorldCanvas,pointerWorld,TILE } = await import(project.module('renderer'));
   Date.now = () => now;
   globalThis.window = { addEventListener() {}, removeEventListener() {} };
   globalThis.Image = class {}; // Keep art loading unresolved; input tests do not render.
@@ -242,6 +242,21 @@ try {
       const hammers=draws.filter(d=>d.name==='hammer');assert.equal(hammers.length,1);
       const hx=Math.round(259.5*24+ox),hy=Math.round(322.5*24+oy);assert.deepEqual(hammers[0].bounds,[hx-3,hy-17,hx+14,hy+3].map(v=>v*2));
     } finally { f.client.destroy(); }
+  });
+
+  await test('odd viewport sizes keep integer pixels and accurate pointer coordinates after resize',()=>{
+    const parent={clientWidth:1001,clientHeight:701},canvas={parentElement:parent,style:{},width:0,height:0};
+    canvas.getBoundingClientRect=()=>({left:11,top:17,width:parseInt(canvas.style.width),height:parseInt(canvas.style.height)});
+    const pos={x:259.25,y:321.5},point={x:260.75,y:322.25};
+    for(const [width,height]of [[1001,701],[732,510],[393,851]]){
+      parent.clientWidth=width;parent.clientHeight=height;
+      const {w,h}=resizeWorldCanvas(canvas),rect=canvas.getBoundingClientRect();
+      assert.equal(canvas.width,rect.width);assert.equal(canvas.height,rect.height);
+      assert(rect.width>=width&&rect.width-width<=1);assert(rect.height>=height&&rect.height-height<=1);
+      const ox=Math.round(w/2-pos.x*TILE),oy=Math.round(h/2-pos.y*TILE);
+      const clicked=pointerWorld(canvas,pos,rect.left+(point.x*TILE+ox)*2,rect.top+(point.y*TILE+oy)*2);
+      assert(Math.abs(clicked.x-point.x)<1e-9);assert(Math.abs(clicked.y-point.y)<1e-9);
+    }
   });
 
   console.log(failures ? `${failures} regression check(s) failed` : 'All regression checks passed');

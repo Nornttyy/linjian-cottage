@@ -3,6 +3,7 @@ import {FULL_BODY_SHEETS,type FullBodySprite} from './full-body-layout';
 import {loadCompleteBodySheet} from './full-body-art';
 import {removeBakedFishingLine} from './hero-fishing-art';
 import {FEMALE_SHEETS,FEMALE_BODY_HEIGHTS,femaleDyeRegistrations,type FemaleSheet} from './female-art-layout';
+import {FEMALE_FRAME_BOUNDS} from './female-crop-bounds';
 import {drawConnectedWall} from './connected-wall';
 import {ART_IMAGE_TIMEOUT_MS,beginAssets,loadedAsset,finishAssets,failAssets,getAssetLoading,loadAssetBatches,registerAssetCancellation} from './asset-loading';
 import {ART_REVISIONS} from './art-sources';
@@ -189,8 +190,9 @@ async function femaleSheet(spec:FemaleSheet){
         const row=Math.floor(i/8),col=i%8,base=registration?.frames[i]??[col*img.width/8,row*img.height/3,img.width/8,img.height/3];
         const margin=spec.registration?0:layout?40:0,sourceRow=Math.floor((base[1]+base[3]/2)/(img.height/3));
         const rowTop=spec.registration?0:spec.rowEdges?.[sourceRow]??sourceRow*img.height/3,rowBottom=spec.registration?img.height:spec.rowEdges?.[sourceRow+1]??(sourceRow+1)*img.height/3;
-        const x=Math.max(0,Math.floor(base[0]-margin)),y=Math.max(rowTop,Math.floor(base[1]-margin));
-        const right=Math.min(img.width,Math.ceil(base[0]+base[2]+margin)),bottom=Math.min(rowBottom,Math.ceil(base[1]+base[3]+margin));
+        const sourceColumn=Math.floor((base[0]+base[2]/2)/(img.width/8)),authored=FEMALE_FRAME_BOUNDS[spec.file]?.[sourceRow*8+sourceColumn];
+        const x=Math.max(0,Math.min(Math.floor(base[0]-margin),authored?.[0]??Infinity)),y=Math.max(0,Math.min(Math.max(rowTop,Math.floor(base[1]-margin)),authored?.[1]??Infinity));
+        const right=Math.min(img.width,Math.max(Math.ceil(base[0]+base[2]+margin),authored?.[2]??0)),bottom=Math.min(img.height,Math.max(Math.min(rowBottom,Math.ceil(base[1]+base[3]+margin)),authored?.[3]??0));
         const c=canvas(right-x,bottom-y);c.getContext('2d')!.drawImage(img,x,y,c.width,c.height,0,0,c.width,c.height);
         cleanFragments(c,true);return{c,x,y,box:bounds(c)};
     });
@@ -200,9 +202,13 @@ async function femaleSheet(spec:FemaleSheet){
         const anchor=registration?[registration.frames[i][0]+registration.anchors[i][0]-x,registration.frames[i][1]+registration.anchors[i][1]-y]:[(box.x0+box.x1+1)/2,box.y1+1];
         const dx=Math.round(HERO_SIZE.anchorX-anchor[0]*scale),dy=Math.round(HERO_SIZE.anchorY-anchor[1]*scale);
         ctx.drawImage(c,dx,dy,c.width*scale,c.height*scale);
+        const rgba=ctx.getImageData(0,0,out.width,out.height);
+        for(let k=3;k<rgba.data.length;k+=4)rgba.data[k]=rgba.data[k]>=128?255:0;
+        ctx.putImageData(rgba,0,0);
+        femaleDyeRegistrations.set(out,{scale:1,x:0,y:0,revised:true});
         if(spec.action==='water'&&layout){
             const oldScale=31/layout.bodyHeights[row],ratio=oldScale/scale;
-            femaleDyeRegistrations.set(out,{scale:ratio,x:(Math.round(HERO_SIZE.anchorX-anchor[0]*oldScale)-dx*ratio)*ART_DENSITY,y:(Math.round(HERO_SIZE.anchorY-anchor[1]*oldScale)-dy*ratio)*ART_DENSITY});
+            femaleDyeRegistrations.set(out,{scale:ratio,x:(Math.round(HERO_SIZE.anchorX-anchor[0]*oldScale)-dx*ratio)*ART_DENSITY,y:(Math.round(HERO_SIZE.anchorY-anchor[1]*oldScale)-dy*ratio)*ART_DENSITY,revised:true});
         }
         return out;
     });

@@ -2,7 +2,7 @@ import {colorHex,appearanceKey,normalizeAppearance,type Appearance,type Clothing
 import type {Atlas,Sprite} from './art';
 import {composeWardrobe} from './wardrobe-render';
 import {femaleDyeRegistrations,type DyeRegistration} from './female-art-layout';
-import {fishingRod,fishingRodPixel,fishingLineOrigin} from './hero-fishing-art';
+import {fishingRod,authoredFishingRod,fishingRodPixel,fishingLineOrigin} from './hero-fishing-art';
 import {toolDyeExclusion} from './hero-tool-masks';
 import {alignHeroFrame,heroFrameOffset} from './hero-registration';
 import {bodyFamily,fullBodyKey} from './full-body-layout';
@@ -45,9 +45,21 @@ const reviewedBoots:Record<string,number[][]>={
     'female:hammer-down-4':[[45,82,59,92],[69,82,83,92]]
 };
 export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,registration?:DyeRegistration){
-    const reviewedTools=toolDyeExclusion(frame,appearance.body,p.width,p.height);
-    const rod=frame?fishingRod(frame,appearance.body):undefined;
-    const rodPixels=new Set<number>();if(rod)for(let i=0;i<p.width*p.height;i++)if(fishingRodPixel(p,i,rod))rodPixels.add(i);
+    let reviewedTools=toolDyeExclusion(frame,appearance.body,p.width,p.height);
+    if(registration?.revised&&reviewedTools?.size){
+        const expanded=new Set(reviewedTools),radius=Math.ceil(p.width/64),d=p.data;
+        for(const i of reviewedTools){
+            const k=i*4;if(d[k+3]<128)continue;
+            for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+                const x=i%p.width+dx,y=(i/p.width|0)+dy;if(x<0||x>=p.width||y<0||y>=p.height)continue;
+                const n=y*p.width+x,t=n*4;
+                if(d[t+3]>=128&&Math.hypot(d[t]-d[k],d[t+1]-d[k+1],d[t+2]-d[k+2])<65)expanded.add(n);
+            }
+        }
+        reviewedTools=expanded;
+    }
+    const rod=frame?(registration?.revised?authoredFishingRod(p,frame,appearance.body):fishingRod(frame,appearance.body)):undefined;
+    const rodPixels=new Set<number>();if(rod)for(let i=0;i<p.width*p.height;i++)if(fishingRodPixel(p,i,rod,registration?.revised))rodPixels.add(i);
     const water=frame?.match(/^water-(down|up|right)-(\d+)$/),pose=water?Number(water[2])%8:0;
     // At impact the pick blade sits between the legs and shares the trousers'
     // blue palette. Its narrow, vertical silhouette belongs to the tool.
@@ -59,6 +71,14 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
         .filter(r=>r.width>25*p.width/128&&r.width>r.height*2.2||r.height>28*p.width/128&&r.height>r.width*2.2).flatMap(r=>r.points):[]);
     let upperCan:Region|undefined;
     const toolPixel=(i:number)=>{
+        if(registration?.revised&&water?.[1]==='up'&&(pose===1||pose===2)){
+            const x=i%p.width*128/p.width,y=Math.floor(i/p.width)*128/p.height;
+            if(y>=53&&y<64&&x>=(pose===1?78:79)&&x<(pose===1?86:88))return true;
+        }
+        if(registration?.revised&&frame==='hoe-down-5'){
+            const x=i%p.width*128/p.width,y=Math.floor(i/p.width)*128/p.height,k=i*4,r=p.data[k],g=p.data[k+1],b=p.data[k+2];
+            return x>=37&&x<=47&&y>=88&&y<=98||x>=39&&x<=57&&y>=77&&y<=93&&x+y>=130&&x+y<=136&&r>g*1.04&&g>b*1.06;
+        }
         if(reviewedTools?.has(i))return true;
         if(rodPixels.has(i))return true;
         if(handles.has(i))return true;
@@ -67,17 +87,21 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
         if(water[1]==='up'&&upperCan){const x=i%p.width,y=Math.floor(i/p.width);return x>=upperCan.x-1&&x<=upperCan.x+upperCan.width&&y>=upperCan.y-1&&y<=upperCan.y+upperCan.height;}
         const x=i%p.width*128/p.width*(registration?.scale??1)+(registration?.x??0),y=Math.floor(i/p.width)*128/p.height*(registration?.scale??1)+(registration?.y??0);
         if(water[1]==='down')return frontCan[pose].some(([x0,y0,x1,y1])=>x>=x0&&x<x1&&y>=y0&&y<y1);
-        return water[1]==='right'&&x>=[66,70,70,68,67,68,65,65][pose]&&y<83;
+        return water[1]==='right'&&x>=[66,70,70,68,67,68,65,65][pose]&&y>=60&&y<83;
     };
+    const upright=!frame?.startsWith('sleep-')&&!frame?.startsWith('dodge-'),u=p.width/128;
+    const belts=registration?.revised&&upright?regions(p,(r,g,b,i)=>!toolPixel(i)&&r>g*1.08&&g>b*1.1&&g<185&&r>70)
+        .filter(r=>r.width>=7*u&&r.width<=28*u&&r.height<=8*u&&r.width>=r.height*1.7&&r.y+r.height/2>=68*u&&r.y+r.height/2<90*u&&Math.abs(r.x+r.width/2-64*u)<28*u):[];
+    belts.sort((a,b)=>Math.abs(a.y+a.height/2-74*u)-Math.abs(b.y+b.height/2-74*u));
+    const belt=registration?.revised&&frame==='hoe-down-5'?{x:49*u,y:76*u,width:22*u,height:2*u,points:[]}:belts[0],belowBelt=(i:number)=>!!belt&&Math.floor(i/p.width)>=belt.y+belt.height-1&&i%p.width>=belt.x-14*u&&i%p.width<=belt.x+belt.width+14*u;
     // Find both masks before writing either color: blue shirts must never be
     // reclassified as pants during the same recolor operation.
     const garments=([['shirt',false],['pants',true]] as const).map(([part,isPants])=>({part,isPants,parts:regions(p,(r,g,b,i)=>{
         const split=appearance.body==='female'?(b-r)*.23:25;
-        return !toolPixel(i)&&g>r*1.22&&b>r*1.3&&g>32&&(isPants?b-g>split:b-g<=split&&b-g>-35);
+        return !toolPixel(i)&&g>r*1.22&&b>r*1.3&&g>32&&(belt?(isPants?belowBelt(i):!belowBelt(i)):(isPants?b-g>split:b-g<=split&&b-g>-35));
     })}));
     if(water?.[1]==='up')upperCan=regions(p,(r,g,b,i)=>i%p.width>p.width*.55&&Math.floor(i/p.width)<p.height*.59&&b>r*1.25&&b-g>20&&g>60)[0];
     const shirt=garments[0].parts[0];let pants=garments[1].parts[0];
-    const upright=!frame?.startsWith('sleep-')&&!frame?.startsWith('dodge-');
     if(upright&&shirt){
         // A sleeve shadow may contain more blue pixels than either leg. Pick
         // the lower garment by its position before attaching the other leg.
@@ -107,7 +131,7 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     let standingWaist=-Infinity;
     if(frame&&upright&&pantsSet.size){
         const rows=[...pantsSet].map(i=>Math.floor(i/p.width)).sort((a,b)=>a-b);
-        standingWaist=rows[Math.floor(rows.length*.5)]-8*unit;
+        standingWaist=belt?belt.y+belt.height-1:rows[Math.floor(rows.length*.5)]-8*unit;
         for(const i of pantsSet)if(Math.floor(i/p.width)<standingWaist){pantsSet.delete(i);shirtSet.add(i);}
     }
     for(const [part,selected,other]of [['shirt',shirtSet,pantsSet],['pants',pantsSet,shirtSet]] as const){
@@ -116,6 +140,7 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
             for(const [dx,dy]of [[-1,0],[1,0],[0,-1],[0,1]]){
                 const xx=x+dx,yy=y+dy,n=yy*p.width+xx;if(xx<0||xx>=p.width||yy<0||yy>=p.height||selected.has(n)||other.has(n)||toolPixel(n))continue;
                 if(part==='pants'&&yy<standingWaist)continue;
+                if(belt&&part==='shirt'&&belowBelt(n))continue;
                 const [r,g,b,a]=p.data.subarray(n*4,n*4+4);
                 if(a>=128&&g>r*1.06&&b>r*1.12&&g>24&&b-g>-50){selected.add(n);queue.push(n);}
             }
@@ -133,6 +158,14 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
             const ds=distance(i,shirtSet),dp=distance(i,pantsSet);if(Math.min(ds,dp)>(lying?576:36)*unit*unit)continue;
             (ds<=dp?shirtSet:pantsSet).add(i);
         }
+        masks.shirt=[...shirtSet];masks.pants=[...pantsSet];
+    }
+    if(shirt&&pants&&frame&&upright&&pantsSet.size){
+        // A pale trouser leg can share the shirt's cyan highlights. The shirt
+        // flood must not claim it merely because that leg has no dark core.
+        const xs=[...pantsSet].map(i=>i%p.width),left=Math.min(...xs)-3*unit,right=Math.max(...xs)+3*unit;
+        const waist=Math.max(standingWaist,shirt.y+shirt.height);
+        for(const i of shirtSet)if(Math.floor(i/p.width)>=waist&&i%p.width>=left&&i%p.width<=right){shirtSet.delete(i);pantsSet.add(i);}
         masks.shirt=[...shirtSet];masks.pants=[...pantsSet];
     }
     if(masks.pants?.length){
@@ -223,9 +256,17 @@ export function recolorClothes(p:Pixels,appearance:Appearance,frame?:Sprite,regi
     return {masks,shirt,pants,head,face,pelvis,headVisible:!hiddenHead,protectedPixels};
 }
 const caches=new WeakMap<Atlas,Map<string,HTMLCanvasElement>>();
+const authoredRodTips=new WeakMap<HTMLCanvasElement,readonly [number,number]|null>();
 export function dressedFishingLineOrigin(art:Atlas,frame:Sprite,value?:Appearance,left=false){
     const a=normalizeAppearance(value),family=bodyFamily(a.outfit);
-    const tip=family?completeBodies.get(art[fullBodyKey(family,a.body,frame)])?.rodTip:undefined;
+    let tip=family?completeBodies.get(art[fullBodyKey(family,a.body,frame)])?.rodTip:undefined;
+    const source=!family&&a.body==='female'?art[`female-${frame}` as Sprite]:undefined;
+    if(source&&femaleDyeRegistrations.get(source)?.revised){
+        if(!authoredRodTips.has(source)){
+            const p=source.getContext('2d')!.getImageData(0,0,source.width,source.height),rod=authoredFishingRod(p,frame,a.body);
+            authoredRodTips.set(source,rod?[rod[0],rod[1]]:null);
+        }tip=authoredRodTips.get(source)??undefined;
+    }
     if(!tip)return fishingLineOrigin(frame,a.body,left);
     const [dx,dy]=heroFrameOffset(frame,a.body);
     return {x:((tip[0]+dx)/2-32)*(left?-1:1),y:(tip[1]+dy)/2-48};

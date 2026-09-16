@@ -11,16 +11,16 @@ export const FEMALE_BODY_HEIGHTS:Record<HeroAction,readonly number[]>={
     eat:[217,231,227],fish:[215,227,218],cook:[215,227,223],
     sleep:[219,219,200],dodge:[213,223,222],
 };
-export type DyeRegistration={scale:number;x:number;y:number};
+export type DyeRegistration={scale:number;x:number;y:number;revised?:boolean};
 // Maps resized female watering frames to the reviewed tool exclusion mask.
 export const femaleDyeRegistrations=new WeakMap<HTMLCanvasElement,DyeRegistration>();
 export const FEMALE_SHEETS:readonly FemaleSheet[]=[
-    {file:'female-walk-v1.png',action:'walk',base:'hero-walk-v2.png'},
-    {file:'female-idle-v1.png',action:'idle'},
-    {file:'female-hurt-v1.png',action:'hurt'},
-    {file:'female-axe-v1.png',action:'axe',base:'hero-axe-v3.png',rowEdges:[0,273,520,768]},
-    {file:'female-pick-v2.png',action:'pick',registration:FEMALE_PICK_LAYOUT},
-    {file:'female-sword-v1.png',action:'sword',base:'hero-sword-v3.png'},
-    ...(['hammer','hoe','water','plant','harvest','pickup','eat','fish','cook','sleep'] as const).map(action=>({file:`female-${action}-v1.png`,action,base:`hero-${action}.png`})),
-    {file:'female-roll-v1.png',action:'dodge',base:'hero-roll.png'},
+    {file:'female-walk-v3.png',action:'walk',base:'hero-walk-v2.png'},
+    {file:'female-idle-v3.png',action:'idle'},
+    {file:'female-hurt-v3.png',action:'hurt'},
+    {file:'female-axe-v3.png',action:'axe',base:'hero-axe-v3.png',rowEdges:[0,273,520,768]},
+    {file:'female-pick-v3.png',action:'pick',registration:FEMALE_PICK_LAYOUT},
+    {file:'female-sword-v3.png',action:'sword',base:'hero-sword-v3.png'},
+    ...(['hammer','hoe','water','plant','harvest','pickup','eat','fish','cook','sleep'] as const).map(action=>({file:`female-${action}-v3.png`,action,base:`hero-${action}.png`})),
+    {file:'female-roll-v3.png',action:'dodge',base:'hero-roll.png'},
 ];

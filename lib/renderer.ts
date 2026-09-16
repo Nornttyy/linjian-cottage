@@ -98,12 +98,24 @@ function slimeDrawPosition(positions:Map<string,SlimeDrawPosition>,m:WorldState[
 const playerViews=new WeakMap<HTMLCanvasElement,{scope:string;positions:Map<string,SlimeDrawPosition>}>();
 const slimeViews=new WeakMap<HTMLCanvasElement,{roomKey:string;created:number;poses:Map<string,{phase:string;started:number}>;positions:Map<string,SlimeDrawPosition>}>();
 
-export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos: Position, view: View, art: Atlas) {
-    const w = Math.max(1, Math.floor(canvas.clientWidth / 2)), h = Math.max(1, Math.floor(canvas.clientHeight / 2));
+export function resizeWorldCanvas(canvas:HTMLCanvasElement){
+    const viewport=canvas.parentElement??canvas;
+    const w=Math.max(1,Math.ceil(viewport.clientWidth/2)),h=Math.max(1,Math.ceil(viewport.clientHeight/2));
+    // An odd viewport clips one pixel instead of stretching every pixel in
+    // the scene by a fractional amount. World coordinates keep the same zoom.
+    const cssWidth=`${w*2}px`,cssHeight=`${h*2}px`;
+    if(canvas.style){
+        if(canvas.style.width!==cssWidth)canvas.style.width=cssWidth;
+        if(canvas.style.height!==cssHeight)canvas.style.height=cssHeight;
+    }
     if (canvas.width !== w*ART_DENSITY)
         canvas.width = w*ART_DENSITY;
     if (canvas.height !== h*ART_DENSITY)
         canvas.height = h*ART_DENSITY;
+    return {w,h};
+}
+export function render(canvas: HTMLCanvasElement, s: WorldState, id: string, pos: Position, view: View, art: Atlas) {
+    const {w,h}=resizeWorldCanvas(canvas);
     const ctx = canvas.getContext('2d')!;
     ctx.setTransform(ART_DENSITY,0,0,ART_DENSITY,0,0);
     ctx.imageSmoothingEnabled = false;

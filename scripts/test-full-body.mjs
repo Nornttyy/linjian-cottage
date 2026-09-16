@@ -27,7 +27,7 @@ try{
  }
  console.log('PASS 60 real male/female poses retain authored silhouettes and leave their source atlas intact');
  const f=fixture.frames.find(f=>f.family==='mushroom'&&f.body==='female'&&f.frame==='pick-down-3'),p=decode(f),info={family:f.family,parts:completeBodyParts(p,reference(f),f.family,f.frame)};
- for(const[part,x,y]of [['skin',64,58],['skin',58,58],['skin',61,59],['skin',66,58],['skin',69,59],['hair',68,44],['outfitColor',55,54],['shoes',59,90]]){
+ for(const[part,x,y]of [['skin',64,60],['skin',58,60],['skin',61,61],['eyes',66,60],['skin',69,61],['hair',68,46],['outfitColor',55,56],['shoes',59,92]]){
   assert(info.parts.masks[part]?.includes(y*128+x),part+' must own the reviewed pixel '+x+','+y);
   for(const other of Object.keys(dyes)){
    const changed=decode(f);dyeCompleteBody(changed,{body:'female',...original,[other]:dyes[other]},info);
@@ -35,7 +35,7 @@ try{
   }
  }
  console.log('PASS raised pick keeps the reviewed face, hair, sleeve and boot pixels in separate dye channels');
- const blade=28*128+58;const dyed=decode(f);dyeCompleteBody(dyed,{body:'female',...original,...dyes},info);assert.deepEqual(Array.from(dyed.data.slice(blade*4,blade*4+4)),Array.from(p.data.slice(blade*4,blade*4+4)));
+ const blade=30*128+58;assert.equal(p.data[blade*4+3],255);const dyed=decode(f);dyeCompleteBody(dyed,{body:'female',...original,...dyes},info);assert.deepEqual(Array.from(dyed.data.slice(blade*4,blade*4+4)),Array.from(p.data.slice(blade*4,blade*4+4)));
  console.log('PASS pick blade keeps its authored metal color under every body dye');
  const pole=new Canvas();completeBodies.set(pole,{family:'swim',parts:info.parts,rodTip:[110,40]});
  const fishingArt={[fullBodyKey('swim','female','fish-right-3')]:pole},swimmer={body:'female',...original,outfit:'river-swim'};
